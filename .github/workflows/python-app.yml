@@ -1,0 +1,124 @@
+# .github/workflows/ci.yml
+# Workflow de GitHub Actions para CoreC v4: configura el entorno, instala dependencias y ejecuta pruebas unitarias.
+
+name: CoreC v4 CI
+
+# Ejecutar el workflow en cada push o pull request a la rama main
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Variables de entorno globales
+env:
+  PYTHON_VERSION: "3.10"  # Versión de Python compatible con CoreC v4
+  POSTGRES_VERSION: "15"  # Versión de PostgreSQL usada en docker-compose
+  REDIS_VERSION: "7.2"   # Versión de Redis usada en docker-compose
+
+jobs:
+  test:
+    name: Setup and Run Tests
+    runs-on: ubuntu-latest  # Usar la última versión de Ubuntu para compatibilidad
+
+    # Servicios necesarios: PostgreSQL y Redis
+    services:
+      postgres:
+        image: postgres:${{ env.POSTGRES_VERSION }}
+        env:
+          POSTGRES_DB: corec_db
+          POSTGRES_USER: corec_user
+          POSTGRES_PASSWORD: secure_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:${{ env.REDIS_VERSION }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # 1. Clonar el repositorio
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Configurar Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"  # Cachear dependencias de pip para acelerar ejecuciones
+
+      # 3. Instalar dependencias del sistema
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev  # Necesario para psycopg2-binary
+
+      # 4. Instalar dependencias de Python
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 5. Configurar bases de datos PostgreSQL
+      - name: Initialize PostgreSQL databases
+        env:
+          PGHOST: localhost
+          PGUSER: corec_user
+          PGPASSWORD: secure_password
+        run: |
+          # Crear bases de datos
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE user_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE cli_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE alert_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE settlement_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE capital_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE execution_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE macro_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE exchange_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE monitor_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE predictor_db;"
+          psql -h localhost -U corec_user -d postgres -c "CREATE DATABASE analyzer_db;"
+          # Aplicar esquemas
+          psql -h localhost -U corec_user -d user_db -f configs/plugins/user_management/schema.sql
+          psql -h localhost -U corec_user -d cli_db -f configs/plugins/cli_manager/schema.sql
+          psql -h localhost -U corec_user -d alert_db -f configs/plugins/alert_manager/schema.sql
+          psql -h localhost -U corec_user -d settlement_db -f configs/plugins/daily_settlement/schema.sql
+          psql -h localhost -U corec_user -d capital_db -f configs/plugins/capital_pool/schema.sql
+          psql -h localhost -U corec_user -d execution_db -f configs/plugins/trading_execution/schema.sql
+          psql -h localhost -U corec_user -d macro_db -f configs/plugins/macro_sync/schema.sql
+          psql -h localhost -U corec_user -d exchange_db -f configs/plugins/exchange_sync/schema.sql
+          psql -h localhost -U corec_user -d monitor_db -f configs/plugins/market_monitor/schema.sql
+          psql -h localhost -U corec_user -d predictor_db -f configs/plugins/predictor_temporal/schema.sql
+          psql -h localhost -U corec_user -d analyzer_db -f configs/plugins/system_analyzer/schema.sql
+
+      # 6. Configurar variables de entorno
+      - name: Set up environment variables
+        run: |
+          echo "PYTHONPATH=$(pwd)/src" >> $GITHUB_ENV
+          echo "OPENROUTER_API_KEY=dummy_key" >> $GITHUB_ENV  # Clave dummy para pruebas
+
+      # 7. Ejecutar pruebas unitarias con pytest
+      - name: Run tests
+        run: |
+          pytest tests/ --cov=src --cov-report=xml -v
+
+      # 8. Subir cobertura de pruebas (opcional)
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}  # Requiere un token en los secretos de GitHub
