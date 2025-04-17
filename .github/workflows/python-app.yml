@@ -3,7 +3,6 @@
 
 name: CoreC v4 CI
 
-# Ejecutar el workflow en cada push o pull request a la rama main
 on:
   push:
     branches:
@@ -16,9 +15,8 @@ jobs:
   test:
     name: Setup and Run Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Tiempo máximo para evitar ejecuciones infinitas
+    timeout-minutes: 15
 
-    # Servicios necesarios: PostgreSQL y Redis
     services:
       postgres:
         image: postgres:15
@@ -62,13 +60,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libpq-dev
 
-      # 4. Instalar dependencias de Python
+      # 4. Verificar versiones disponibles de sendgrid
+      - name: Check available sendgrid versions
+        run: |
+          pip install --no-cache-dir pipdeptree
+          pip list --outdated
+          pip install sendgrid --dry-run | grep -i "Available versions"
+
+      # 5. Instalar dependencias de Python
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+        continue-on-error: false
 
-      # 5. Configurar bases de datos PostgreSQL
+      # 6. Configurar bases de datos PostgreSQL
       - name: Initialize PostgreSQL databases
         env:
           PGHOST: localhost
@@ -100,18 +106,18 @@ jobs:
           psql -h localhost -U corec_user -d predictor_db -f configs/plugins/predictor_temporal/schema.sql
           psql -h localhost -U corec_user -d analyzer_db -f configs/plugins/system_analyzer/schema.sql
 
-      # 6. Configurar variables de entorno
+      # 7. Configurar variables de entorno
       - name: Set up environment variables
         run: |
           echo "PYTHONPATH=$(pwd)/src" >> $GITHUB_ENV
           echo "OPENROUTER_API_KEY=dummy_key" >> $GITHUB_ENV
 
-      # 7. Ejecutar pruebas unitarias con pytest
+      # 8. Ejecutar pruebas unitarias con pytest
       - name: Run tests
         run: |
           pytest tests/ --cov=src --cov-report=xml -v
 
-      # 8. Subir cobertura de pruebas (opcional)
+      # 9. Subir cobertura de pruebas (opcional)
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
         with:
