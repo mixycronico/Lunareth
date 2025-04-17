@@ -70,6 +70,11 @@ jobs:
         run: |
           pipdeptree
 
+      - name: Set up environment variables
+        run: |
+          echo "PYTHONPATH=$(pwd):$(pwd)/src" >> $GITHUB_ENV
+          echo "OPENROUTER_API_KEY=dummy_key" >> $GITHUB_ENV
+
       - name: Initialize PostgreSQL databases
         env:
           PGHOST: localhost
@@ -99,14 +104,10 @@ jobs:
           psql -h localhost -U corec_user -d predictor_db -f configs/plugins/predictor_temporal/schema.sql
           psql -h localhost -U corec_user -d analyzer_db -f configs/plugins/system_analyzer/schema.sql
 
-      - name: Set up environment variables
-        run: |
-          echo "PYTHONPATH=$(pwd)/src" >> $GITHUB_ENV
-          echo "OPENROUTER_API_KEY=dummy_key" >> $GITHUB_ENV
-
       - name: Run tests
         run: |
-          pytest tests/ --cov=src --cov-report=xml -v
+          cd $GITHUB_WORKSPACE
+          pytest --cov=src --cov-report=xml -v
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
