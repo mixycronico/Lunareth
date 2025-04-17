@@ -50,6 +50,7 @@ jobs:
         run: |
           pwd
           ls -R
+          find . -name pytest.ini
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
