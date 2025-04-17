@@ -3,7 +3,7 @@
 # src/plugins/alert_manager/processors/alert_processor.py
 """
 alert_processor.py
-Gestiona y clasifica alertas con contexto de DXY y system_analyzer, enviando notificaciones a email y Discord.
+Gestiona y clasifica alertas con contexto de DXY y system_analyzer, enviando notificaciones a email (SendGrid) y Discord.
 """
 
 from ....core.processors.base import ProcesadorBase
@@ -16,8 +16,8 @@ from typing import Dict, Any
 from datetime import datetime, timedelta
 import asyncio
 import aiohttp
-import smtplib
-from email.mime.text import MIMEText
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Email, To, Content
 import psycopg2
 
 class AlertProcessor(ProcesadorBase):
@@ -33,7 +33,8 @@ class AlertProcessor(ProcesadorBase):
         self.breaker_tripped = False
         self.breaker_reset_time = None
         self.thresholds = config.get("alert_config", {}).get("thresholds", {"vix": 20})
-        self.email_config = config.get("notification_config", {}).get("email", {})
+        self.sendgrid_client = None
+        self.sendgrid_config = config.get("notification_config", {}).get("sendgrid", {})
         self.discord_webhook = config.get("notification_config", {}).get("discord", {}).get("webhook_url", "")
         self.data_cache = {}
 
@@ -43,6 +44,16 @@ class AlertProcessor(ProcesadorBase):
         if not await self.plugin_db.connect():
             self.logger.warning("No se pudo conectar a alert_db")
             await self.nucleus.publicar_alerta({"tipo": "db_connection_error", "plugin": "alert_manager", "message": "No se pudo conectar a alert_db"})
+
+        # Inicializar SendGrid
+        if self.sendgrid_config:
+            try:
+                self.sendgrid_client = SendGridAPIClient(self.sendgrid_config.get("api_key"))
+                self.logger.info("SendGrid inicializado")
+            except Exception as e:
+                self.logger.error(f"Error inicializando SendGrid: {e}")
+                self.sendgrid_client = None
+
         self.logger.info("AlertProcessor inicializado")
 
     async def check_circuit_breaker(self) -> bool:
@@ -67,7 +78,7 @@ class AlertProcessor(ProcesadorBase):
             await self.nucleus.publicar_alerta({"tipo": "circuit_breaker_tripped", "plugin": "alert_manager"})
 
     async def send_email(self, message: str, severity: str) -> bool:
-        if not self.email_config or severity not in ["high", "medium"]:
+        if not self.sendgrid_client or severity not in ["high", "medium"]:
             return False
         try:
             # Obtener usuarios con preferencia de email
@@ -78,22 +89,18 @@ class AlertProcessor(ProcesadorBase):
             cur.close()
             conn.close()
 
-            if not emails:
-                return False
-
-            # Configurar correo
-            msg = MIMEText(f"[CoreC Alert - {severity.upper()}] {message}")
-            msg['Subject'] = f"CoreC Alert: {severity.upper()}"
-            msg['From'] = self.email_config.get("from_email")
-            msg['To'] = ", ".join(emails)
-
-            # Conectar al servidor SMTP
-            with smtplib.SMTP(self.email_config.get("smtp_server"), self.email_config.get("smtp_port")) as server:
-                server.starttls()
-                server.login(self.email_config.get("username"), self.email_config.get("password"))
-                server.send_message(msg)
-
-            self.logger.info(f"Email enviado a {len(emails)} usuarios")
+            for email in emails:
+                mail = Mail(
+                    from_email=Email(self.sendgrid_config.get("from_email")),
+                    to_emails=To(email),
+                    subject=f"CoreC Alert - {severity.upper()}",
+                    plain_text_content=Content("text/plain", f"[CoreC Alert - {severity.upper()}] {message}")
+                )
+                response = self.sendgrid_client.send(mail)
+                if response.status_code == 202:
+                    self.logger.info(f"Email enviado a {email}")
+                else:
+                    self.logger.error(f"Error enviando email a {email}: {response.status_code}")
             return True
         except Exception as e:
             self.logger.error(f"Error enviando email: {e}")
