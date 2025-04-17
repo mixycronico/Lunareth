@@ -17,7 +17,6 @@ backoff==2.2.1
 python-jwt==4.1.0
 textual==0.47.1
 click==8.1.7
-python-sendgrid==0.9.7  # Para notificaciones por email
-hashlib==3.9.0
+sendgrid==6.11.0  # Reemplaza python-sendgrid==0.9.7 para notificaciones por email
 pytest==8.3.2  # Para pruebas unitarias
 pytest-cov==5.0.0  # Para cobertura de pruebas
