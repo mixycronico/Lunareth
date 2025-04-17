@@ -1,0 +1,137 @@
+# .gitignore
+# Ignora archivos y directorios innecesarios, sensibles o generados automáticamente para CoreC v4.
+
+# --- Entorno de Python ---
+# Entornos virtuales
+venv/
+.env/
+env/
+*.venv/
+
+# Archivos compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos de paquetes e instalación
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.pytest_cache/
+
+# --- Archivos de Desarrollo ---
+# Archivos de editores/IDEs
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Archivos temporales
+*.bak
+*.swp
+*~
+*.tmp
+
+# --- Archivos Sensibles ---
+# Archivos de configuración con claves de API o secretos
+.env
+*.env
+secrets/
+*.key
+*.pem
+*.crt
+*.cert
+configs/plugins/*/secrets.yaml
+configs/plugins/*/api_keys.yaml
+
+# Archivos generados localmente
+*.local
+local_settings.py
+local_config.yaml
+
+# --- Docker ---
+# Volúmenes de Docker y datos generados
+docker-compose.override.yml
+*.docker
+docker-data/
+*.log
+*.pid
+
+# --- Bases de Datos ---
+# Datos generados por PostgreSQL en Docker
+data/
+*.sql.gz
+*.sql.bak
+backups/*.sql
+backups/*.gz
+
+# --- Archivos de CoreC v4 ---
+# Modelos entrenados (predictor_temporal)
+models/*.pth
+models/*.pt
+
+# Cachés locales y temporales
+*.cache
+*.tmp
+tmp/
+cache/
+redis_cache/
+*.rdb
+*.aof
+
+# Logs generados
+logs/
+*.log
+*.log.*
+log/
+
+# Directorios de pruebas generados
+tests/output/
+tests/temp/
+tests/*.pyc
+
+# Archivos de backups locales
+backups/
+*.backup
+*.tar.gz
+*.zip
+
+# --- Archivos del Sistema Operativo ---
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# --- Directorios Específicos de CoreC ---
+# Directorios generados por plugins
+src/plugins/*/temp/
+src/plugins/*/cache/
+src/plugins/*/logs/
+
+# Archivos de datos locales
+data/*
+!data/.gitkeep
+
+# --- Notas ---
+# Mantén archivos de configuración base (ej., configs/plugins/*/plugin.yaml) pero ignora secretos.
+# Asegúrate de no incluir claves de API en los YAMLs subidos a Git.
