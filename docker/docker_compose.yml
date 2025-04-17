@@ -1,0 +1,199 @@
+version: '3.9'
+services:
+  corec1:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      - ENVIRONMENT=development
+      - INSTANCE_ID=corec1
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    volumes:
+      - ./configs:/app/configs
+      - ./src/plugins:/app/src/plugins
+    depends_on:
+      - redis
+      - postgres
+      - trading_db
+      - predictor_db
+      - monitor_db
+      - exchange_db
+      - macro_db
+      - execution_db
+      - capital_db
+      - user_db
+      - settlement_db
+      - alert_db
+      - cli_db
+      - analyzer_db
+    ports:
+      - "8000:8000"
+    networks:
+      - corec-network
+
+  redis:
+    image: redis:7.2
+    networks:
+      - corec-network
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: corec_db
+      POSTGRES_USER: corec_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  trading_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: trading_db
+      POSTGRES_USER: trading_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - trading_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  predictor_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: predictor_db
+      POSTGRES_USER: predictor_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - predictor_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  monitor_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: monitor_db
+      POSTGRES_USER: monitor_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - monitor_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  exchange_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: exchange_db
+      POSTGRES_USER: exchange_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - exchange_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  macro_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: macro_db
+      POSTGRES_USER: macro_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - macro_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  execution_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: execution_db
+      POSTGRES_USER: execution_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - execution_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  capital_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: capital_db
+      POSTGRES_USER: capital_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - capital_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  user_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: user_management_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - user_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  settlement_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: settlement_db
+      POSTGRES_USER: settlement_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - settlement_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  alert_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: alert_db
+      POSTGRES_USER: alert_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - alert_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  cli_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: cli_db
+      POSTGRES_USER: cli_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - cli_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+  analyzer_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: analyzer_db
+      POSTGRES_USER: analyzer_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - analyzer_db-data:/var/lib/postgresql/data
+    networks:
+      - corec-network
+
+networks:
+  corec-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  trading_db-data:
+  predictor_db-data:
+  monitor_db-data:
+  exchange_db-data:
+  macro_db-data:
+  execution_db-data:
+  capital_db-data:
+  user_db-data:
+  settlement_db-data:
+  alert_db-data:
+  cli_db-data:
+  analyzer_db-data:

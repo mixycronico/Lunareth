@@ -1,0 +1,11 @@
+{
+  "name": "user_management",
+  "version": "1.0.0",
+  "description": "Plugin biomimético para gestionar autenticación, autorización y perfiles de usuarios",
+  "type": "processor",
+  "channels": ["user_data", "trading_results", "capital_data"],
+  "dependencies": ["psycopg2-binary==2.9.9", "zstandard==0.22.0", "bcrypt==4.1.3", "pyjwt==2.8.0"],
+  "config_file": "configs/plugins/user_management/user_management.yaml",
+  "main_class": "user_management.processors.user_processor.UserProcessor",
+  "critical": true
+}

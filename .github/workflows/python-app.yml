@@ -1,0 +1,25 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+      - name: Install dependencies
+        run: pip install jinja2 cachetools numpy pytest pytest-asyncio tenacity torch aiohttp sklearn
+      - name: Create directories
+        run: |
+          mkdir -p corec/plugins/constructor/templates corec/plugins/constructor/generated corec/plugins/constructor/backups tests/fake_dir tests/generated tests/logs
+      - name: Verify templates directory
+        run: ls -la corec/plugins/constructor/templates
+      - name: Run tests
+        run: PYTHONPATH=$PWD/CoreC pytest CoreC/corec/plugins/constructor/tests --disable-warnings --tb=short

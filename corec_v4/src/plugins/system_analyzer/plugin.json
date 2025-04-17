@@ -1,0 +1,11 @@
+{
+  "name": "system_analyzer",
+  "version": "1.0.0",
+  "description": "Plugin biomimético para analizar y optimizar el rendimiento de CoreC y trading",
+  "type": "processor",
+  "channels": ["system_insights", "market_data", "corec_stream_corec1", "trading_results", "capital_data", "user_data", "settlement_data", "alert_data", "eventos", "auditoria", "cli_data"],
+  "dependencies": ["psycopg2-binary==2.9.9", "zstandard==0.22.0"],
+  "config_file": "configs/plugins/system_analyzer/system_analyzer.yaml",
+  "main_class": "system_analyzer.processors.analyzer_processor.AnalyzerProcessor",
+  "critical": false
+}

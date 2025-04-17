@@ -1,0 +1,24 @@
+channels:
+  - "alertas"
+  - "trading_results"
+  - "macro_data"
+  - "system_insights"
+config:
+  circuit_breaker:
+    max_failures: 3
+    reset_timeout: 900
+alert_config:
+  thresholds:
+    vix: 20
+notification_config:
+  sendgrid:
+    api_key: "TU_SENDGRID_API_KEY"
+    from_email: "corec@example.com"
+  discord:
+    webhook_url: "TU_DISCORD_WEBHOOK_URL"
+db_config:
+  host: "alert_db"
+  port: 5432
+  database: "alert_db"
+  user: "alert_user"
+  password: "secure_password"

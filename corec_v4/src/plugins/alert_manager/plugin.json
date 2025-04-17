@@ -1,0 +1,11 @@
+{
+  "name": "alert_manager",
+  "version": "1.0.0",
+  "description": "Plugin biomimético para gestionar alertas y notificaciones del sistema CoreC v4",
+  "type": "processor",
+  "channels": ["alert_data", "alertas", "trading_results", "capital_data", "macro_data", "user_data", "settlement_data"],
+  "dependencies": ["psycopg2-binary==2.9.9", "zstandard==0.22.0", "aiohttp==3.9.5", "backoff==2.2.1"],
+  "config_file": "configs/plugins/alert_manager/alert_manager.yaml",
+  "main_class": "alert_manager.processors.alert_processor.AlertProcessor",
+  "critical": true
+}

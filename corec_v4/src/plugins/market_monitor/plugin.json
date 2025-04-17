@@ -1,0 +1,11 @@
+{
+  "name": "market_monitor",
+  "version": "1.0.0",
+  "description": "Plugin biomimético para monitoreo en tiempo real de precios de criptomonedas",
+  "type": "processor",
+  "channels": ["market_data", "macro_data"],
+  "dependencies": ["aiohttp==3.9.5", "psycopg2-binary==2.9.9", "zstandard==0.22.0"],
+  "config_file": "configs/plugins/market_monitor/market_monitor.yaml",
+  "main_class": "market_monitor.processors.monitor_processor.MonitorProcessor",
+  "critical": false
+}

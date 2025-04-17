@@ -1,0 +1,11 @@
+{
+  "name": "cli_manager",
+  "version": "1.0.0",
+  "description": "Plugin biomimético para una interfaz CLI interactiva con chat para CoreC y trading",
+  "type": "interface",
+  "channels": ["cli_data", "market_data", "corec_stream_corec1", "trading_results", "capital_data", "user_data", "settlement_data", "alert_data", "eventos", "auditoria"],
+  "dependencies": ["textual==0.47.1", "click==8.1.7", "psycopg2-binary==2.9.9", "zstandard==0.22.0"],
+  "config_file": "configs/plugins/cli_manager/cli_manager.yaml",
+  "main_class": "cli_manager.processors.cli_processor.CLIProcessor",
+  "critical": false
+}

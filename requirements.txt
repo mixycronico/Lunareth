@@ -1,0 +1,21 @@
+# requirements.txt
+# Dependencias completas para CoreC v4 y todos sus plugins, incluyendo mejoras de automatización, CLI avanzado, DXY, backtesting, y alertas contextuales.
+
+# --- Dependencias Core ---
+python>=3.8,<3.11
+asyncio==3.4.3
+psycopg2-binary==2.9.9
+redis==5.0.1
+aioredis==2.0.1
+zstandard==0.22.0
+pyyaml==6.0.1
+
+# --- Dependencias de Plugins ---
+torch==2.0.1
+numpy==1.24.4  # Necesario para Sharpe Ratio y Bollinger Bands
+aiohttp==3.9.1
+backoff==2.2.1
+python-jwt==4.1.0
+textual==0.47.1
+click==8.1.7
+hashlib==3.9.0  # Incluido en Python estándar

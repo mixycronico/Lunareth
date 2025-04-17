@@ -1,0 +1,25 @@
+channels:
+  - "market_data"
+  - "corec_stream_corec1"
+  - "trading_results"
+  - "capital_data"
+  - "user_data"
+  - "settlement_data"
+  - "alert_data"
+  - "eventos"
+  - "auditoria"
+  - "system_insights"
+cli_config:
+  tui_enabled: true
+db_config:
+  host: "cli_db"
+  port: 5432
+  database: "cli_db"
+  user: "cli_user"
+  password: "secure_password"
+user_db_config:
+  host: "user_db"
+  port: 5432
+  database: "user_db"
+  user: "user_management_user"
+  password: "secure_password"

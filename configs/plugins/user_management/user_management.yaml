@@ -1,0 +1,16 @@
+channels:
+  - "user_data"
+  - "trading_results"
+  - "capital_data"
+config:
+  circuit_breaker:
+    max_failures: 3
+    reset_timeout: 900
+jwt_config:
+  secret: "secure_secret"
+db_config:
+  host: "user_db"
+  port: 5432
+  database: "user_db"
+  user: "user_management_user"
+  password: "secure_password"

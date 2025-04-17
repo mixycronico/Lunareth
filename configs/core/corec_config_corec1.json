@@ -1,0 +1,9 @@
+{
+  "instance_id": "corec1",
+  "rol": "generica",
+  "redis_config": {
+    "host": "redis",
+    "port": 6379
+  },
+  "modulos": ["registro", "ejecucion", "sincronizacion", "auditoria"]
+}

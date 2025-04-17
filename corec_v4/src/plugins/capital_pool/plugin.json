@@ -1,0 +1,11 @@
+{
+  "name": "capital_pool",
+  "version": "1.0.0",
+  "description": "Plugin biomimético para gestionar el capital compartido de usuarios en el sistema de trading",
+  "type": "processor",
+  "channels": ["capital_data", "trading_results", "macro_data"],
+  "dependencies": ["psycopg2-binary==2.9.9", "zstandard==0.22.0"],
+  "config_file": "configs/plugins/capital_pool/capital_pool.yaml",
+  "main_class": "capital_pool.processors.capital_processor.CapitalProcessor",
+  "critical": false
+}

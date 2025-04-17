@@ -1,0 +1,11 @@
+{
+  "name": "daily_settlement",
+  "version": "1.0.0",
+  "description": "Plugin biomimético para consolidar resultados diarios de trading y generar reportes",
+  "type": "processor",
+  "channels": ["settlement_data", "trading_results", "capital_data", "macro_data", "user_data"],
+  "dependencies": ["psycopg2-binary==2.9.9", "zstandard==0.22.0"],
+  "config_file": "configs/plugins/daily_settlement/daily_settlement.yaml",
+  "main_class": "daily_settlement.processors.settlement_processor.SettlementProcessor",
+  "critical": false
+}
