@@ -16,11 +16,12 @@ jobs:
   test:
     name: Setup and Run Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # Tiempo máximo para evitar ejecuciones infinitas
 
     # Servicios necesarios: PostgreSQL y Redis
     services:
       postgres:
-        image: postgres:15  # Versión fija para evitar problemas con env
+        image: postgres:15
         env:
           POSTGRES_DB: corec_db
           POSTGRES_USER: corec_user
@@ -34,7 +35,7 @@ jobs:
           --health-retries 5
 
       redis:
-        image: redis:7.2  # Versión fija para evitar problemas con env
+        image: redis:7.2
         ports:
           - 6379:6379
         options: >-
