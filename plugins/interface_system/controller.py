@@ -73,8 +73,9 @@ class InterfaceController:
                         "entidades": len(b.entidades)
                     } for bid, b in bloques.items()
                 ],
-                "alertas": self.nucleus.modulos["auditoria"].mem.get("alertas", [])
-                if "auditoria" in self.nucleus.modulos else [],
+                "alertas": self.nucleus.modulos["auditoria"].mem.get(
+                    "alertas", []
+                ) if "auditoria" in self.nucleus.modulos else [],
                 "nodos": self.nucleus.config.get("nodos", 1)
             }
             return estado
@@ -85,7 +86,9 @@ class InterfaceController:
     async def listar_nodos(self) -> Dict[str, Any]:
         try:
             nodos = self.nucleus.config.get("nodos", 1)
-            return {"nodos": [{"id": f"nodo_{i}", "activo": True} for i in range(nodos)]}
+            return {
+                "nodos": [{"id": f"nodo_{i}", "activo": True} for i in range(nodos)]
+            }
         except Exception as e:
             self.logger.error(f"Error listando nodos: {e}")
             return {"error": str(e)}
