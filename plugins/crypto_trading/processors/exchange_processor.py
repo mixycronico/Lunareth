@@ -25,11 +25,16 @@ class ExchangeProcessor(ComponenteBase):
         self.redis_client = redis_client
         self.logger = logging.getLogger("ExchangeProcessor")
         self.exchanges = self.config.get("exchange_config", {}).get("exchanges", [])
-        self.fetch_interval = self.config.get("exchange_config", {}).get("fetch_interval", 300) / len(self.exchanges)
+        interval = self.config.get("exchange_config", {}).get("fetch_interval", 300)
+        self.fetch_interval = interval / max(len(self.exchanges), 1)
         self.circuit_breakers = {
             ex["name"]: CircuitBreaker(
-                self.config.get("exchange_config", {}).get("circuit_breaker", {}).get("max_failures", 3),
-                self.config.get("exchange_config", {}).get("circuit_breaker", {}).get("reset_timeout", 900)
+                self.config.get("exchange_config", {}).get(
+                    "circuit_breaker", {}
+                ).get("max_failures", 3),
+                self.config.get("exchange_config", {}).get(
+                    "circuit_breaker", {}
+                ).get("reset_timeout", 900)
             ) for ex in self.exchanges
         }
         self.plugin_db = TradingDB(self.config.get("db_config", {}))
@@ -41,7 +46,10 @@ class ExchangeProcessor(ComponenteBase):
         self.logger.info("ExchangeProcessor inicializado")
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=3)
-    async def fetch_spot_price(self, exchange: Dict[str, Any], symbol: str, session: aiohttp.ClientSession) -> Dict[str, Any]:
+    async def fetch_spot_price(
+        self, exchange: Dict[str, Any], symbol: str,
+        session: aiohttp.ClientSession
+    ) -> Dict[str, Any]:
         try:
             name = exchange["name"]
             headers = {}
@@ -70,7 +78,8 @@ class ExchangeProcessor(ComponenteBase):
                     elif name == "okx":
                         price = float(data.get("data", [{}])[0].get("last", 0))
                     elif name == "kraken":
-                        price = float(data.get("result", {}).get(symbol.replace('/', ''), {}).get("c", [0])[0])
+                        pair = symbol.replace('/', '')
+                        price = float(data.get("result", {}).get(pair, {}).get("c", [0])[0])
                     return {
                         "exchange": name,
                         "symbol": symbol,
@@ -79,16 +88,21 @@ class ExchangeProcessor(ComponenteBase):
                         "timestamp": datetime.utcnow().timestamp()
                     }
                 else:
-                    self.logger.error(f"Error obteniendo precio spot para {symbol} en {name}: {resp.status}")
+                    self.logger.error(
+                        f"Error precio spot {symbol} en {name}: {resp.status}"
+                    )
                     self.circuit_breakers[name].register_failure()
                     return {}
         except Exception as e:
-            self.logger.error(f"Error obteniendo precio spot para {symbol} en {name}: {e}")
+            self.logger.error(f"Error spot {symbol} en {name}: {e}")
             self.circuit_breakers[name].register_failure()
             return {}
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=3)
-    async def fetch_futures_price(self, exchange: Dict[str, Any], symbol: str, session: aiohttp.ClientSession) -> Dict[str, Any]:
+    async def fetch_futures_price(
+        self, exchange: Dict[str, Any], symbol: str,
+        session: aiohttp.ClientSession
+    ) -> Dict[str, Any]:
         try:
             name = exchange["name"]
             headers = {}
@@ -126,27 +140,31 @@ class ExchangeProcessor(ComponenteBase):
                         "timestamp": datetime.utcnow().timestamp()
                     }
                 else:
-                    self.logger.error(f"Error obteniendo precio futures para {symbol} en {name}: {resp.status}")
+                    self.logger.error(
+                        f"Error futures {symbol} en {name}: {resp.status}"
+                    )
                     self.circuit_breakers[name].register_failure()
                     return {}
         except Exception as e:
-            self.logger.error(f"Error obteniendo precio futures para {symbol} en {name}: {e}")
+            self.logger.error(f"Error futures {symbol} en {name}: {e}")
             self.circuit_breakers[name].register_failure()
             return {}
 
-    @backoff.on_exception(backoff.expo, Exception, max_tries=3)
-    async def fetch_open_orders(self, exchange: Dict[str, Any], session: aiohttp.ClientSession) -> List[Dict[str, Any]]:
+    async def fetch_open_orders(
+        self, exchange: Dict[str, Any], session: aiohttp.ClientSession
+    ) -> List[Dict[str, Any]]:
         try:
-            # lógica intacta
-            return []
+            return []  # placeholder real
         except Exception as e:
-            self.logger.error(f"Error obteniendo órdenes abiertas en {exchange['name']}: {e}")
+            self.logger.error(
+                f"Error órdenes abiertas en {exchange['name']}: {e}"
+            )
             self.circuit_breakers[exchange["name"]].register_failure()
             return []
 
     async def fetch_exchange_data(self, exchange: Dict[str, Any]):
         while True:
-            # lógica intacta
+            # Aquí deberías colocar llamadas a fetch_spot_price / fetch_futures_price
             await asyncio.sleep(self.fetch_interval)
 
     async def detener(self):
