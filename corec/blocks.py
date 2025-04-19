@@ -1,4 +1,4 @@
-from corec.core import IsolationForest, psycopg2, zstd, json, statistics, logging, asyncio, time, random, serializar_mensaje, deserializar_mensaje
+from corec.core import IsolationForest, psycopg2, zstd, json, statistics, logging, asyncio, time, serializar_mensaje, deserializar_mensaje
 from corec.entities import MicroCeluEntidadCoreC, crear_entidad, procesar_entidad
 from typing import Dict, Any, List
 
