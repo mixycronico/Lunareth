@@ -6,7 +6,6 @@ Orquesta el plugin CryptoTrading.
 """
 import asyncio
 import logging
-import json
 from corec.core import ComponenteBase
 from .processors.exchange_processor import ExchangeProcessor
 from .processors.capital_processor import CapitalProcessor
