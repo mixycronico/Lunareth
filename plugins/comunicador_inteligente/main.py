@@ -20,6 +20,7 @@ from corec.core import serializar_mensaje, aioredis
 from corec.entities import crear_entidad
 from corec.blocks import BloqueSimbiotico
 
+
 class RedNeuronalLigera(nn.Module):
     def __init__(self):
         super().__init__()
@@ -32,6 +33,7 @@ class RedNeuronalLigera(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
+
 
 class QLearningAgent:
     def __init__(self, actions: list, alpha=0.1, gamma=0.9, epsilon=0.1):
@@ -59,11 +61,13 @@ class QLearningAgent:
             self.q_table[next_state_key] = {a: 0.0 for a in self.actions}
         current_q = self.q_table[state_key][action]
         max_next_q = max(self.q_table[next_state_key].values())
-        self.q_table[state_key][action] = current_q + self.alpha * (reward + self.gamma * max_next_q - current_q)
+        self.q_table[state_key][action] = current_q + self.alpha * \
+            (reward + self.gamma * max_next_q - current_q)
 
     def save(self, path: str):
         with open(path, "wb") as f:
             pickle.dump(self, f)
+
 
 class ComunicadorInteligente:
     def __init__(self, nucleus, config):
@@ -76,7 +80,8 @@ class ComunicadorInteligente:
         self.nn_model = RedNeuronalLigera()
         self.bayes_model = GaussianNB()
         self.rl_model = QLearningAgent(actions=["responder", "analizar", "optimizar"])
-        self.training_log = config.get("training_log", "plugins/comunicador_inteligente/data/training.log")
+        self.training_log = config.get(
+            "training_log", "plugins/comunicador_inteligente/data/training.log")
         self.is_openrouter_available = True
         self.redis_client = None
         self.model_path = {
@@ -86,8 +91,15 @@ class ComunicadorInteligente:
         }
 
     async def inicializar(self):
-        redis_url = f"redis://{self.nucleus.redis_config['username']}:{self.nucleus.redis_config['password']}@{self.nucleus.redis_config['host']}:{self.nucleus.redis_config['port']}"
-        self.redis_client = await aioredis.from_url(redis_url, decode_responses=True)
+        redis_url = (
+            f"redis://{self.nucleus.redis_config['username']}:"
+            f"{self.nucleus.redis_config['password']}@"
+            f"{self.nucleus.redis_config['host']}:"
+            f"{self.nucleus.redis_config['port']}"
+        )
+        self.redis_client = await aioredis.from_url(
+            redis_url, decode_responses=True
+        )
         self.logger.info("Redis inicializado para ComunicadorInteligente")
 
         try:
@@ -99,18 +111,23 @@ class ComunicadorInteligente:
                 self.rl_model = pickle.load(f)
             self.logger.info("Modelos locales cargados")
         except FileNotFoundError:
-            self.logger.info("Modelos locales no encontrados, inicializando nuevos")
+            self.logger.info("Modelos no encontrados, inicializando nuevos")
             torch.save(self.nn_model.state_dict(), self.model_path["nn"])
             with open(self.model_path["bayes"], "wb") as f:
                 pickle.dump(self.bayes_model, f)
             self.rl_model.save(self.model_path["rl"])
 
-        entidades = [crear_entidad(f"m{i}", self.canal, self._procesar_mensaje) for i in range(self.config.get("entidades", 100))]
-        self.bloque = BloqueSimbiotico("comunicador_inteligente", self.canal, entidades, max_size=1024, nucleus=self.nucleus)
+        entidades = [
+            crear_entidad(f"m{i}", self.canal, self._procesar_mensaje)
+            for i in range(self.config.get("entidades", 100))
+        ]
+        self.bloque = BloqueSimbiotico(
+            "comunicador_inteligente", self.canal,
+            entidades, max_size=1024, nucleus=self.nucleus
+        )
         self.nucleus.modulos["registro"].bloques[self.bloque.id] = self.bloque
-        self.logger.info(f"Plugin ComunicadorInteligente inicializado con {len(entidades)} entidades")
+        self.logger.info(f"Plugin inicializado con {len(entidades)} entidades")
         self.nucleus.registrar_plugin("comunicador_inteligente", self)
-
         asyncio.create_task(self._escuchar_mensajes())
 
     async def _escuchar_mensajes(self):
@@ -123,7 +140,8 @@ class ComunicadorInteligente:
                         mensaje = json.loads(data["data"])
                         resultado = await self._procesar_mensaje(mensaje)
                         respuesta = await serializar_mensaje(
-                            int(time.time_ns() % 1000000), self.canal, resultado["valor"], True
+                            int(time.time_ns() % 1000000), self.canal,
+                            resultado["valor"], True
                         )
                         await self.redis_client.xadd(
                             self.config.get("redis_stream_output", "user_output_stream"),
@@ -138,6 +156,7 @@ class ComunicadorInteligente:
         valor = mensaje.get("valor", random.random())
         state = (valor, len(self.bloque.mensajes))
         action = self.rl_model.choose_action(state)
+        texto_respuesta = ""
 
         if action == "responder" and self.is_openrouter_available:
             try:
@@ -149,14 +168,21 @@ class ComunicadorInteligente:
                         "max_tokens": 100
                     }
                     async with session.post(
-                        "https://openrouter.ai/api/v1/completions", json=data, headers=headers
+                        "https://openrouter.ai/api/v1/completions",
+                        json=data, headers=headers
                     ) as resp:
                         respuesta = await resp.json()
                         texto_respuesta = respuesta["choices"][0]["text"]
                         with open(self.training_log, "a") as f:
-                            f.write(json.dumps({"entrada": mensaje, "salida": texto_respuesta}) + "\n")
+                            f.write(json.dumps({
+                                "entrada": mensaje,
+                                "salida": texto_respuesta
+                            }) + "\n")
                         reward = 1.0
-                        return {"valor": hash(texto_respuesta) % 1000 / 1000, "texto": texto_respuesta}
+                        return {
+                            "valor": hash(texto_respuesta) % 1000 / 1000,
+                            "texto": texto_respuesta
+                        }
             except Exception as e:
                 self.logger.error(f"Error con OpenRouter: {e}")
                 self.is_openrouter_available = False
@@ -166,9 +192,15 @@ class ComunicadorInteligente:
             reward = 0.5 if respuesta_local["valor"] > 0 else -0.5
             texto_respuesta = respuesta_local["texto"]
 
-        next_state = (respuesta_local["valor"] if action != "responder" else valor, len(self.bloque.mensajes))
+        next_state = (
+            respuesta_local["valor"] if action != "responder" else valor,
+            len(self.bloque.mensajes)
+        )
         self.rl_model.update(state, action, reward, next_state)
-        return {"valor": respuesta_local["valor"] if action != "responder" else valor, "texto": texto_respuesta}
+        return {
+            "valor": respuesta_local["valor"] if action != "responder" else valor,
+            "texto": texto_respuesta
+        }
 
     async def _procesar_local(self, mensaje: Dict[str, Any]) -> Dict[str, Any]:
         valor = mensaje.get("valor", random.random())
@@ -178,10 +210,11 @@ class ComunicadorInteligente:
 
         try:
             bayes_pred = self.bayes_model.predict([[valor]])[0]
-        except Exception as e:
+        except Exception:
             bayes_pred = "Sistema operativo, fitness estimado: 0.9"
 
-        texto = bayes_pred if random.random() > 0.5 else f"Análisis local: {prediccion_nn[0]:.2f}"
+        texto = bayes_pred if random.random() > 0.5 else \
+            f"Análisis local: {prediccion_nn[0]:.2f}"
         return {"valor": prediccion_nn[0], "texto": texto}
 
     async def entrenar_local(self):
@@ -203,7 +236,9 @@ class ComunicadorInteligente:
     async def ejecutar(self):
         while True:
             try:
-                resultado = await self.bloque.procesar(self.config.get("carga", 0.5))
+                resultado = await self.bloque.procesar(
+                    self.config.get("carga", 0.5)
+                )
                 for msg in resultado["mensajes"]:
                     if msg.get("texto"):
                         self.logger.info(f"Respuesta al usuario: {msg['texto']}")
@@ -215,7 +250,7 @@ class ComunicadorInteligente:
                 })
                 await self.entrenar_local()
             except Exception as e:
-                self.logger.error(f"Error ejecutando plugin ComunicadorInteligente: {e}")
+                self.logger.error(f"Error ejecutando ComunicadorInteligente: {e}")
             await asyncio.sleep(self.config.get("intervalo", 60))
 
     async def detener(self):
@@ -226,6 +261,7 @@ class ComunicadorInteligente:
         with open(self.model_path["bayes"], "wb") as f:
             pickle.dump(self.bayes_model, f)
         self.rl_model.save(self.model_path["rl"])
+
 
 def inicializar(nucleus, config):
     plugin = ComunicadorInteligente(nucleus, config)
