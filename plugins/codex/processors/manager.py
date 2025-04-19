@@ -8,7 +8,7 @@ import os
 import json
 import asyncio
 import logging
-from corec.core import ComponenteBase, zstd, serializar_mensaje
+from corec.core import ComponenteBase, zstd
 from plugins.codex.processors.reviser import CodexReviser
 from plugins.codex.processors.generator import CodexGenerator
 from plugins.codex.processors.memory import CodexMemory
