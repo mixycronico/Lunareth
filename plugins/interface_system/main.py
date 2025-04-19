@@ -33,23 +33,19 @@ class InterfaceSystem:
         self.controller = None
 
     async def inicializar(self):
-        # Inicializar Redis
         redis_url = f"redis://{self.nucleus.redis_config['username']}:{self.nucleus.redis_config['password']}@{self.nucleus.redis_config['host']}:{self.nucleus.redis_config['port']}"
         self.redis_client = await aioredis.from_url(redis_url, decode_responses=True)
         self.logger.info("Redis inicializado para InterfaceSystem")
         await self.brain.inicializar_redis()
 
-        # Inicializar controlador
         self.controller = InterfaceController(self.nucleus, self.redis_client)
 
-        # Crear bloque simbiótico
         entidades = [crear_entidad(f"m{i}", self.canal, self._procesar_comando) for i in range(self.config.get("entidades", 100))]
-        self.bloque = BloqueSimbiotico(f"interface_system", self.canal, entidades, max_size=1024, nucleus=self.nucleus)
+        self.bloque = BloqueSimbiotico("interface_system", self.canal, entidades, max_size=1024, nucleus=self.nucleus)
         self.nucleus.modulos["registro"].bloques[self.bloque.id] = self.bloque
         self.nucleus.registrar_plugin("interface_system", self)
         self.logger.info(f"Plugin InterfaceSystem inicializado con {len(entidades)} entidades")
 
-        # Iniciar CLI
         asyncio.create_task(self._iniciar_cli())
 
     async def _procesar_comando(self, mensaje: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -58,9 +54,8 @@ class InterfaceSystem:
                 mensaje = {"comando": "status"}
             comando = mensaje.get("comando", "").lower()
             valor = mensaje.get("valor", 0.5)
-            texto = mensaje.get("texto", "")
 
-            if comando == "status" or comando == "estado":
+            if comando in ["status", "estado"]:
                 estado = await self.controller.estado_sistema()
                 if "error" in estado:
                     return {"valor": 0.0, "texto": estado["error"]}
@@ -84,7 +79,7 @@ class InterfaceSystem:
                     table.add_row(plugin)
                 console.print(table)
                 respuesta = f"{len(estado['plugins_activos'])} plugins activos 🎉"
-            elif comando == "blocks" or comando == "bloques":
+            elif comando in ["blocks", "bloques"]:
                 estado = await self.controller.estado_sistema()
                 if "error" in estado:
                     return {"valor": 0.0, "texto": estado["error"]}
@@ -97,7 +92,7 @@ class InterfaceSystem:
                     table.add_row(bloque["id"], str(bloque["canal"]), f"{bloque['fitness']:.2f}", str(bloque["entidades"]))
                 console.print(table)
                 respuesta = f"{len(estado['bloques'])} bloques activos 🧬"
-            elif comando == "nodes" or comando == "nodos":
+            elif comando in ["nodes", "nodos"]:
                 nodos = await self.controller.listar_nodos()
                 if "error" in nodos:
                     return {"valor": 0.0, "texto": nodos["error"]}
@@ -108,7 +103,7 @@ class InterfaceSystem:
                     table.add_row(nodo["id"], "Activo" if nodo["activo"] else "Inactivo")
                 console.print(table)
                 respuesta = f"{len(nodos['nodos'])} nodos activos 🌐"
-            elif comando == "alerts" or comando == "alertas":
+            elif comando in ["alerts", "alertas"]:
                 alertas = await self.controller.listar_alertas()
                 if "error" in alertas:
                     return {"valor": 0.0, "texto": alertas["error"]}
@@ -137,7 +132,6 @@ class InterfaceSystem:
                     pass
                 respuesta = await self.controller.configurar(clave, valor)
             else:
-                # Enviar a ComunicadorInteligente para respuestas vivas
                 respuesta = await self.controller.enviar_chat(comando, valor)
 
             console.print(f"[bold magenta]CoreC[/bold magenta]: {respuesta}", style="green")
@@ -151,8 +145,7 @@ class InterfaceSystem:
         @click.group()
         def cli():
             console.print(Panel(
-                "[bold green]Bienvenido a CoreC Interface CLI[/bold green]
-"
+                "[bold green]Bienvenido a CoreC Interface CLI[/bold green]\n"
                 "Sistema bioinspirado ligero y escalable 🌱",
                 border_style="cyan", expand=False
             ))
