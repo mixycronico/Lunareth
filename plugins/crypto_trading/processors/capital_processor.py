@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 plugins/crypto_trading/processors/capital_processor.py
-Gestiona el capital compartido de usuarios, asigna fondos para trading,
-y ajusta fases dinámicamente.
+Gestiona el capital compartido de usuarios, asigna fondos para trading, y ajusta fases dinámicamente.
 """
 
 import asyncio
@@ -22,13 +21,20 @@ class CapitalProcessor(ComponenteBase):
         self.config = config.get("crypto_trading", {})
         self.redis_client = redis_client
         self.logger = logging.getLogger("CapitalProcessor")
-        capital_cfg = self.config.get("capital_config", {})
-        self.min_contribution = capital_cfg.get("min_contribution", 100)
-        self.max_active_ratio = capital_cfg.get("max_active_ratio", 0.6)
-        self.phases = capital_cfg.get("phases", [])
+        self.min_contribution = self.config.get(
+            "capital_config", {}
+        ).get("min_contribution", 100)
+        self.max_active_ratio = self.config.get(
+            "capital_config", {}
+        ).get("max_active_ratio", 0.6)
+        self.phases = self.config.get("capital_config", {}).get("phases", [])
         self.circuit_breaker = CircuitBreaker(
-            capital_cfg.get("circuit_breaker", {}).get("max_failures", 3),
-            capital_cfg.get("circuit_breaker", {}).get("reset_timeout", 900)
+            self.config.get("capital_config", {})
+            .get("circuit_breaker", {})
+            .get("max_failures", 3),
+            self.config.get("capital_config", {})
+            .get("circuit_breaker", {})
+            .get("reset_timeout", 900)
         )
         self.plugin_db = TradingDB(self.config.get("db_config", {}))
         self.pool = 0.0
@@ -124,7 +130,9 @@ class CapitalProcessor(ComponenteBase):
             profit = result.get("profit", 0)
             if profit != 0:
                 self.pool += profit
-                self.active_capital -= result.get("quantity", 0) * result.get("price", 0)
+                self.active_capital -= (
+                    result.get("quantity", 0) * result.get("price", 0)
+                )
                 await self.plugin_db.update_pool(self.pool)
                 await self.plugin_db.update_active_capital(self.active_capital)
                 mensaje = await serializar_mensaje(
@@ -135,7 +143,8 @@ class CapitalProcessor(ComponenteBase):
                 )
                 await self.redis_client.xadd("crypto_trading_data", {"data": mensaje})
                 self.logger.info(
-                    f"Pool actualizado con profit: {profit}, total: {self.pool}"
+                    f"Pool actualizado con profit: {profit}, "
+                    f"total: {self.pool}"
                 )
         except Exception as e:
             self.logger.error(f"Error actualizando pool: {e}")
@@ -153,10 +162,11 @@ class CapitalProcessor(ComponenteBase):
                 risk_adjustment = 0.5
             available_capital = max(0, max_active - self.active_capital)
             trade_amount = min(
-                available_capital,
-                self.pool * risk_per_trade * risk_adjustment
+                available_capital, self.pool * risk_per_trade * risk_adjustment
             )
             if trade_amount > 0:
+                self.active_capital += trade_amount
+                await self.plugin_db.update_active_capital(self.active_capital)
                 mensaje = await serializar_mensaje(
                     int(datetime.utcnow().timestamp() % 1000000),
                     self.canal,
@@ -164,8 +174,6 @@ class CapitalProcessor(ComponenteBase):
                     True
                 )
                 await self.redis_client.xadd("crypto_trading_data", {"data": mensaje})
-                self.active_capital += trade_amount
-                await self.plugin_db.update_active_capital(self.active_capital)
                 self.logger.info(
                     f"Asignado {trade_amount} para trading, fase: {phase['name']} 🌟"
                 )
