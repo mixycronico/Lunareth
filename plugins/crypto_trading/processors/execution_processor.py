@@ -1,21 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-plugins/crypto_trading/processors/execution_processor.py
-Gestiona la ejecución de órdenes de trading y backtesting avanzado con Bollinger Bands.
-"""
+
 from corec.core import ComponenteBase, zstd, serializar_mensaje
 from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
-import aiohttp
 import time
-import psycopg2
 import logging
-import hmac
-import hashlib
-import json
-import backoff
-import numpy as np
 from typing import Dict, Any, List
 from datetime import datetime
 
