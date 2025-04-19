@@ -8,6 +8,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import json
+import asyncio
 from brain import JarvisBrain
 from controller import InterfaceController
 import logging
