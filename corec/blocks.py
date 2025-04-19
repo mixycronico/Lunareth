@@ -1,6 +1,6 @@
-from corec.core import IsolationForest, psycopg2, zstd, json, statistics, logging, asyncio, time, serializar_mensaje, deserializar_mensaje
+from corec.core import IsolationForest, psycopg2, zstd, json, statistics, logging, asyncio, time, deserializar_mensaje
 from corec.entities import MicroCeluEntidadCoreC, crear_entidad, procesar_entidad
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 class BloqueSimbiotico:
     def __init__(self, id: str, canal: int, entidades: list[MicroCeluEntidadCoreC], max_size: int = 1024, nucleus=None):
