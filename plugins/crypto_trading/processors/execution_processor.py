@@ -14,7 +14,9 @@ import logging
 import hmac
 import hashlib
 import json
-from typing import Dict, Any
+import backoff
+import numpy as np
+from typing import Dict, Any, List
 from datetime import datetime
 
 class ExecutionProcessor(ComponenteBase):
