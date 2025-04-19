@@ -2,17 +2,22 @@
 # -*- coding: utf-8 -*-
 """
 plugins/interface_system/brain.py
-Núcleo conversacional para el plugin InterfaceSystem, integrado con ComunicadorInteligente.
+Núcleo conversacional para el plugin InterfaceSystem,
+integrado con ComunicadorInteligente.
 """
+
 import json
 import os
 import time
 from typing import Dict, Any
 import logging
+
 from corec.core import zstd
+
 
 MEM_FILE = "plugins/interface_system/memory.json"
 MEM_KEY = "interface_memory"
+
 
 class JarvisBrain:
     def __init__(self, nucleus=None, use_redis: bool = True):
@@ -24,8 +29,15 @@ class JarvisBrain:
 
     async def inicializar_redis(self):
         if self.use_redis and self.nucleus:
-            redis_url = f"redis://{self.nucleus.redis_config['username']}:{self.nucleus.redis_config['password']}@{self.nucleus.redis_config['host']}:{self.nucleus.redis_config['port']}"
-            self.redis_client = await self.nucleus.aioredis.from_url(redis_url, decode_responses=False)
+            redis_url = (
+                f"redis://{self.nucleus.redis_config['username']}:"
+                f"{self.nucleus.redis_config['password']}@"
+                f"{self.nucleus.redis_config['host']}:"
+                f"{self.nucleus.redis_config['port']}"
+            )
+            self.redis_client = await self.nucleus.aioredis.from_url(
+                redis_url, decode_responses=False
+            )
             self.logger.info("Redis inicializado para memoria")
 
     def _cargar_memoria(self) -> Dict[str, Any]:
@@ -42,7 +54,12 @@ class JarvisBrain:
                     return json.load(f)
             except Exception as e:
                 self.logger.error(f"Error cargando memoria desde archivo: {e}")
-        return {"conversacion": [], "estado": {}, "config": {}, "timestamp": time.time()}
+        return {
+            "conversacion": [],
+            "estado": {},
+            "config": {},
+            "timestamp": time.time()
+        }
 
     def guardar_memoria(self):
         try:
