@@ -9,9 +9,11 @@ from corec.core import ComponenteBase, zstd, serializar_mensaje
 from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
 import json
+import datetime
+import numpy as np
 import asyncio
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 class AnalyzerProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
