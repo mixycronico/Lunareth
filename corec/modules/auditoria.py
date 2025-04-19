@@ -5,7 +5,6 @@ corec/modules/auditoria.py
 Módulo de auditoría para detección de anomalías en CoreC.
 """
 from corec.core import ModuloBase, asyncio, logging, psycopg2, time
-from typing import Dict, Any
 
 class ModuloAuditoria(ModuloBase):
     def __init__(self):
