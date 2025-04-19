@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 plugins/interface_system/main.py
-Plugin que proporciona una CLI y WebSocket para CoreC, con vida via ComunicadorInteligente.
+Plugin CLI y WebSocket para CoreC, con vida vía ComunicadorInteligente.
 """
 
 import asyncio
@@ -33,42 +33,42 @@ class InterfaceSystem:
         self.config = config
         self.canal = config.get("canal", 8)
         self.bloque = None
-        self.brain = JarvisBrain(nucleus, use_redis=config.get("use_redis", True))
+        self.brain = JarvisBrain(
+            nucleus, use_redis=config.get("use_redis", True)
+        )
         self.redis_client = None
         self.controller = None
 
     async def inicializar(self):
         redis_cfg = self.nucleus.redis_config
         redis_url = (
-            f"redis://{redis_cfg['username']}:{redis_cfg['password']}@"
-            f"{redis_cfg['host']}:{redis_cfg['port']}"
+            f"redis://{redis_cfg['username']}:{redis_cfg['password']}"
+            f"@{redis_cfg['host']}:{redis_cfg['port']}"
         )
-        self.redis_client = await aioredis.from_url(redis_url, decode_responses=True)
+        self.redis_client = await aioredis.from_url(
+            redis_url, decode_responses=True
+        )
         self.logger.info("Redis inicializado para InterfaceSystem")
         await self.brain.inicializar_redis()
-
         self.controller = InterfaceController(self.nucleus, self.redis_client)
-
         entidades = [
             crear_entidad(f"m{i}", self.canal, self._procesar_comando)
             for i in range(self.config.get("entidades", 100))
         ]
         self.bloque = BloqueSimbiotico(
-            "interface_system",
-            self.canal,
-            entidades,
-            max_size=1024,
-            nucleus=self.nucleus
+            "interface_system", self.canal, entidades,
+            max_size=1024, nucleus=self.nucleus
         )
         self.nucleus.modulos["registro"].bloques[self.bloque.id] = self.bloque
         self.nucleus.registrar_plugin("interface_system", self)
         self.logger.info(
             f"Plugin InterfaceSystem inicializado con {len(entidades)} entidades"
         )
-
         asyncio.create_task(self._iniciar_cli())
 
-    async def _procesar_comando(self, mensaje: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def _procesar_comando(
+        self, mensaje: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         try:
             if mensaje is None:
                 mensaje = {"comando": "status"}
@@ -169,7 +169,10 @@ class InterfaceSystem:
             else:
                 respuesta = await self.controller.enviar_chat(comando, valor)
 
-            console.print(f"[bold magenta]CoreC[/bold magenta]: {respuesta}", style="green")
+            console.print(
+                f"[bold magenta]CoreC[/bold magenta]: {respuesta}",
+                style="green"
+            )
             self.brain.recordar(comando, respuesta)
             return {"valor": valor, "texto": respuesta}
 
@@ -188,27 +191,37 @@ class InterfaceSystem:
 
         @cli.command()
         def status():
-            resultado = asyncio.run(self._procesar_comando({"comando": "status"}))
+            resultado = asyncio.run(
+                self._procesar_comando({"comando": "status"})
+            )
             self.brain.recordar("status", resultado["texto"])
 
         @cli.command()
         def plugins():
-            resultado = asyncio.run(self._procesar_comando({"comando": "plugins"}))
+            resultado = asyncio.run(
+                self._procesar_comando({"comando": "plugins"})
+            )
             self.brain.recordar("plugins", resultado["texto"])
 
         @cli.command()
         def blocks():
-            resultado = asyncio.run(self._procesar_comando({"comando": "blocks"}))
+            resultado = asyncio.run(
+                self._procesar_comando({"comando": "blocks"})
+            )
             self.brain.recordar("blocks", resultado["texto"])
 
         @cli.command()
         def nodes():
-            resultado = asyncio.run(self._procesar_comando({"comando": "nodes"}))
+            resultado = asyncio.run(
+                self._procesar_comando({"comando": "nodes"})
+            )
             self.brain.recordar("nodes", resultado["texto"])
 
         @cli.command()
         def alerts():
-            resultado = asyncio.run(self._procesar_comando({"comando": "alerts"}))
+            resultado = asyncio.run(
+                self._procesar_comando({"comando": "alerts"})
+            )
             self.brain.recordar("alerts", resultado["texto"])
 
         @cli.command()
@@ -225,7 +238,9 @@ class InterfaceSystem:
             resultado = asyncio.run(
                 self._procesar_comando({"comando": f"activar plugin {plugin}"})
             )
-            self.brain.recordar(f"activar plugin {plugin}", resultado["texto"])
+            self.brain.recordar(
+                f"activar plugin {plugin}", resultado["texto"]
+            )
 
         @cli.command()
         @click.argument("plugin")
@@ -233,7 +248,9 @@ class InterfaceSystem:
             resultado = asyncio.run(
                 self._procesar_comando({"comando": f"desactivar plugin {plugin}"})
             )
-            self.brain.recordar(f"desactivar plugin {plugin}", resultado["texto"])
+            self.brain.recordar(
+                f"desactivar plugin {plugin}", resultado["texto"]
+            )
 
         @cli.command()
         @click.argument("clave")
@@ -242,13 +259,17 @@ class InterfaceSystem:
             resultado = asyncio.run(
                 self._procesar_comando({"comando": f"config {clave} {valor}"})
             )
-            self.brain.recordar(f"config {clave} {valor}", resultado["texto"])
+            self.brain.recordar(
+                f"config {clave} {valor}", resultado["texto"]
+            )
 
         cli()
 
     async def ejecutar(self):
         while True:
-            resultado = await self.bloque.procesar(self.config.get("carga", 0.5))
+            resultado = await self.bloque.procesar(
+                self.config.get("carga", 0.5)
+            )
             await self.nucleus.publicar_alerta({
                 "tipo": "interface_actividad",
                 "bloque_id": self.bloque.id,
