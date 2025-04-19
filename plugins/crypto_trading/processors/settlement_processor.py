@@ -11,6 +11,7 @@ import json
 import logging
 import asyncio
 from datetime import datetime, timedelta
+from typing import Dict, Any
 
 class SettlementProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
