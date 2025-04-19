@@ -6,7 +6,6 @@ Almacena estado de revisiones en Redis.
 """
 import hashlib
 import logging
-from typing import Optional
 
 class CodexMemory:
     def __init__(self, redis_client):
