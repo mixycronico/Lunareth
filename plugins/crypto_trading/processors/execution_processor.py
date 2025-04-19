@@ -48,29 +48,37 @@ class ExecutionProcessor(ComponenteBase):
                 prediction = mensaje.get("prediction")
 
                 if symbol and prediction:
-                    price_data = self.metrics_cache.get("market_data", {}).get(symbol, {})
+                    price_data = self.metrics_cache.get(
+                        "market_data", {}
+                    ).get(symbol, {})
                     current_price = price_data.get("price")
 
                     if not current_price:
-                        raise ValueError(f"No hay precio actual para {symbol} en cache")
+                        raise ValueError(
+                            f"No hay precio actual para {symbol} en cache"
+                        )
 
                     exchange = self.config["exchange_config"]["exchanges"][0]
                     quantity = (1000 * self.risk_per_trade) / current_price
 
                     if prediction > current_price * (1 + self.take_profit):
                         await self.place_order(
-                            exchange, symbol, "buy", quantity, "spot", current_price
+                            exchange, symbol, "buy",
+                            quantity, "spot", current_price
                         )
                     elif prediction < current_price * (1 - self.stop_loss):
                         await self.place_order(
-                            exchange, symbol, "sell", quantity, "spot", current_price
+                            exchange, symbol, "sell",
+                            quantity, "spot", current_price
                         )
 
             elif tipo == "trading_execution":
                 action = mensaje.get("action")
                 if action == "update_risk":
                     self.risk_per_trade = mensaje["risk_per_trade"]
-                    self.logger.info(f"Riesgo actualizado a {self.risk_per_trade}")
+                    self.logger.info(
+                        f"Riesgo actualizado a {self.risk_per_trade}"
+                    )
                 elif action == "update_strategy":
                     params = mensaje["params"]
                     self.risk_per_trade = params["risk_per_trade"]
