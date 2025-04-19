@@ -31,12 +31,14 @@ class CodexReviser:
             self.ai_pipeline = None
 
     async def revisar_codigo(
-        self, codigo: str, archivo: str
+        self,
+        codigo: str,
+        archivo: str
     ) -> Optional[str]:
         try:
             if archivo.endswith(".py"):
                 return await self._revisar_python(codigo)
-            elif archivo.endswith(".js"):
+            if archivo.endswith(".js"):
                 return await self._revisar_javascript(codigo)
             return codigo
         except Exception as e:
@@ -44,13 +46,11 @@ class CodexReviser:
             return None
 
     async def _revisar_python(self, codigo: str) -> str:
-        # Análisis estático con pyflakes
         reporter = StringIO()
         pyflakes.api.check(codigo, "<string>", reporter)
         if reporter.getvalue():
             self.logger.warning(f"Errores pyflakes: {reporter.getvalue()}")
 
-        # Refactorización con ast
         try:
             tree = ast.parse(codigo)
             for node in ast.walk(tree):
@@ -64,17 +64,16 @@ class CodexReviser:
         except SyntaxError:
             self.logger.warning("Error de sintaxis, omitiendo ast")
 
-        # Formato con black
         try:
             codigo = black.format_str(codigo, mode=black.FileMode())
         except Exception as e:
             self.logger.warning(f"Error en black: {e}")
 
-        # Sugerencias AI (CodeT5)
         if self.ai_pipeline:
             try:
                 sugerencia = self.ai_pipeline(
-                    codigo, max_length=512
+                    codigo,
+                    max_length=512
                 )[0]["generated_text"]
                 if sugerencia != codigo:
                     self.logger.info("Aplicando sugerencia AI")
@@ -85,5 +84,4 @@ class CodexReviser:
         return codigo
 
     async def _revisar_javascript(self, codigo: str) -> str:
-        # Lógica básica para JavaScript (futuras mejoras)
         return codigo
