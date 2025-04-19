@@ -11,7 +11,6 @@ import logging
 import redis.asyncio as aioredis
 from typing import Dict, Any, List
 from celery import Celery
-from sklearn.ensemble import IsolationForest
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
