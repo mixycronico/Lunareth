@@ -16,7 +16,7 @@ async def procesar_entidad(entidad: MicroCeluEntidadCoreC, umbral: float = 0.5) 
         if valor > umbral:
             return await serializar_mensaje(int(id[1:]), canal, valor, True)
         return await serializar_mensaje(int(id[1:]), canal, 0.0, True)
-    except Exception as e:
+    except Exception:
         return await serializar_mensaje(int(id[1:]), canal, 0.0, False)
 
 CeluEntidadCoreC = tuple[str, int, Callable[[Dict[str, Any]], Any], bool]
@@ -34,5 +34,5 @@ async def procesar_celu_entidad(entidad: CeluEntidadCoreC, datos: Dict[str, Any]
         if valor > umbral:
             return await serializar_mensaje(int(id[1:]), canal, valor, True)
         return await serializar_mensaje(int(id[1:]), canal, 0.0, True)
-    except Exception as e:
+    except Exception:
         return await serializar_mensaje(int(id[1:]), canal, 0.0, False)
