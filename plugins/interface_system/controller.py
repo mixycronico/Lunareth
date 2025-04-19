@@ -4,11 +4,13 @@
 plugins/interface_system/controller.py
 Ejecuta acciones en CoreC para el plugin InterfaceSystem.
 """
+
 import json
 import asyncio
 import time
 import logging
 from typing import Dict, Any
+
 
 class InterfaceController:
     def __init__(self, nucleus, redis_client):
@@ -64,10 +66,15 @@ class InterfaceController:
                 "modulos_activos": list(self.nucleus.modulos.keys()),
                 "plugins_activos": list(self.nucleus.plugins.keys()),
                 "bloques": [
-                    {"id": bid, "canal": b.canal, "fitness": b.fitness, "entidades": len(b.entidades)}
-                    for bid, b in bloques.items()
+                    {
+                        "id": bid,
+                        "canal": b.canal,
+                        "fitness": b.fitness,
+                        "entidades": len(b.entidades)
+                    } for bid, b in bloques.items()
                 ],
-                "alertas": self.nucleus.modulos["auditoria"].mem.get("alertas", []) if "auditoria" in self.nucleus.modulos else [],
+                "alertas": self.nucleus.modulos["auditoria"].mem.get("alertas", [])
+                if "auditoria" in self.nucleus.modulos else [],
                 "nodos": self.nucleus.config.get("nodos", 1)
             }
             return estado
@@ -85,7 +92,7 @@ class InterfaceController:
 
     async def listar_alertas(self) -> Dict[str, Any]:
         try:
-            alertas = self.nucleus.modulos["auditoria"].mem.get("alertas", []) if "auditoria" in self.nucleus.modulos else []
+            alertas = self.nucleus.modulos["auditoria"].mem.get("alertas", [])
             return {"alertas": alertas}
         except Exception as e:
             self.logger.error(f"Error listando alertas: {e}")
@@ -103,10 +110,14 @@ class InterfaceController:
     async def enviar_chat(self, mensaje: str, valor: float = 0.5) -> str:
         try:
             mensaje_data = {"texto": mensaje, "valor": valor}
-            await self.redis_client.xadd(self.input_stream, {"data": json.dumps(mensaje_data)})
+            await self.redis_client.xadd(
+                self.input_stream, {"data": json.dumps(mensaje_data)}
+            )
             start = time.time()
             while time.time() - start < 5:
-                mensajes = await self.redis_client.xread({self.output_stream: "0-0"}, count=1)
+                mensajes = await self.redis_client.xread(
+                    {self.output_stream: "0-0"}, count=1
+                )
                 for _, entries in mensajes:
                     for _, data in entries:
                         if data.get("texto"):
