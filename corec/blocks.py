@@ -80,7 +80,7 @@ class BloqueSimbiotico:
             cur.close()
             conn.close()
 
-            # Nuevo: enviar también a Redis si está disponible
+            # También enviar los resultados comprimidos a Redis si está disponible
             if hasattr(self.nucleus, "redis_client") and self.nucleus.redis_client:
                 await self.nucleus.redis_client.xadd("bloque_simbiotico_stream", {
                     "data": datos_comprimidos
