@@ -178,7 +178,7 @@ class ComunicadorInteligente:
 
         try:
             bayes_pred = self.bayes_model.predict([[valor]])[0]
-        except:
+        except Exception as e:
             bayes_pred = "Sistema operativo, fitness estimado: 0.9"
 
         texto = bayes_pred if random.random() > 0.5 else f"Análisis local: {prediccion_nn[0]:.2f}"
@@ -201,7 +201,6 @@ class ComunicadorInteligente:
             self.logger.error(f"Error entrenando localmente: {e}")
 
     async def ejecutar(self):
-        """Ejecutar el plugin, procesando mensajes y entrenando IAs."""
         while True:
             try:
                 resultado = await self.bloque.procesar(self.config.get("carga", 0.5))
