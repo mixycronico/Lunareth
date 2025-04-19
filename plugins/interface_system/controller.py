@@ -9,7 +9,6 @@ import asyncio
 import time
 import logging
 from typing import Dict, Any
-from corec.core import serializar_mensaje, deserializar_mensaje
 
 class InterfaceController:
     def __init__(self, nucleus, redis_client):
