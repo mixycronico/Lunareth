@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 plugins/crypto_trading/processors/exchange_processor.py
-Consulta precios y órdenes abiertas en 5 exchanges, publicando datos en crypto_trading_data.
+Consulta precios y órdenes abiertas en exchanges, publica en crypto_trading_data.
 """
 
 import aiohttp
@@ -54,19 +54,25 @@ class ExchangeProcessor(ComponenteBase):
             headers = {}
             url = ""
 
-            symbol_noslash = symbol.replace('/', '')
-            symbol_dash = symbol.replace('/', '-')
+            sym_noslash = symbol.replace('/', '')
+            sym_dash = symbol.replace('/', '-')
 
             if name == "binance":
-                url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol_noslash}"
+                url = f"https://api.binance.com/api/v3/ticker/price?symbol={sym_noslash}"
             elif name == "kucoin":
-                url = f"https://api.kucoin.com/api/v1/market/orderbook/level1?symbol={symbol_dash}"
+                url = (
+                    "https://api.kucoin.com/api/v1/market/"
+                    f"orderbook/level1?symbol={sym_dash}"
+                )
             elif name == "bybit":
-                url = f"https://api.bybit.com/v2/public/tickers?symbol={symbol_noslash}"
+                url = (
+                    "https://api.bybit.com/v2/public/"
+                    f"tickers?symbol={sym_noslash}"
+                )
             elif name == "okx":
-                url = f"https://www.okx.com/api/v5/market/ticker?instId={symbol_dash}"
+                url = f"https://www.okx.com/api/v5/market/ticker?instId={sym_dash}"
             elif name == "kraken":
-                url = f"https://api.kraken.com/0/public/Ticker?pair={symbol_noslash}"
+                url = f"https://api.kraken.com/0/public/Ticker?pair={sym_noslash}"
 
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
@@ -77,12 +83,16 @@ class ExchangeProcessor(ComponenteBase):
                     elif name == "kucoin":
                         price = float(data.get("data", {}).get("price", 0))
                     elif name == "bybit":
-                        price = float(data.get("result", [{}])[0].get("last_price", 0))
+                        price = float(
+                            data.get("result", [{}])[0].get("last_price", 0)
+                        )
                     elif name == "okx":
                         price = float(data.get("data", [{}])[0].get("last", 0))
                     elif name == "kraken":
-                        key = symbol_noslash
-                        price = float(data.get("result", {}).get(key, {}).get("c", [0])[0])
+                        price = float(
+                            data.get("result", {}).get(sym_noslash, {})
+                            .get("c", [0])[0]
+                        )
                     return {
                         "exchange": name,
                         "symbol": symbol,
@@ -111,30 +121,33 @@ class ExchangeProcessor(ComponenteBase):
             headers = {}
             url = ""
 
-            symbol_noslash = symbol.replace('/', '')
-            symbol_dash = symbol.replace('/', '-')
+            sym_noslash = symbol.replace('/', '')
+            sym_dash = symbol.replace('/', '-')
 
             if name == "binance":
                 url = (
-                    f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol_noslash}"
+                    "https://fapi.binance.com/fapi/v1/"
+                    f"ticker/price?symbol={sym_noslash}"
                 )
             elif name == "kucoin":
                 url = (
-                    f"https://api-futures.kucoin.com/api/v1/ticker?symbol={symbol_dash}"
+                    "https://api-futures.kucoin.com/api/v1/"
+                    f"ticker?symbol={sym_dash}"
                 )
             elif name == "bybit":
                 url = (
-                    f"https://api.bybit.com/v2/public/tickers?symbol={symbol_noslash}"
+                    "https://api.bybit.com/v2/public/"
+                    f"tickers?symbol={sym_noslash}"
                 )
             elif name == "okx":
                 url = (
-                    f"https://www.okx.com/api/v5/market/ticker?"
-                    f"instId={symbol_dash}-FUT"
+                    "https://www.okx.com/api/v5/market/"
+                    f"ticker?instId={sym_dash}-FUT"
                 )
             elif name == "kraken":
                 url = (
-                    f"https://futures.kraken.com/api/v3/ticker?"
-                    f"symbol={symbol_noslash}"
+                    "https://futures.kraken.com/api/v3/"
+                    f"ticker?symbol={sym_noslash}"
                 )
 
             async with session.get(url, headers=headers) as resp:
@@ -146,7 +159,9 @@ class ExchangeProcessor(ComponenteBase):
                     elif name == "kucoin":
                         price = float(data.get("data", {}).get("price", 0))
                     elif name == "bybit":
-                        price = float(data.get("result", [{}])[0].get("last_price", 0))
+                        price = float(
+                            data.get("result", [{}])[0].get("last_price", 0)
+                        )
                     elif name == "okx":
                         price = float(data.get("data", [{}])[0].get("last", 0))
                     elif name == "kraken":
@@ -183,7 +198,7 @@ class ExchangeProcessor(ComponenteBase):
 
     async def fetch_exchange_data(self, exchange: Dict[str, Any]):
         while True:
-            # Tu lógica para precios y órdenes aquí
+            # Lógica para procesar precios o órdenes
             await asyncio.sleep(self.fetch_interval)
 
     async def detener(self):
