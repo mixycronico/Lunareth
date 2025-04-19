@@ -7,8 +7,11 @@ Módulo central para imports y comunicaciones en CoreC.
 # Dependencias externas
 import struct
 import zstd
+import json
+import logging
 import redis.asyncio as aioredis
 import psycopg2
+from typing import Dict, Any, List
 from celery import Celery
 from sklearn.ensemble import IsolationForest
 import torch
