@@ -8,7 +8,7 @@ import psycopg2
 import logging
 import json
 import datetime
-from typing import Dict, Any
+from typing import List, Dict, Any
 
 class TradingDB:
     def __init__(self, db_config: Dict[str, Any]):
