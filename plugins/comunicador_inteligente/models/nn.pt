@@ -1,4 +1,18 @@
 import torch
 from plugins.comunicador_inteligente.main import RedNeuronalLigera
-nn_model = RedNeuronalLigera()
-torch.save(nn_model.state_dict(), "plugins/comunicador_inteligente/models/nn.pt")
+
+modelo = RedNeuronalLigera()
+X = torch.tensor([[0.1]*10, [0.5]*10, [0.9]*10])
+y = torch.tensor([[0, 0, 1, 0, 0], [0, 1, 0, 0, 0], [1, 0, 0, 0, 0]], dtype=torch.float32)
+
+loss_fn = torch.nn.MSELoss()
+optimizer = torch.optim.Adam(modelo.parameters(), lr=0.01)
+
+for epoch in range(300):
+    output = modelo(X)
+    loss = loss_fn(output, y)
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+torch.save(modelo.state_dict(), "plugins/comunicador_inteligente/models/nn.pt")
