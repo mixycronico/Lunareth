@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+plugins/corec/blocks/bloque_simbiotico.py
+Define el bloque simbiótico para procesamiento distribuido en CoreC.
+"""
+
 from corec.core import IsolationForest, psycopg2, zstd, json, statistics, logging, asyncio, time, deserializar_mensaje
 from corec.entities import MicroCeluEntidadCoreC, crear_entidad, procesar_entidad
 from typing import Dict, Any
@@ -72,6 +79,13 @@ class BloqueSimbiotico:
             conn.commit()
             cur.close()
             conn.close()
+
+            # Nuevo: enviar también a Redis si está disponible
+            if hasattr(self.nucleus, "redis_client") and self.nucleus.redis_client:
+                await self.nucleus.redis_client.xadd("bloque_simbiotico_stream", {
+                    "data": datos_comprimidos
+                })
+
             self.mensajes.clear()
         except Exception as e:
             self.logger.error(f"[BloqueSimbiotico {self.id}] Error escribiendo en PostgreSQL: {e}")
