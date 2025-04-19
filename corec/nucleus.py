@@ -2,7 +2,6 @@ import asyncio
 import time
 import json
 import importlib
-import zstd
 import logging
 import psycopg2
 import aioredis
