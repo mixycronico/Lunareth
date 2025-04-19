@@ -5,7 +5,7 @@ corec/bootstrap.py
 Orquestador plug-and-play para CoreC.
 """
 
-from corec.core import asyncio, logging, json, Path, importlib, cargar_config
+from corec.core import asyncio, logging, Path, importlib, cargar_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 
