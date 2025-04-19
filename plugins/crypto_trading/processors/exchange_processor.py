@@ -28,12 +28,12 @@ class ExchangeProcessor(ComponenteBase):
         self.fetch_interval = interval / max(len(self.exchanges), 1)
         self.circuit_breakers = {
             ex["name"]: CircuitBreaker(
-                self.config.get("exchange_config", {}).get(
-                    "circuit_breaker", {}
-                ).get("max_failures", 3),
-                self.config.get("exchange_config", {}).get(
-                    "circuit_breaker", {}
-                ).get("reset_timeout", 900)
+                self.config.get("exchange_config", {}).get("circuit_breaker", {}).get(
+                    "max_failures", 3
+                ),
+                self.config.get("exchange_config", {}).get("circuit_breaker", {}).get(
+                    "reset_timeout", 900
+                )
             ) for ex in self.exchanges
         }
         self.plugin_db = TradingDB(self.config.get("db_config", {}))
@@ -58,7 +58,10 @@ class ExchangeProcessor(ComponenteBase):
             sym_dash = symbol.replace('/', '-')
 
             if name == "binance":
-                url = f"https://api.binance.com/api/v3/ticker/price?symbol={sym_noslash}"
+                url = (
+                    "https://api.binance.com/api/v3/ticker/price"
+                    f"?symbol={sym_noslash}"
+                )
             elif name == "kucoin":
                 url = (
                     "https://api.kucoin.com/api/v1/market/"
@@ -70,9 +73,15 @@ class ExchangeProcessor(ComponenteBase):
                     f"tickers?symbol={sym_noslash}"
                 )
             elif name == "okx":
-                url = f"https://www.okx.com/api/v5/market/ticker?instId={sym_dash}"
+                url = (
+                    "https://www.okx.com/api/v5/market/"
+                    f"ticker?instId={sym_dash}"
+                )
             elif name == "kraken":
-                url = f"https://api.kraken.com/0/public/Ticker?pair={sym_noslash}"
+                url = (
+                    "https://api.kraken.com/0/public/Ticker"
+                    f"?pair={sym_noslash}"
+                )
 
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
@@ -111,94 +120,8 @@ class ExchangeProcessor(ComponenteBase):
             self.circuit_breakers[name].register_failure()
             return {}
 
-    @backoff.on_exception(backoff.expo, Exception, max_tries=3)
-    async def fetch_futures_price(
-        self, exchange: Dict[str, Any], symbol: str,
-        session: aiohttp.ClientSession
-    ) -> Dict[str, Any]:
-        try:
-            name = exchange["name"]
-            headers = {}
-            url = ""
-
-            sym_noslash = symbol.replace('/', '')
-            sym_dash = symbol.replace('/', '-')
-
-            if name == "binance":
-                url = (
-                    "https://fapi.binance.com/fapi/v1/"
-                    f"ticker/price?symbol={sym_noslash}"
-                )
-            elif name == "kucoin":
-                url = (
-                    "https://api-futures.kucoin.com/api/v1/"
-                    f"ticker?symbol={sym_dash}"
-                )
-            elif name == "bybit":
-                url = (
-                    "https://api.bybit.com/v2/public/"
-                    f"tickers?symbol={sym_noslash}"
-                )
-            elif name == "okx":
-                url = (
-                    "https://www.okx.com/api/v5/market/"
-                    f"ticker?instId={sym_dash}-FUT"
-                )
-            elif name == "kraken":
-                url = (
-                    "https://futures.kraken.com/api/v3/"
-                    f"ticker?symbol={sym_noslash}"
-                )
-
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    price = 0.0
-                    if name == "binance":
-                        price = float(data.get("price", 0))
-                    elif name == "kucoin":
-                        price = float(data.get("data", {}).get("price", 0))
-                    elif name == "bybit":
-                        price = float(
-                            data.get("result", [{}])[0].get("last_price", 0)
-                        )
-                    elif name == "okx":
-                        price = float(data.get("data", [{}])[0].get("last", 0))
-                    elif name == "kraken":
-                        price = float(data.get("tickers", [{}])[0].get("last", 0))
-                    return {
-                        "exchange": name,
-                        "symbol": symbol,
-                        "market": "futures",
-                        "price": price,
-                        "timestamp": datetime.utcnow().timestamp()
-                    }
-                else:
-                    self.logger.error(
-                        f"Error futures {symbol} en {name}: {resp.status}"
-                    )
-                    self.circuit_breakers[name].register_failure()
-                    return {}
-        except Exception as e:
-            self.logger.error(f"Error futures {symbol} en {name}: {e}")
-            self.circuit_breakers[name].register_failure()
-            return {}
-
-    async def fetch_open_orders(
-        self, exchange: Dict[str, Any], session: aiohttp.ClientSession
-    ) -> List[Dict[str, Any]]:
-        try:
-            return []
-        except Exception as e:
-            self.logger.error(
-                f"Error órdenes abiertas en {exchange['name']}: {e}"
-            )
-            self.circuit_breakers[exchange["name"]].register_failure()
-            return []
-
     async def fetch_exchange_data(self, exchange: Dict[str, Any]):
         while True:
-            # Lógica para procesar precios o órdenes
             await asyncio.sleep(self.fetch_interval)
 
     async def detener(self):
