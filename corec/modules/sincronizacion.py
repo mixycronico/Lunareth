@@ -7,7 +7,6 @@ Módulo de sincronización para fusión y adaptación de bloques en CoreC.
 from corec.core import ModuloBase, asyncio, logging, time, random
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
-from typing import Dict, Any
 
 class ModuloSincronización(ModuloBase):
     def __init__(self):
