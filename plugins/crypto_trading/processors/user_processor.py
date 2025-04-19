@@ -10,7 +10,6 @@ from ..utils.helpers import CircuitBreaker
 import jwt
 import json
 import logging
-import asyncio
 import bcrypt
 from typing import Dict, Any
 from datetime import datetime, timedelta
