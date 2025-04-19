@@ -10,7 +10,8 @@ from controller import InterfaceController
 
 
 app = FastAPI(title="CoreC Interface Web")
-app.mount("/static", StaticFiles(directory="plugins/interface_system/static"), name="static")
+app.mount("/static", StaticFiles(
+    directory="plugins/interface_system/static"), name="static")
 
 # Contexto global para acceder al controlador y al cerebro
 contexto_web_interface = {
