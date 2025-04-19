@@ -5,6 +5,7 @@ plugins/codex/processors/manager.py
 Gestiona optimización, generación de websites y plugins en Codex.
 """
 import os
+import json
 import asyncio
 import logging
 from corec.core import ComponenteBase, zstd, serializar_mensaje
