@@ -8,12 +8,10 @@ from corec.core import ComponenteBase, zstd, serializar_mensaje
 from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
 import aiohttp
-import asyncio
 import json
 import logging
-import backoff
 from typing import Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class MacroProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
