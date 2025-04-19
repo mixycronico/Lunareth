@@ -6,13 +6,12 @@ Gestiona el capital compartido de usuarios, asigna fondos para trading,
 y ajusta fases dinámicamente.
 """
 
-import json
 import asyncio
 import logging
 from typing import Dict, Any
 from datetime import datetime
 
-from corec.core import ComponenteBase, zstd, serializar_mensaje
+from corec.core import ComponenteBase, serializar_mensaje
 from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
 
@@ -158,12 +157,6 @@ class CapitalProcessor(ComponenteBase):
                 self.pool * risk_per_trade * risk_adjustment
             )
             if trade_amount > 0:
-                capital_data = {
-                    "trade_amount": trade_amount,
-                    "phase": phase["name"],
-                    "risk_per_trade": risk_per_trade,
-                    "timestamp": datetime.utcnow().timestamp()
-                }
                 mensaje = await serializar_mensaje(
                     int(datetime.utcnow().timestamp() % 1000000),
                     self.canal,
