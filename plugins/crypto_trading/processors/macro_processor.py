@@ -4,9 +4,7 @@
 plugins/crypto_trading/processors/macro_processor.py
 Sincroniza datos macroeconómicos (S&P 500, Nasdaq, VIX, oro, petróleo, altcoins, DXY) desde APIs externas.
 """
-from corec.core import ComponenteBase, zstd, serializar_mensaje
-from ..utils.db import TradingDB
-from ..utils.helpers import CircuitBreaker
+
 import aiohttp
 import json
 import asyncio
@@ -15,20 +13,26 @@ import backoff
 from typing import Dict, Any
 from datetime import datetime
 
+from corec.core import ComponenteBase, zstd, serializar_mensaje
+from ..utils.db import TradingDB
+from ..utils.helpers import CircuitBreaker
+
+
 class MacroProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
         super().__init__()
         self.config = config.get("crypto_trading", {})
         self.redis_client = redis_client
         self.logger = logging.getLogger("MacroProcessor")
-        self.symbols = self.config.get("macro_config", {}).get("symbols", [])
-        self.altcoin_symbols = self.config.get("macro_config", {}).get("altcoin_symbols", [])
-        self.update_interval = self.config.get("macro_config", {}).get("update_interval", 300)
-        self.api_keys = self.config.get("macro_config", {}).get("api_keys", {})
+        macro_cfg = self.config.get("macro_config", {})
+        self.symbols = macro_cfg.get("symbols", [])
+        self.altcoin_symbols = macro_cfg.get("altcoin_symbols", [])
+        self.update_interval = macro_cfg.get("update_interval", 300)
+        self.api_keys = macro_cfg.get("api_keys", {})
         self.circuit_breakers = {
             symbol: CircuitBreaker(
-                self.config.get("macro_config", {}).get("circuit_breaker", {}).get("max_failures", 3),
-                self.config.get("macro_config", {}).get("circuit_breaker", {}).get("reset_timeout", 900)
+                macro_cfg.get("circuit_breaker", {}).get("max_failures", 3),
+                macro_cfg.get("circuit_breaker", {}).get("reset_timeout", 900)
             ) for symbol in self.symbols + self.altcoin_symbols + ["DXY", "news"]
         }
         self.plugin_db = TradingDB(self.config.get("db_config", {}))
@@ -45,15 +49,21 @@ class MacroProcessor(ComponenteBase):
             return {}
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={self.api_keys['alpha_vantage']}"
+                url = (
+                    f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE"
+                    f"&symbol={symbol}&apikey={self.api_keys['alpha_vantage']}"
+                )
                 async with session.get(url) as response:
                     if response.status != 200:
-                        self.logger.error(f"Error en Alpha Vantage para {symbol}: {response.status}")
+                        self.logger.error(
+                            f"Error en Alpha Vantage para {symbol}: {response.status}"
+                        )
                         self.circuit_breakers[symbol].register_failure()
                         return {}
                     result = await response.json()
-                    price = float(result["Global Quote"]["05. price"])
-                    change_percent = float(result["Global Quote"]["10. change percent"].replace("%", ""))
+                    quote = result["Global Quote"]
+                    price = float(quote["05. price"])
+                    change_percent = float(quote["10. change percent"].replace("%", ""))
                     return {"price": price, "change_percent": change_percent}
         except Exception as e:
             self.logger.error(f"Error obteniendo datos de {symbol}: {e}")
@@ -66,16 +76,26 @@ class MacroProcessor(ComponenteBase):
             return {}
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=DX-Y.NYB&apikey={self.api_keys['alpha_vantage']}"
+                url = (
+                    "https://www.alphavantage.co/query?"
+                    "function=CURRENCY_EXCHANGE_RATE&from_currency=USD"
+                    "&to_currency=DX-Y.NYB&apikey="
+                    f"{self.api_keys['alpha_vantage']}"
+                )
                 async with session.get(url) as response:
                     if response.status != 200:
-                        self.logger.error(f"Error en Alpha Vantage para DXY: {response.status}")
+                        self.logger.error(
+                            f"Error en Alpha Vantage para DXY: {response.status}"
+                        )
                         self.circuit_breakers["DXY"].register_failure()
                         return {}
                     result = await response.json()
-                    price = float(result["Realtime Currency Exchange Rate"]["5. Exchange Rate"])
-                    previous_price = self.macro_data_cache.get("DXY", {}).get("price", price)
-                    change_percent = ((price - previous_price) / previous_price * 100) if previous_price else 0
+                    rate = result["Realtime Currency Exchange Rate"]
+                    price = float(rate["5. Exchange Rate"])
+                    previous = self.macro_data_cache.get("DXY", {}).get("price", price)
+                    change_percent = (
+                        (price - previous) / previous * 100 if previous else 0
+                    )
                     return {"price": price, "change_percent": change_percent}
         except Exception as e:
             self.logger.error(f"Error obteniendo DXY: {e}")
@@ -89,18 +109,22 @@ class MacroProcessor(ComponenteBase):
         try:
             async with aiohttp.ClientSession() as session:
                 headers = {"X-CMC_PRO_API_KEY": self.api_keys["coinmarketcap"]}
-                url = f"https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={','.join(self.altcoin_symbols)}"
+                symbols = ",".join(self.altcoin_symbols)
+                url = (
+                    f"https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+                    f"?symbol={symbols}"
+                )
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:
                         result = await response.json()
-                        return {
-                            "altcoins": list(result["data"].keys()),
-                            "altcoins_volume": sum(result["data"][s]["quote"]["USD"]["volume_24h"] for s in result["data"])
-                        }
-                    else:
-                        self.logger.error(f"Error en CoinMarketCap: {response.status}")
-                        self.circuit_breakers["altcoins"].register_failure()
-                        return {}
+                        keys = list(result["data"].keys())
+                        volume = sum(
+                            result["data"][s]["quote"]["USD"]["volume_24h"] for s in keys
+                        )
+                        return {"altcoins": keys, "altcoins_volume": volume}
+                    self.logger.error(f"Error en CoinMarketCap: {response.status}")
+                    self.circuit_breakers["altcoins"].register_failure()
+                    return {}
         except Exception as e:
             self.logger.error(f"Error obteniendo altcoins: {e}")
             self.circuit_breakers["altcoins"].register_failure()
@@ -112,56 +136,75 @@ class MacroProcessor(ComponenteBase):
             return {}
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"https://newsapi.org/v2/everything?q=cryptocurrency&apiKey={self.api_keys['newsapi']}"
+                url = (
+                    "https://newsapi.org/v2/everything?q=cryptocurrency"
+                    f"&apiKey={self.api_keys['newsapi']}"
+                )
                 async with session.get(url) as response:
                     if response.status == 200:
                         await response.json()
                         return {"news_sentiment": 0.7}
-                    else:
-                        self.logger.error(f"Error en NewsAPI: {response.status}")
-                        self.circuit_breakers["news"].register_failure()
-                        return {}
+                    self.logger.error(f"Error en NewsAPI: {response.status}")
+                    self.circuit_breakers["news"].register_failure()
+                    return {}
         except Exception as e:
-            self.logger.error(f"Error obteniendo sentimiento de noticias: {e}")
+            self.logger.error(f"Error obteniendo sentimiento noticias: {e}")
             self.circuit_breakers["news"].register_failure()
             return {}
 
     async def sync_macro_data(self):
         while True:
             now = datetime.utcnow()
-            if now.hour >= 7 and now.hour <= 17:
+            if 7 <= now.hour <= 17:
                 macro_data = {}
                 for symbol in self.symbols:
                     data = await self.fetch_alpha_vantage(symbol)
                     if data:
-                        key = symbol.lower().replace('^', '')
+                        key = symbol.lower().replace("^", "")
                         macro_data[f"{key}_price"] = data["price"]
                         macro_data[f"{key}_change_percent"] = data["change_percent"]
+
                 dxy_data = await self.fetch_dxy()
                 if dxy_data:
                     macro_data["dxy_price"] = dxy_data["price"]
                     macro_data["dxy_change_percent"] = dxy_data["change_percent"]
+
                 altcoin_data = await self.fetch_altcoins()
                 if altcoin_data:
                     macro_data.update(altcoin_data)
+
                 news_data = await self.fetch_news_sentiment()
                 if news_data:
                     macro_data.update(news_data)
+
                 macro_data["timestamp"] = datetime.utcnow().timestamp()
                 self.macro_data_cache = macro_data
+
                 if "dxy_change_percent" in macro_data and "sp500_change_percent" in macro_data:
-                    macro_data["dxy_sp500_correlation"] = -0.5 if macro_data["dxy_change_percent"] * macro_data["sp500_change_percent"] < 0 else 0.5
-                    macro_data["dxy_btc_correlation"] = -0.6 if macro_data["dxy_change_percent"] > 0 else 0.4
-                datos_comprimidos = zstd.compress(json.dumps(macro_data).encode())
-                mensaje = await serializar_mensaje(int(macro_data["timestamp"] % 1000000), self.canal, 0.0, True)
+                    dxy = macro_data["dxy_change_percent"]
+                    sp500 = macro_data["sp500_change_percent"]
+                    macro_data["dxy_sp500_correlation"] = -0.5 if dxy * sp500 < 0 else 0.5
+                    macro_data["dxy_btc_correlation"] = -0.6 if dxy > 0 else 0.4
+
+                mensaje = await serializar_mensaje(
+                    int(macro_data["timestamp"] % 1000000),
+                    self.canal,
+                    0.0,
+                    True
+                )
                 await self.redis_client.xadd("crypto_trading_data", {"data": mensaje})
                 await self.plugin_db.save_macro_data(macro_data)
-                if "dxy_change_percent" in macro_data and abs(macro_data["dxy_change_percent"]) > 1:
+
+                if abs(macro_data.get("dxy_change_percent", 0)) > 1:
                     await self.nucleus.publicar_alerta({
                         "tipo": "dxy_change",
                         "plugin": "crypto_trading",
-                        "message": f"DXY cambió {macro_data['dxy_change_percent']:.2f}%, riesgo {'alto' if macro_data['dxy_change_percent'] > 0 else 'bajo'}"
+                        "message": (
+                            f"DXY cambió {macro_data['dxy_change_percent']:.2f}%, "
+                            f"riesgo {'alto' if macro_data['dxy_change_percent'] > 0 else 'bajo'}"
+                        )
                     })
+
                 self.logger.debug(f"Datos macro sincronizados: {macro_data}")
             await asyncio.sleep(self.update_interval)
 
