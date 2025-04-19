@@ -10,12 +10,9 @@ from ..utils.helpers import CircuitBreaker
 import torch
 import torch.nn as nn
 import json
-import logging
-import numpy as np
-import asyncio
-import backoff
-from typing import Dict, Any, List
-from datetime import datetime, timedelta
+import loggin
+from typing import Dict, Any
+from datetime import datetime
 
 class LSTMPredictor(nn.Module):
     def __init__(self, input_size=1, hidden_size=50, num_layers=2):
