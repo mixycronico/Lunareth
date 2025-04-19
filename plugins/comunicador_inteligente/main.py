@@ -4,6 +4,7 @@
 plugins/comunicador_inteligente/main.py
 Plugin que añade comunicación con el usuario y razonamiento avanzado a CoreC.
 """
+
 import asyncio
 import logging
 import json
@@ -85,12 +86,10 @@ class ComunicadorInteligente:
         }
 
     async def inicializar(self):
-        # Inicializar Redis
         redis_url = f"redis://{self.nucleus.redis_config['username']}:{self.nucleus.redis_config['password']}@{self.nucleus.redis_config['host']}:{self.nucleus.redis_config['port']}"
         self.redis_client = await aioredis.from_url(redis_url, decode_responses=True)
         self.logger.info("Redis inicializado para ComunicadorInteligente")
 
-        # Cargar o inicializar modelos locales
         try:
             with open(self.model_path["nn"], "rb") as f:
                 self.nn_model.load_state_dict(torch.load(f))
@@ -106,18 +105,15 @@ class ComunicadorInteligente:
                 pickle.dump(self.bayes_model, f)
             self.rl_model.save(self.model_path["rl"])
 
-        # Crear bloque simbiótico
         entidades = [crear_entidad(f"m{i}", self.canal, self._procesar_mensaje) for i in range(self.config.get("entidades", 100))]
-        self.bloque = BloqueSimbiotico(f"comunicador_inteligente", self.canal, entidades, max_size=1024, nucleus=self.nucleus)
+        self.bloque = BloqueSimbiotico("comunicador_inteligente", self.canal, entidades, max_size=1024, nucleus=self.nucleus)
         self.nucleus.modulos["registro"].bloques[self.bloque.id] = self.bloque
         self.logger.info(f"Plugin ComunicadorInteligente inicializado con {len(entidades)} entidades")
         self.nucleus.registrar_plugin("comunicador_inteligente", self)
 
-        # Iniciar escucha de mensajes
         asyncio.create_task(self._escuchar_mensajes())
 
     async def _escuchar_mensajes(self):
-        """Escuchar mensajes de usuario en un stream de Redis."""
         stream = self.config.get("redis_stream_input", "user_input_stream")
         while True:
             try:
@@ -126,7 +122,6 @@ class ComunicadorInteligente:
                     for _, data in entries:
                         mensaje = json.loads(data["data"])
                         resultado = await self._procesar_mensaje(mensaje)
-                        # Enviar respuesta al usuario via Redis
                         respuesta = await serializar_mensaje(
                             int(time.time_ns() % 1000000), self.canal, resultado["valor"], True
                         )
@@ -139,7 +134,6 @@ class ComunicadorInteligente:
             await asyncio.sleep(1)
 
     async def _procesar_mensaje(self, mensaje: Dict[str, Any]):
-        """Procesar mensaje de usuario."""
         texto = mensaje.get("texto", "")
         valor = mensaje.get("valor", random.random())
         state = (valor, len(self.bloque.mensajes))
@@ -168,7 +162,6 @@ class ComunicadorInteligente:
                 self.is_openrouter_available = False
                 reward = -1.0
         else:
-            # Fallback a IAs locales
             respuesta_local = await self._procesar_local(mensaje)
             reward = 0.5 if respuesta_local["valor"] > 0 else -0.5
             texto_respuesta = respuesta_local["texto"]
@@ -178,25 +171,20 @@ class ComunicadorInteligente:
         return {"valor": respuesta_local["valor"] if action != "responder" else valor, "texto": texto_respuesta}
 
     async def _procesar_local(self, mensaje: Dict[str, Any]) -> Dict[str, Any]:
-        """Procesar mensaje con IAs locales."""
         valor = mensaje.get("valor", random.random())
-        # Red neuronal
         input_tensor = torch.tensor([valor] * 10, dtype=torch.float32)
         with torch.no_grad():
             prediccion_nn = self.nn_model(input_tensor).numpy()[0]
 
-        # Bayesiano
         try:
             bayes_pred = self.bayes_model.predict([[valor]])[0]
         except:
             bayes_pred = "Sistema operativo, fitness estimado: 0.9"
 
-        # Combinar resultados
         texto = bayes_pred if random.random() > 0.5 else f"Análisis local: {prediccion_nn[0]:.2f}"
         return {"valor": prediccion_nn[0], "texto": texto}
 
     async def entrenar_local(self):
-        """Entrenar IAs locales con datos de training.log."""
         try:
             with open(self.training_log, "r") as f:
                 datos = [json.loads(line) for line in f]
@@ -204,7 +192,6 @@ class ComunicadorInteligente:
                 X = [[d["entrada"]["valor"]] for d in datos]
                 y = [d["salida"] for d in datos]
                 self.bayes_model.fit(X, y)
-                # Simular entrenamiento de NN (requiere más datos en producción)
                 torch.save(self.nn_model.state_dict(), self.model_path["nn"])
                 with open(self.model_path["bayes"], "wb") as f:
                     pickle.dump(self.bayes_model, f)
@@ -216,25 +203,26 @@ class ComunicadorInteligente:
     async def ejecutar(self):
         """Ejecutar el plugin, procesando mensajes y entrenando IAs."""
         while True:
-            resultado = await self.bloque.procesar(self.config.get("carga", 0.5))
-            for msg in resultado["mensajes"]:
-                if msg.get("texto"):
-                    self.logger.info(f"Respuesta al usuario: {msg['texto']}")
-            await self.nucleus.publicar_alerta({
-                "tipo": "comunicacion",
-                "bloque_id": self.bloque.id,
-                "fitness": resultado["fitness"],
-                "timestamp": time.time()
-            })
-            await self.entrenar_local()
+            try:
+                resultado = await self.bloque.procesar(self.config.get("carga", 0.5))
+                for msg in resultado["mensajes"]:
+                    if msg.get("texto"):
+                        self.logger.info(f"Respuesta al usuario: {msg['texto']}")
+                await self.nucleus.publicar_alerta({
+                    "tipo": "comunicacion",
+                    "bloque_id": self.bloque.id,
+                    "fitness": resultado["fitness"],
+                    "timestamp": time.time()
+                })
+                await self.entrenar_local()
+            except Exception as e:
+                self.logger.error(f"Error ejecutando plugin ComunicadorInteligente: {e}")
             await asyncio.sleep(self.config.get("intervalo", 60))
 
     async def detener(self):
-        """Detener el plugin."""
         self.logger.info("Plugin ComunicadorInteligente detenido")
         if self.redis_client:
             await self.redis_client.close()
-        # Guardar modelos
         torch.save(self.nn_model.state_dict(), self.model_path["nn"])
         with open(self.model_path["bayes"], "wb") as f:
             pickle.dump(self.bayes_model, f)
