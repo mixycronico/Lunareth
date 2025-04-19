@@ -9,6 +9,7 @@ from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
 import aiohttp
 import time
+import psycopg2
 import logging
 import hmac
 import hashlib
