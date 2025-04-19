@@ -11,7 +11,6 @@ import time
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.prompt import Prompt
 import click
 from corec.core import aioredis
 from corec.entities import crear_entidad
