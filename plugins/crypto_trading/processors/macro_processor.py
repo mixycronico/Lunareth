@@ -24,23 +24,14 @@ class MacroProcessor(ComponenteBase):
         self.redis_client = redis_client
         self.logger = logging.getLogger("MacroProcessor")
         self.symbols = self.config.get("macro_config", {}).get("symbols", [])
-        self.altcoin_symbols = self.config.get(
-            "macro_config", {}
-        ).get("altcoin_symbols", [])
-        self.update_interval = self.config.get("macro_config", {}).get(
-            "update_interval", 300
-        )
+        self.altcoin_symbols = self.config.get("macro_config", {}).get("altcoin_symbols", [])
+        self.update_interval = self.config.get("macro_config", {}).get("update_interval", 300)
         self.api_keys = self.config.get("macro_config", {}).get("api_keys", {})
         self.circuit_breakers = {
             symbol: CircuitBreaker(
-                self.config.get("macro_config", {})
-                .get("circuit_breaker", {})
-                .get("max_failures", 3),
-                self.config.get("macro_config", {})
-                .get("circuit_breaker", {})
-                .get("reset_timeout", 900),
-            )
-            for symbol in self.symbols + self.altcoin_symbols + ["DXY", "news"]
+                self.config.get("macro_config", {}).get("circuit_breaker", {}).get("max_failures", 3),
+                self.config.get("macro_config", {}).get("circuit_breaker", {}).get("reset_timeout", 900)
+            ) for symbol in self.symbols + self.altcoin_symbols + ["DXY", "news"]
         }
         self.plugin_db = TradingDB(self.config.get("db_config", {}))
         self.macro_data_cache = {}
@@ -98,12 +89,8 @@ class MacroProcessor(ComponenteBase):
                         self.circuit_breakers["DXY"].register_failure()
                         return {}
                     result = await response.json()
-                    price = float(
-                        result["Realtime Currency Exchange Rate"]["5. Exchange Rate"]
-                    )
-                    previous_price = self.macro_data_cache.get(
-                        "DXY", {}
-                    ).get("price", price)
+                    price = float(result["Realtime Currency Exchange Rate"]["5. Exchange Rate"])
+                    previous_price = self.macro_data_cache.get("DXY", {}).get("price", price)
                     change_percent = (
                         (price - previous_price) / previous_price * 100
                         if previous_price
@@ -137,9 +124,7 @@ class MacroProcessor(ComponenteBase):
                             ),
                         }
                     else:
-                        self.logger.error(
-                            f"Error en CoinMarketCap: {response.status}"
-                        )
+                        self.logger.error(f"Error en CoinMarketCap: {response.status}")
                         self.circuit_breakers["altcoins"].register_failure()
                         return {}
         except Exception as e:
@@ -205,21 +190,20 @@ class MacroProcessor(ComponenteBase):
                     macro_data["dxy_sp500_correlation"] = (
                         -0.5
                         if macro_data["dxy_change_percent"]
-                        * macro_data["sp500_change_percent"]
-                        < 0
+                        * macro_data["sp500_change_percent"] < 0
                         else 0.5
                     )
                     macro_data["dxy_btc_correlation"] = (
-                        -0.6
-                        if macro_data["dxy_change_percent"] > 0
-                        else 0.4
+                        -0.6 if macro_data["dxy_change_percent"] > 0 else 0.4
                     )
 
                 await self.redis_client.xadd(
                     "crypto_trading_data",
                     {
-                        "data": f"{macro_data['timestamp']}|macro_data|0.0|1|"
-                        + str(macro_data)
+                        "data": (
+                            f"{macro_data['timestamp']}|macro_data|0.0|1|"
+                            + str(macro_data)
+                        )
                     },
                 )
                 await self.plugin_db.save_macro_data(macro_data)
@@ -228,16 +212,14 @@ class MacroProcessor(ComponenteBase):
                     "dxy_change_percent" in macro_data
                     and abs(macro_data["dxy_change_percent"]) > 1
                 ):
-                    await self.nucleus.publicar_alerta(
-                        {
-                            "tipo": "dxy_change",
-                            "plugin": "crypto_trading",
-                            "message": (
-                                f"DXY cambió {macro_data['dxy_change_percent']:.2f}%, "
-                                f"riesgo {'alto' if macro_data['dxy_change_percent'] > 0 else 'bajo'}"
-                            ),
-                        }
-                    )
+                    await self.nucleus.publicar_alerta({
+                        "tipo": "dxy_change",
+                        "plugin": "crypto_trading",
+                        "message": (
+                            f"DXY cambió {macro_data['dxy_change_percent']:.2f}%, "
+                            f"riesgo {'alto' if macro_data['dxy_change_percent'] > 0 else 'bajo'}"
+                        )
+                    })
 
                 self.logger.debug(f"Datos macro sincronizados: {macro_data}")
 
