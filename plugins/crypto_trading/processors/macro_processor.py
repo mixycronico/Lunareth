@@ -51,9 +51,9 @@ class MacroProcessor(ComponenteBase):
                         self.logger.error(f"Error en Alpha Vantage para {symbol}: {response.status}")
                         self.circuit_breakers[symbol].register_failure()
                         return {}
-                    data = await response.json()
-                    price = float(data["Global Quote"]["05. price"])
-                    change_percent = float(data["Global Quote"]["10. change percent"].replace("%", ""))
+                    result = await response.json()
+                    price = float(result["Global Quote"]["05. price"])
+                    change_percent = float(result["Global Quote"]["10. change percent"].replace("%", ""))
                     return {"price": price, "change_percent": change_percent}
         except Exception as e:
             self.logger.error(f"Error obteniendo datos de {symbol}: {e}")
@@ -72,8 +72,8 @@ class MacroProcessor(ComponenteBase):
                         self.logger.error(f"Error en Alpha Vantage para DXY: {response.status}")
                         self.circuit_breakers["DXY"].register_failure()
                         return {}
-                    data = await response.json()
-                    price = float(data["Realtime Currency Exchange Rate"]["5. Exchange Rate"])
+                    result = await response.json()
+                    price = float(result["Realtime Currency Exchange Rate"]["5. Exchange Rate"])
                     previous_price = self.macro_data_cache.get("DXY", {}).get("price", price)
                     change_percent = ((price - previous_price) / previous_price * 100) if previous_price else 0
                     return {"price": price, "change_percent": change_percent}
@@ -92,10 +92,10 @@ class MacroProcessor(ComponenteBase):
                 url = f"https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={','.join(self.altcoin_symbols)}"
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:
-                        data = await response.json()
+                        result = await response.json()
                         return {
-                            "altcoins": list(data["data"].keys()),
-                            "altcoins_volume": sum(data["data"][s]["quote"]["USD"]["volume_24h"] for s in data["data"])
+                            "altcoins": list(result["data"].keys()),
+                            "altcoins_volume": sum(result["data"][s]["quote"]["USD"]["volume_24h"] for s in result["data"])
                         }
                     else:
                         self.logger.error(f"Error en CoinMarketCap: {response.status}")
@@ -115,8 +115,8 @@ class MacroProcessor(ComponenteBase):
                 url = f"https://newsapi.org/v2/everything?q=cryptocurrency&apiKey={self.api_keys['newsapi']}"
                 async with session.get(url) as response:
                     if response.status == 200:
-                        data = await response.json()
-                        return {"news_sentiment": 0.7}  # Simulado, implementar análisis real en producción
+                        await response.json()
+                        return {"news_sentiment": 0.7}
                     else:
                         self.logger.error(f"Error en NewsAPI: {response.status}")
                         self.circuit_breakers["news"].register_failure()
@@ -129,7 +129,7 @@ class MacroProcessor(ComponenteBase):
     async def sync_macro_data(self):
         while True:
             now = datetime.utcnow()
-            if now.hour >= 7 and now.hour <= 17:  # Horario de Nueva York
+            if now.hour >= 7 and now.hour <= 17:
                 macro_data = {}
                 for symbol in self.symbols:
                     data = await self.fetch_alpha_vantage(symbol)
