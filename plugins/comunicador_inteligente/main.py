@@ -5,20 +5,11 @@ plugins/comunicador_inteligente/main.py
 Plugin que añade comunicación con el usuario y razonamiento avanzado a CoreC.
 """
 
-import asyncio
-import logging
-import json
-import time
 import random
 import pickle
 import torch
 import torch.nn as nn
-import aiohttp
 from typing import Dict, Any
-from sklearn.naive_bayes import GaussianNB
-from corec.core import serializar_mensaje, aioredis
-from corec.entities import crear_entidad
-from corec.blocks import BloqueSimbiotico
 
 
 class RedNeuronalLigera(nn.Module):
@@ -54,7 +45,13 @@ class QLearningAgent:
             return random.choice(self.actions)
         return max(self.q_table[state_key], key=self.q_table[state_key].get)
 
-    def update(self, state: tuple, action: str, reward: float, next_state: tuple):
+    def update(
+        self,
+        state: tuple,
+        action: str,
+        reward: float,
+        next_state: tuple
+    ):
         state_key = self.get_state_key(state)
         next_state_key = self.get_state_key(next_state)
         if next_state_key not in self.q_table:
