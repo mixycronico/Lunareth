@@ -1,5 +1,5 @@
-from corec.core import ModuloBase, celery_app, logging, asyncio, time, random
-from corec.entities import MicroCeluEntidadCoreC, CeluEntidadCoreC, crear_entidad, crear_celu_entidad, procesar_entidad, procesar_celu_entidad
+from corec.core import ModuloBase, logging, asyncio, random
+from corec.entities import MicroCeluEntidadCoreC, CeluEntidadCoreC
 from corec.blocks import BloqueSimbiotico
 
 class ModuloRegistro(ModuloBase):
