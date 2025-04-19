@@ -7,9 +7,7 @@ Plugin que añade comunicación con el usuario y razonamiento avanzado a CoreC.
 
 import random
 import pickle
-import torch
 import torch.nn as nn
-from typing import Dict, Any
 
 
 class RedNeuronalLigera(nn.Module):
