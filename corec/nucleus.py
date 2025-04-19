@@ -1,6 +1,6 @@
 import asyncio
 import time
-from corec.core import logging, json, os, importlib, zstd, psycopg2, aioredis, celery_app, ComponenteBase, CANALES_CRITICOS
+from corec.core import logging, json, importlib, zstd, psycopg2, aioredis, celery_app, ComponenteBase, CANALES_CRITICOS
 from corec.entities import CeluEntidadCoreC, MicroCeluEntidadCoreC
 from pathlib import Path
 from typing import Dict, Any
