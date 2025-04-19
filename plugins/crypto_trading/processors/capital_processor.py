@@ -2,16 +2,20 @@
 # -*- coding: utf-8 -*-
 """
 plugins/crypto_trading/processors/capital_processor.py
-Gestiona el capital compartido de usuarios, asigna fondos para trading, y ajusta fases dinámicamente.
+Gestiona el capital compartido de usuarios, asigna fondos para trading,
+y ajusta fases dinámicamente.
 """
-from corec.core import ComponenteBase, zstd, serializar_mensaje
-from ..utils.db import TradingDB
-from ..utils.helpers import CircuitBreaker
+
 import json
 import asyncio
 import logging
 from typing import Dict, Any
 from datetime import datetime
+
+from corec.core import ComponenteBase, zstd, serializar_mensaje
+from ..utils.db import TradingDB
+from ..utils.helpers import CircuitBreaker
+
 
 class CapitalProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
@@ -19,12 +23,13 @@ class CapitalProcessor(ComponenteBase):
         self.config = config.get("crypto_trading", {})
         self.redis_client = redis_client
         self.logger = logging.getLogger("CapitalProcessor")
-        self.min_contribution = self.config.get("capital_config", {}).get("min_contribution", 100)
-        self.max_active_ratio = self.config.get("capital_config", {}).get("max_active_ratio", 0.6)
-        self.phases = self.config.get("capital_config", {}).get("phases", [])
+        capital_cfg = self.config.get("capital_config", {})
+        self.min_contribution = capital_cfg.get("min_contribution", 100)
+        self.max_active_ratio = capital_cfg.get("max_active_ratio", 0.6)
+        self.phases = capital_cfg.get("phases", [])
         self.circuit_breaker = CircuitBreaker(
-            self.config.get("capital_config", {}).get("circuit_breaker", {}).get("max_failures", 3),
-            self.config.get("capital_config", {}).get("circuit_breaker", {}).get("reset_timeout", 900)
+            capital_cfg.get("circuit_breaker", {}).get("max_failures", 3),
+            capital_cfg.get("circuit_breaker", {}).get("reset_timeout", 900)
         )
         self.plugin_db = TradingDB(self.config.get("db_config", {}))
         self.pool = 0.0
@@ -50,19 +55,30 @@ class CapitalProcessor(ComponenteBase):
         if not self.circuit_breaker.check():
             return False
         if amount < self.min_contribution:
-            self.logger.warning(f"Contribución de {user_id} ({amount}) menor al mínimo ({self.min_contribution})")
+            self.logger.warning(
+                f"Contribución de {user_id} ({amount}) menor al mínimo "
+                f"({self.min_contribution})"
+            )
             return False
         try:
             if user_id not in self.users:
                 self.users[user_id] = 0.0
             self.users[user_id] += amount
             self.pool += amount
-            await self.plugin_db.save_contribution(user_id, amount, datetime.utcnow().timestamp())
+            await self.plugin_db.save_contribution(
+                user_id, amount, datetime.utcnow().timestamp()
+            )
             await self.plugin_db.update_pool(self.pool)
-            datos_comprimidos = zstd.compress(json.dumps({"user_id": user_id, "amount": amount, "action": "contribution"}).encode())
-            mensaje = await serializar_mensaje(int(datetime.utcnow().timestamp() % 1000000), self.canal, amount, True)
+            mensaje = await serializar_mensaje(
+                int(datetime.utcnow().timestamp() % 1000000),
+                self.canal,
+                amount,
+                True
+            )
             await self.redis_client.xadd("crypto_trading_data", {"data": mensaje})
-            self.logger.info(f"Contribución de {user_id}: {amount}, pool total: {self.pool}")
+            self.logger.info(
+                f"Contribución de {user_id}: {amount}, pool total: {self.pool}"
+            )
             return True
         except Exception as e:
             self.logger.error(f"Error añadiendo contribución: {e}")
@@ -73,19 +89,29 @@ class CapitalProcessor(ComponenteBase):
         if not self.circuit_breaker.check():
             return False
         if user_id not in self.users or self.users[user_id] < amount:
-            self.logger.warning(f"Retiro de {user_id} ({amount}) excede contribución disponible")
+            self.logger.warning(
+                f"Retiro de {user_id} ({amount}) excede contribución disponible"
+            )
             return False
         try:
             self.users[user_id] -= amount
             self.pool -= amount
             if self.users[user_id] <= 0:
                 del self.users[user_id]
-            await self.plugin_db.save_withdrawal(user_id, amount, datetime.utcnow().timestamp())
+            await self.plugin_db.save_withdrawal(
+                user_id, amount, datetime.utcnow().timestamp()
+            )
             await self.plugin_db.update_pool(self.pool)
-            datos_comprimidos = zstd.compress(json.dumps({"user_id": user_id, "amount": amount, "action": "withdrawal"}).encode())
-            mensaje = await serializar_mensaje(int(datetime.utcnow().timestamp() % 1000000), self.canal, -amount, True)
+            mensaje = await serializar_mensaje(
+                int(datetime.utcnow().timestamp() % 1000000),
+                self.canal,
+                -amount,
+                True
+            )
             await self.redis_client.xadd("crypto_trading_data", {"data": mensaje})
-            self.logger.info(f"Retiro de {user_id}: {amount}, pool total: {self.pool}")
+            self.logger.info(
+                f"Retiro de {user_id}: {amount}, pool total: {self.pool}"
+            )
             return True
         except Exception as e:
             self.logger.error(f"Error procesando retiro: {e}")
@@ -102,10 +128,16 @@ class CapitalProcessor(ComponenteBase):
                 self.active_capital -= result.get("quantity", 0) * result.get("price", 0)
                 await self.plugin_db.update_pool(self.pool)
                 await self.plugin_db.update_active_capital(self.active_capital)
-                datos_comprimidos = zstd.compress(json.dumps({"action": "update_pool", "profit": profit}).encode())
-                mensaje = await serializar_mensaje(int(datetime.utcnow().timestamp() % 1000000), self.canal, profit, True)
+                mensaje = await serializar_mensaje(
+                    int(datetime.utcnow().timestamp() % 1000000),
+                    self.canal,
+                    profit,
+                    True
+                )
                 await self.redis_client.xadd("crypto_trading_data", {"data": mensaje})
-                self.logger.info(f"Pool actualizado con profit: {profit}, total: {self.pool}")
+                self.logger.info(
+                    f"Pool actualizado con profit: {profit}, total: {self.pool}"
+                )
         except Exception as e:
             self.logger.error(f"Error actualizando pool: {e}")
             self.circuit_breaker.register_failure()
@@ -121,7 +153,10 @@ class CapitalProcessor(ComponenteBase):
             if self.macro_context.get("vix_price", 0) > 20:
                 risk_adjustment = 0.5
             available_capital = max(0, max_active - self.active_capital)
-            trade_amount = min(available_capital, self.pool * risk_per_trade * risk_adjustment)
+            trade_amount = min(
+                available_capital,
+                self.pool * risk_per_trade * risk_adjustment
+            )
             if trade_amount > 0:
                 capital_data = {
                     "trade_amount": trade_amount,
@@ -129,12 +164,18 @@ class CapitalProcessor(ComponenteBase):
                     "risk_per_trade": risk_per_trade,
                     "timestamp": datetime.utcnow().timestamp()
                 }
-                datos_comprimidos = zstd.compress(json.dumps(capital_data).encode())
-                mensaje = await serializar_mensaje(int(datetime.utcnow().timestamp() % 1000000), self.canal, trade_amount, True)
+                mensaje = await serializar_mensaje(
+                    int(datetime.utcnow().timestamp() % 1000000),
+                    self.canal,
+                    trade_amount,
+                    True
+                )
                 await self.redis_client.xadd("crypto_trading_data", {"data": mensaje})
                 self.active_capital += trade_amount
                 await self.plugin_db.update_active_capital(self.active_capital)
-                self.logger.info(f"Asignado {trade_amount} para trading, fase: {phase['name']} 🌟")
+                self.logger.info(
+                    f"Asignado {trade_amount} para trading, fase: {phase['name']} 🌟"
+                )
         except Exception as e:
             self.logger.error(f"Error asignando capital: {e}")
             self.circuit_breaker.register_failure()
