@@ -1,3 +1,4 @@
+from corec.core import serializar_mensaje
 from typing import Callable, Dict, Any
 
 MicroCeluEntidadCoreC = tuple[str, int, Callable[[], Any], bool]
