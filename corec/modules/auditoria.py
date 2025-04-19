@@ -4,7 +4,9 @@
 corec/modules/auditoria.py
 Módulo de auditoría para detección de anomalías en CoreC.
 """
+
 from corec.core import ModuloBase, asyncio, logging, psycopg2, time
+
 
 class ModuloAuditoria(ModuloBase):
     def __init__(self):
@@ -21,14 +23,16 @@ class ModuloAuditoria(ModuloBase):
             try:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT id, num_entidades, fitness FROM bloques WHERE timestamp > %s",
+                    "SELECT id, num_entidades, fitness FROM bloques "
+                    "WHERE timestamp > %s",
                     (time.time() - 3600,)
                 )
                 datos = [(row[1], row[2]) for row in cur.fetchall()]
                 if datos:
                     anomalias = self.nucleus.anomaly_detector.fit_predict(datos)
                     cur.execute(
-                        "SELECT id, num_entidades, fitness FROM bloques WHERE timestamp > %s",
+                        "SELECT id, num_entidades, fitness FROM bloques "
+                        "WHERE timestamp > %s",
                         (time.time() - 3600,)
                     )
                     for i, (bloque_id, _, _) in enumerate(cur.fetchall()):
@@ -39,7 +43,9 @@ class ModuloAuditoria(ModuloBase):
                                 "prioridad": 2,
                                 "timestamp": time.time()
                             })
-                            self.logger.info(f"Anomalía detectada en bloque {bloque_id}")
+                            self.logger.info(
+                                f"Anomalía detectada en bloque {bloque_id}"
+                            )
                 cur.close()
             finally:
                 conn.close()
