@@ -10,7 +10,10 @@ import logging
 from typing import Dict, Any
 from datetime import datetime
 
-from corec.core import ComponenteBase, serializar_mensaje
+from corec.core import (
+    ComponenteBase,
+    serializar_mensaje
+)
 from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
 
