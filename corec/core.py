@@ -4,19 +4,6 @@
 corec/core.py
 Módulo central para imports y comunicaciones en CoreC.
 """
-
-# Bibliotecas estándar
-import asyncio
-import logging
-import json
-import os
-import time
-import random
-import statistics
-from pathlib import Path
-from typing import Dict, Any, Callable, List
-import importlib
-
 # Dependencias externas
 import struct
 import zstd
