@@ -9,9 +9,8 @@ from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
 import json
 import logging
-import asyncio
 from typing import Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class CapitalProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
