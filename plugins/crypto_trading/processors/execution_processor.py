@@ -1,11 +1,9 @@
 
-from corec.core import ComponenteBase, zstd, serializar_mensaje
+from corec.core import ComponenteBase
 from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
-import time
 import logging
-from typing import Dict, Any, List
-from datetime import datetime
+from typing import Dict, Any
 
 class ExecutionProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
