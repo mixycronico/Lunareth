@@ -4,6 +4,7 @@
 plugins/crypto_trading/main.py
 Orquesta el plugin CryptoTrading.
 """
+
 import asyncio
 import logging
 from corec.core import ComponenteBase
@@ -16,6 +17,7 @@ from .processors.predictor_processor import PredictorProcessor
 from .processors.analyzer_processor import AnalyzerProcessor
 from .processors.execution_processor import ExecutionProcessor
 from .processors.user_processor import UserProcessor
+
 
 class CryptoTrading(ComponenteBase):
     def __init__(self, nucleus, config):
@@ -47,6 +49,7 @@ class CryptoTrading(ComponenteBase):
         for component in self.components:
             await component.detener()
         self.logger.info("CryptoTrading detenido")
+
 
 def inicializar(nucleus, config):
     plugin = CryptoTrading(nucleus, config)
