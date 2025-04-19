@@ -5,6 +5,7 @@ plugins/interface_system/controller.py
 Ejecuta acciones en CoreC para el plugin InterfaceSystem.
 """
 import json
+import asyncio
 import time
 import logging
 from typing import Dict, Any
