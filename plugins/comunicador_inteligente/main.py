@@ -10,13 +10,12 @@ import json
 import time
 import random
 import pickle
-import numpy as np
 import torch
 import torch.nn as nn
 import aiohttp
 from typing import Dict, Any
 from sklearn.naive_bayes import GaussianNB
-from corec.core import serializar_mensaje, deserializar_mensaje, zstd, aioredis
+from corec.core import serializar_mensaje, aioredis
 from corec.entities import crear_entidad
 from corec.blocks import BloqueSimbiotico
 
