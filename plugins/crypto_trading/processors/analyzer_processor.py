@@ -10,10 +10,7 @@ from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
 import json
 import logging
-import asyncio
-import numpy as np
-from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from typing import Dict, Any
 
 class AnalyzerProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
