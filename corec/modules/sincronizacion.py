@@ -19,7 +19,9 @@ class ModuloSincronización(ModuloBase):
         self.nucleus = nucleus
         self.logger.info("[ModuloSincronización] Inicializado")
 
-    async def fusionar_bloques(self, bloque_id_1: str, bloque_id_2: str, nuevo_id: str):
+    async def fusionar_bloques(
+        self, bloque_id_1: str, bloque_id_2: str, nuevo_id: str
+    ):
         modulo_registro = self.nucleus.modulos.get("registro")
         if modulo_registro:
             bloque_1 = modulo_registro.bloques.get(bloque_id_1)
@@ -67,10 +69,13 @@ class ModuloSincronización(ModuloBase):
                     for i in range(num_entidades, 1000):
                         async def funcion():
                             return {"valor": random.random()}
-                        entidad = crear_entidad(f"m{i}", bloque.canal, funcion)
+                        entidad = crear_entidad(
+                            f"m{i}", bloque.canal, funcion
+                        )
                         bloque.entidades.append(entidad)
                     self.logger.info(
-                        f"Bloque {bloque_id} ampliado a {len(bloque.entidades)} entidades"
+                        f"Bloque {bloque_id} ampliado a "
+                        f"{len(bloque.entidades)} entidades"
                     )
             else:
                 self.logger.error(f"Bloque {bloque_id} no encontrado")
