@@ -10,6 +10,7 @@ from ..utils.helpers import CircuitBreaker
 import aiohttp
 import asyncio
 import json
+import logging
 import backoff
 from typing import Dict, Any
 from datetime import datetime, timedelta
