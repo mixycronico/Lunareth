@@ -7,10 +7,18 @@ Orquestador plug-and-play para CoreC.
 
 from corec.core import asyncio, logging, Path, importlib, cargar_config
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+)
+
 
 class Bootstrap:
-    def __init__(self, config_path: str = "configs/corec_config.json", instance_id: str = "corec1"):
+    def __init__(
+        self,
+        config_path: str = "configs/corec_config.json",
+        instance_id: str = "corec1"
+    ):
         self.logger = logging.getLogger("Bootstrap")
         self.instance_id = instance_id
         self.config_path = config_path
@@ -51,12 +59,14 @@ class Bootstrap:
             await componente.detener()
         self.logger.info("Sistema CoreC detenido")
 
+
 async def main():
     bootstrap = Bootstrap(config_path="configs/corec_config.json", instance_id="corec1")
     try:
         await bootstrap.iniciar()
     except KeyboardInterrupt:
         await bootstrap.detener()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
