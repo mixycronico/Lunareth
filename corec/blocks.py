@@ -13,7 +13,7 @@ class BloqueSimbiotico:
     def __init__(self, id: str, canal: int, entidades: list[MicroCeluEntidadCoreC], max_size: int = 1024, nucleus=None):
         self.id = id
         self.canal = canal
-        self.entidades = entidades[:max_size // 1]
+        self.entidades = entidades[:max_size]
         self.fitness = 0.0
         self.nucleus = nucleus
         self.logger = logging.getLogger(f"BloqueSimbiotico-{id}")
@@ -71,16 +71,19 @@ class BloqueSimbiotico:
             cur = conn.cursor()
             datos_comprimidos = zstd.compress(json.dumps(resultados["mensajes"]).encode(), level=3)
             cur.execute(
-                "INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp, instance_id) VALUES (%s, %s, %s, %s, %s, %s) "
+                "INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp, instance_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (id) DO UPDATE SET num_entidades = %s, fitness = %s, timestamp = %s",
-                (self.id, self.canal, len(self.entidades), self.fitness, time.time(), self.nucleus.instance_id,
-                 len(self.entidades), self.fitness, time.time())
+                (
+                    self.id, self.canal, len(self.entidades), self.fitness, time.time(), self.nucleus.instance_id,
+                    len(self.entidades), self.fitness, time.time()
+                )
             )
             conn.commit()
             cur.close()
             conn.close()
 
-            # También enviar los resultados comprimidos a Redis si está disponible
+            # Enviar a Redis si está disponible
             if hasattr(self.nucleus, "redis_client") and self.nucleus.redis_client:
                 await self.nucleus.redis_client.xadd("bloque_simbiotico_stream", {
                     "data": datos_comprimidos
