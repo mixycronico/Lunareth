@@ -8,7 +8,7 @@ Plugin Codex para CoreC – optimiza código, genera websites y plugins.
 import asyncio
 import logging
 from corec.core import ComponenteBase
-from plugins.codex.processors.manager import CodexManager
+from .processors.manager import CodexManager
 
 
 class CodexPlugin(ComponenteBase):
