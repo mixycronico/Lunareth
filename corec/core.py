@@ -4,6 +4,7 @@
 corec/core.py
 Módulo central para imports y comunicaciones en CoreC.
 """
+
 # Dependencias externas
 import struct
 import json
@@ -13,7 +14,10 @@ from typing import Dict, Any, List
 from celery import Celery
 
 # Configuración de logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+)
 
 # Configuración de Celery
 celery_app = Celery(
@@ -21,6 +25,7 @@ celery_app = Celery(
     broker='redis://corec_user:secure_password@redis:6379/0',
     backend='redis://corec_user:secure_password@redis:6379/0'
 )
+
 celery_app.conf.update(
     task_serializer='json',
     accept_content=['json'],
@@ -34,8 +39,14 @@ celery_app.conf.update(
     retry_backoff=True,
     worker_concurrency=4,
     task_queues={
-        'default': {'exchange': 'default', 'routing_key': 'default'},
-        'critical': {'exchange': 'critical', 'routing_key': 'critical'}
+        'default': {
+            'exchange': 'default',
+            'routing_key': 'default'
+        },
+        'critical': {
+            'exchange': 'critical',
+            'routing_key': 'critical'
+        }
     }
 )
 
@@ -43,25 +54,51 @@ celery_app.conf.update(
 MESSAGE_FORMAT = "!Ibf?"  # ID uint32, canal uint8, valor float32, estado bool
 CANALES_CRITICOS = [2, 3, 5]  # Seguridad, IA, alertas
 
-async def serializar_mensaje(id: int, canal: int, valor: float, activo: bool) -> bytes:
+
+async def serializar_mensaje(
+    id: int, canal: int, valor: float, activo: bool
+) -> bytes:
     """Serializa un mensaje binario."""
     return struct.pack(MESSAGE_FORMAT, id, canal, valor, activo)
+
 
 async def deserializar_mensaje(mensaje: bytes) -> Dict[str, Any]:
     """Deserializa un mensaje binario."""
     id, canal, valor, activo = struct.unpack(MESSAGE_FORMAT, mensaje)
-    return {"id": id, "canal": canal, "valor": valor, "activo": activo}
+    return {
+        "id": id,
+        "canal": canal,
+        "valor": valor,
+        "activo": activo
+    }
 
-async def enviar_mensaje_redis(redis_client: aioredis.Redis, stream: str, mensaje: bytes, prioridad: str = "default"):
+
+async def enviar_mensaje_redis(
+    redis_client: aioredis.Redis,
+    stream: str,
+    mensaje: bytes,
+    prioridad: str = "default"
+):
     """Envía un mensaje a un stream de Redis."""
     try:
         await redis_client.xadd(stream, {"data": mensaje}, maxlen=1000)
         if prioridad == "critical":
-            await redis_client.xadd(f"{stream}_critical", {"data": mensaje}, maxlen=100)
+            await redis_client.xadd(
+                f"{stream}_critical",
+                {"data": mensaje},
+                maxlen=100
+            )
     except Exception as e:
-        logging.getLogger("CoreC").error(f"Error enviando mensaje a Redis: {e}")
+        logging.getLogger("CoreC").error(
+            f"Error enviando mensaje a Redis: {e}"
+        )
 
-async def recibir_mensajes_redis(redis_client: aioredis.Redis, stream: str, count: int = 100) -> List[Dict[str, Any]]:
+
+async def recibir_mensajes_redis(
+    redis_client: aioredis.Redis,
+    stream: str,
+    count: int = 100
+) -> List[Dict[str, Any]]:
     """Recibe mensajes de un stream de Redis."""
     try:
         mensajes = await redis_client.xread({stream: "0-0"}, count=count)
@@ -72,8 +109,11 @@ async def recibir_mensajes_redis(redis_client: aioredis.Redis, stream: str, coun
                 resultados.append(mensaje)
         return resultados
     except Exception as e:
-        logging.getLogger("CoreC").error(f"Error recibiendo mensajes de Redis: {e}")
+        logging.getLogger("CoreC").error(
+            f"Error recibiendo mensajes de Redis: {e}"
+        )
         return []
+
 
 def cargar_config(config_path: str) -> Dict[str, Any]:
     """Carga configuración desde JSON."""
@@ -81,8 +121,15 @@ def cargar_config(config_path: str) -> Dict[str, Any]:
         with open(config_path, "r") as f:
             return json.load(f)
     except Exception as e:
-        logging.getLogger("CoreC").error(f"Error cargando configuración: {e}")
-        return {"instance_id": "corec1", "db_config": {}, "redis_config": {}}
+        logging.getLogger("CoreC").error(
+            f"Error cargando configuración: {e}"
+        )
+        return {
+            "instance_id": "corec1",
+            "db_config": {},
+            "redis_config": {}
+        }
+
 
 class ComponenteBase:
     async def inicializar(self):
