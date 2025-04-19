@@ -14,10 +14,7 @@ from typing import Dict, Any
 
 import psycopg2
 import zstd
-from corec.core import (
-    IsolationForest,
-    deserializar_mensaje
-)
+from corec.core import IsolationForest, deserializar_mensaje
 from corec.entities import (
     MicroCeluEntidadCoreC,
     crear_entidad,
@@ -45,7 +42,9 @@ class BloqueSimbiotico:
         self.umbral = 0.5
         self.fallos = 0
 
-    async def ajustar_umbral(self, carga: float, valores: list[float], errores: int):
+    async def ajustar_umbral(
+        self, carga: float, valores: list[float], errores: int
+    ):
         try:
             desviacion = statistics.stdev(valores) if len(valores) > 1 else 0.1
             self.umbral = min(
@@ -55,7 +54,9 @@ class BloqueSimbiotico:
                 ),
                 0.9
             )
-            self.logger.info(f"Bloque {self.id} ajustó umbral a {self.umbral:.2f}")
+            self.logger.info(
+                f"Bloque {self.id} ajustó umbral a {self.umbral:.2f}"
+            )
         except Exception as e:
             self.logger.error(
                 f"[BloqueSimbiotico {self.id}] Error ajustando umbral: {e}"
@@ -106,7 +107,8 @@ class BloqueSimbiotico:
                     self.fallos = 0
                 else:
                     entidad_activa = next(
-                        (e for e in self.entidades if e[3]), self.entidades[i]
+                        (e for e in self.entidades if e[3]),
+                        self.entidades[i]
                     )
                     self.entidades[i] = crear_entidad(
                         f"m{time.time_ns()}",
@@ -128,9 +130,12 @@ class BloqueSimbiotico:
                 level=3
             )
             cur.execute(
-                "INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp, instance_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT (id) DO UPDATE SET num_entidades = %s, fitness = %s, timestamp = %s",
+                (
+                    "INSERT INTO bloques (id, canal, num_entidades, fitness, "
+                    "timestamp, instance_id) VALUES (%s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (id) DO UPDATE SET num_entidades = %s, "
+                    "fitness = %s, timestamp = %s"
+                ),
                 (
                     self.id, self.canal, len(self.entidades), self.fitness,
                     time.time(), self.nucleus.instance_id,
