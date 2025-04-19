@@ -7,6 +7,7 @@ Gestión de trading_db para el plugin CryptoTrading.
 import psycopg2
 import logging
 import json
+import datetime
 from typing import Dict, Any
 
 class TradingDB:
