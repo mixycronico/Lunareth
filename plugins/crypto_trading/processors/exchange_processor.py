@@ -10,6 +10,7 @@ from ..utils.helpers import CircuitBreaker
 import aiohttp
 import asyncio
 import json
+import logging
 import hmac
 import hashlib
 import backoff
