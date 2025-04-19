@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 plugins/crypto_trading/processors/analyzer_processor.py
-Analiza métricas de CoreC y trading, proponiendo y ejecutando optimizaciones automáticamente.
-Incluye Sharpe Ratio para evaluación de rendimiento ajustado al riesgo.
+Analiza métricas de CoreC y trading, proponiendo y ejecutando optimizaciones.
+Incluye Sharpe Ratio para evaluar rendimiento ajustado al riesgo.
 """
 
 import json
