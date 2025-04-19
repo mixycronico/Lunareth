@@ -9,16 +9,18 @@ import asyncio
 import logging
 import json
 import time
+from typing import Dict, Any
+
+import click
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-import click
+
 from corec.core import aioredis
 from corec.entities import crear_entidad
 from corec.blocks import BloqueSimbiotico
 from brain import JarvisBrain
 from controller import InterfaceController
-from typing import Dict, Any
 
 console = Console()
 
@@ -35,13 +37,14 @@ class InterfaceSystem:
         self.controller = None
 
     async def inicializar(self):
+        redis_cfg = self.nucleus.redis_config
         redis_url = (
-            f"redis://{self.nucleus.redis_config['username']}:"
-            f"{self.nucleus.redis_config['password']}@"
-            f"{self.nucleus.redis_config['host']}:"
-            f"{self.nucleus.redis_config['port']}"
+            f"redis://{redis_cfg['username']}:{redis_cfg['password']}@"
+            f"{redis_cfg['host']}:{redis_cfg['port']}"
         )
-        self.redis_client = await aioredis.from_url(redis_url, decode_responses=True)
+        self.redis_client = await aioredis.from_url(
+            redis_url, decode_responses=True
+        )
         self.logger.info("Redis inicializado para InterfaceSystem")
         await self.brain.inicializar_redis()
 
@@ -52,8 +55,8 @@ class InterfaceSystem:
             for i in range(self.config.get("entidades", 100))
         ]
         self.bloque = BloqueSimbiotico(
-            "interface_system", self.canal, entidades, max_size=1024,
-            nucleus=self.nucleus
+            "interface_system", self.canal, entidades,
+            max_size=1024, nucleus=self.nucleus
         )
         self.nucleus.modulos["registro"].bloques[self.bloque.id] = self.bloque
         self.nucleus.registrar_plugin("interface_system", self)
@@ -63,7 +66,9 @@ class InterfaceSystem:
 
         asyncio.create_task(self._iniciar_cli())
 
-    async def _procesar_comando(self, mensaje: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def _procesar_comando(
+        self, mensaje: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
         try:
             if mensaje is None:
                 mensaje = {"comando": "status"}
@@ -84,6 +89,7 @@ class InterfaceSystem:
                 table.add_row("Nodos", str(estado["nodos"]))
                 console.print(table)
                 respuesta = "Estado mostrado correctamente 🌱"
+
             elif comando == "plugins":
                 estado = await self.controller.estado_sistema()
                 if "error" in estado:
@@ -94,6 +100,7 @@ class InterfaceSystem:
                     table.add_row(plugin)
                 console.print(table)
                 respuesta = f"{len(estado['plugins_activos'])} plugins activos 🎉"
+
             elif comando in ["blocks", "bloques"]:
                 estado = await self.controller.estado_sistema()
                 if "error" in estado:
@@ -110,6 +117,7 @@ class InterfaceSystem:
                     )
                 console.print(table)
                 respuesta = f"{len(estado['bloques'])} bloques activos 🧬"
+
             elif comando in ["nodes", "nodos"]:
                 nodos = await self.controller.listar_nodos()
                 if "error" in nodos:
@@ -122,6 +130,7 @@ class InterfaceSystem:
                     table.add_row(nodo["id"], estado_txt)
                 console.print(table)
                 respuesta = f"{len(nodos['nodos'])} nodos activos 🌐"
+
             elif comando in ["alerts", "alertas"]:
                 alertas = await self.controller.listar_alertas()
                 if "error" in alertas:
@@ -132,14 +141,18 @@ class InterfaceSystem:
                     table.add_row(alerta)
                 console.print(table)
                 respuesta = f"{len(alertas['alertas'])} alertas pendientes ⚠️"
+
             elif comando.startswith("chat "):
                 respuesta = await self.controller.enviar_chat(comando[5:], valor)
+
             elif comando.startswith("activar plugin "):
                 plugin = comando.split("activar plugin ")[1].strip()
                 respuesta = await self.controller.activar_plugin(plugin)
+
             elif comando.startswith("desactivar plugin "):
                 plugin = comando.split("desactivar plugin ")[1].strip()
                 respuesta = await self.controller.deactivar_plugin(plugin)
+
             elif comando.startswith("config "):
                 partes = comando.split(" ", 2)
                 if len(partes) < 3:
@@ -150,12 +163,17 @@ class InterfaceSystem:
                 except Exception:
                     pass
                 respuesta = await self.controller.configurar(clave, valor)
+
             else:
                 respuesta = await self.controller.enviar_chat(comando, valor)
 
-            console.print(f"[bold magenta]CoreC[/bold magenta]: {respuesta}", style="green")
+            console.print(
+                f"[bold magenta]CoreC[/bold magenta]: {respuesta}",
+                style="green"
+            )
             self.brain.recordar(comando, respuesta)
             return {"valor": valor, "texto": respuesta}
+
         except Exception as e:
             console.print(f"Error ejecutando comando: {e}", style="bold red")
             return {"valor": 0.0, "texto": str(e)}
@@ -197,32 +215,34 @@ class InterfaceSystem:
         @cli.command()
         @click.argument("mensaje")
         def chat(mensaje):
-            resultado = asyncio.run(self._procesar_comando({"comando": f"chat {mensaje}"}))
+            resultado = asyncio.run(
+                self._procesar_comando({"comando": f"chat {mensaje}"})
+            )
             self.brain.recordar(f"chat {mensaje}", resultado["texto"])
 
         @cli.command()
         @click.argument("plugin")
         def activate(plugin):
-            resultado = asyncio.run(self._procesar_comando(
-                {"comando": f"activar plugin {plugin}"}
-            ))
+            resultado = asyncio.run(
+                self._procesar_comando({"comando": f"activar plugin {plugin}"})
+            )
             self.brain.recordar(f"activar plugin {plugin}", resultado["texto"])
 
         @cli.command()
         @click.argument("plugin")
         def deactivate(plugin):
-            resultado = asyncio.run(self._procesar_comando(
-                {"comando": f"desactivar plugin {plugin}"}
-            ))
+            resultado = asyncio.run(
+                self._procesar_comando({"comando": f"desactivar plugin {plugin}"})
+            )
             self.brain.recordar(f"desactivar plugin {plugin}", resultado["texto"])
 
         @cli.command()
         @click.argument("clave")
         @click.argument("valor")
         def config(clave, valor):
-            resultado = asyncio.run(self._procesar_comando(
-                {"comando": f"config {clave} {valor}"}
-            ))
+            resultado = asyncio.run(
+                self._procesar_comando({"comando": f"config {clave} {valor}"})
+            )
             self.brain.recordar(f"config {clave} {valor}", resultado["texto"])
 
         cli()
