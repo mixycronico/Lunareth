@@ -4,10 +4,12 @@
 plugins/codex/main.py
 Plugin Codex para CoreC – optimiza código, genera websites y plugins.
 """
+
 import asyncio
 import logging
 from corec.core import ComponenteBase
 from plugins.codex.processors.manager import CodexManager
+
 
 class CodexPlugin(ComponenteBase):
     def __init__(self, nucleus, config):
@@ -28,6 +30,7 @@ class CodexPlugin(ComponenteBase):
     async def detener(self):
         await self.manager.detener()
         self.logger.info("CodexPlugin detenido")
+
 
 def inicializar(nucleus, config):
     plugin = CodexPlugin(nucleus, config)
