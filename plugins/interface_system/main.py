@@ -4,6 +4,7 @@
 plugins/interface_system/main.py
 Plugin que proporciona una CLI y WebSocket para CoreC, con vida via ComunicadorInteligente.
 """
+
 import asyncio
 import logging
 import json
@@ -21,6 +22,7 @@ from typing import Dict, Any
 
 console = Console()
 
+
 class InterfaceSystem:
     def __init__(self, nucleus, config):
         self.nucleus = nucleus
@@ -33,18 +35,31 @@ class InterfaceSystem:
         self.controller = None
 
     async def inicializar(self):
-        redis_url = f"redis://{self.nucleus.redis_config['username']}:{self.nucleus.redis_config['password']}@{self.nucleus.redis_config['host']}:{self.nucleus.redis_config['port']}"
+        redis_url = (
+            f"redis://{self.nucleus.redis_config['username']}:"
+            f"{self.nucleus.redis_config['password']}@"
+            f"{self.nucleus.redis_config['host']}:"
+            f"{self.nucleus.redis_config['port']}"
+        )
         self.redis_client = await aioredis.from_url(redis_url, decode_responses=True)
         self.logger.info("Redis inicializado para InterfaceSystem")
         await self.brain.inicializar_redis()
 
         self.controller = InterfaceController(self.nucleus, self.redis_client)
 
-        entidades = [crear_entidad(f"m{i}", self.canal, self._procesar_comando) for i in range(self.config.get("entidades", 100))]
-        self.bloque = BloqueSimbiotico("interface_system", self.canal, entidades, max_size=1024, nucleus=self.nucleus)
+        entidades = [
+            crear_entidad(f"m{i}", self.canal, self._procesar_comando)
+            for i in range(self.config.get("entidades", 100))
+        ]
+        self.bloque = BloqueSimbiotico(
+            "interface_system", self.canal, entidades, max_size=1024,
+            nucleus=self.nucleus
+        )
         self.nucleus.modulos["registro"].bloques[self.bloque.id] = self.bloque
         self.nucleus.registrar_plugin("interface_system", self)
-        self.logger.info(f"Plugin InterfaceSystem inicializado con {len(entidades)} entidades")
+        self.logger.info(
+            f"Plugin InterfaceSystem inicializado con {len(entidades)} entidades"
+        )
 
         asyncio.create_task(self._iniciar_cli())
 
@@ -89,7 +104,10 @@ class InterfaceSystem:
                 table.add_column("Fitness", style="white")
                 table.add_column("Entidades", style="white")
                 for bloque in estado["bloques"]:
-                    table.add_row(bloque["id"], str(bloque["canal"]), f"{bloque['fitness']:.2f}", str(bloque["entidades"]))
+                    table.add_row(
+                        bloque["id"], str(bloque["canal"]),
+                        f"{bloque['fitness']:.2f}", str(bloque["entidades"])
+                    )
                 console.print(table)
                 respuesta = f"{len(estado['bloques'])} bloques activos 🧬"
             elif comando in ["nodes", "nodos"]:
@@ -100,7 +118,8 @@ class InterfaceSystem:
                 table.add_column("ID", style="green")
                 table.add_column("Estado", style="white")
                 for nodo in nodos["nodos"]:
-                    table.add_row(nodo["id"], "Activo" if nodo["activo"] else "Inactivo")
+                    estado_txt = "Activo" if nodo["activo"] else "Inactivo"
+                    table.add_row(nodo["id"], estado_txt)
                 console.print(table)
                 respuesta = f"{len(nodos['nodos'])} nodos activos 🌐"
             elif comando in ["alerts", "alertas"]:
@@ -184,20 +203,26 @@ class InterfaceSystem:
         @cli.command()
         @click.argument("plugin")
         def activate(plugin):
-            resultado = asyncio.run(self._procesar_comando({"comando": f"activar plugin {plugin}"}))
+            resultado = asyncio.run(self._procesar_comando(
+                {"comando": f"activar plugin {plugin}"}
+            ))
             self.brain.recordar(f"activar plugin {plugin}", resultado["texto"])
 
         @cli.command()
         @click.argument("plugin")
         def deactivate(plugin):
-            resultado = asyncio.run(self._procesar_comando({"comando": f"desactivar plugin {plugin}"}))
+            resultado = asyncio.run(self._procesar_comando(
+                {"comando": f"desactivar plugin {plugin}"}
+            ))
             self.brain.recordar(f"desactivar plugin {plugin}", resultado["texto"])
 
         @cli.command()
         @click.argument("clave")
         @click.argument("valor")
         def config(clave, valor):
-            resultado = asyncio.run(self._procesar_comando({"comando": f"config {clave} {valor}"}))
+            resultado = asyncio.run(self._procesar_comando(
+                {"comando": f"config {clave} {valor}"}
+            ))
             self.brain.recordar(f"config {clave} {valor}", resultado["texto"])
 
         cli()
@@ -218,6 +243,7 @@ class InterfaceSystem:
         if self.redis_client:
             await self.redis_client.close()
         self.brain.guardar_memoria()
+
 
 def inicializar(nucleus, config):
     plugin = InterfaceSystem(nucleus, config)
