@@ -1,5 +1,5 @@
 from corec.core import ModuloBase, logging, asyncio, random
-from corec.entities import MicroCeluEntidadCoreC, CeluEntidadCoreC
+from corec.entities import MicroCeluEntidadCoreC, CeluEntidadCoreC, crear_entidad
 from corec.blocks import BloqueSimbiotico
 
 class ModuloRegistro(ModuloBase):
