@@ -66,6 +66,9 @@ class CodexGenerator:
                 if file.endswith((".py", ".js", ".html", ".css", ".json")):
                     file_path = os.path.join(root, file)
                     rel_path = os.path.relpath(file_path, output_dir)
-                    template = self.env.get_template(rel_path)
-                    with open(file_path, "w", encoding="utf-8") as f:
-                        f.write(template.render(**params))
+                    try:
+                        template = self.env.get_template(rel_path)
+                        with open(file_path, "w", encoding="utf-8") as f:
+                            f.write(template.render(**params))
+                    except Exception as e:
+                        self.logger.warning(f"No se pudo renderizar {file_path}: {e}")
