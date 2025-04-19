@@ -13,12 +13,9 @@ import psycopg2
 import logging
 import hmac
 import hashlib
-import backoff
-import numpy as np
 import json
-import asyncio
-from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from typing import Dict, Any
+from datetime import datetime
 
 class ExecutionProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
