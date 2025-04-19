@@ -49,7 +49,7 @@ class MacroProcessor(ComponenteBase):
         try:
             async with aiohttp.ClientSession() as session:
                 url = (
-                    f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE"
+                    "https://www.alphavantage.co/query?function=GLOBAL_QUOTE"
                     f"&symbol={symbol}&apikey={self.api_keys['alpha_vantage']}"
                 )
                 async with session.get(url) as response:
@@ -79,9 +79,10 @@ class MacroProcessor(ComponenteBase):
         try:
             async with aiohttp.ClientSession() as session:
                 url = (
-                    "https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE"
-                    "&from_currency=USD&to_currency=DX-Y.NYB&apikey="
-                    f"{self.api_keys['alpha_vantage']}"
+                    "https://www.alphavantage.co/query?"
+                    "function=CURRENCY_EXCHANGE_RATE"
+                    "&from_currency=USD&to_currency=DX-Y.NYB"
+                    f"&apikey={self.api_keys['alpha_vantage']}"
                 )
                 async with session.get(url) as response:
                     if response.status != 200:
@@ -108,8 +109,8 @@ class MacroProcessor(ComponenteBase):
                 headers = {"X-CMC_PRO_API_KEY": self.api_keys["coinmarketcap"]}
                 symbols = ",".join(self.altcoin_symbols)
                 url = (
-                    "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
-                    f"?symbol={symbols}"
+                    "https://pro-api.coinmarketcap.com/v1/"
+                    f"cryptocurrency/quotes/latest?symbol={symbols}"
                 )
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:
@@ -137,8 +138,8 @@ class MacroProcessor(ComponenteBase):
         try:
             async with aiohttp.ClientSession() as session:
                 url = (
-                    "https://newsapi.org/v2/everything?q=cryptocurrency"
-                    f"&apiKey={self.api_keys['newsapi']}"
+                    "https://newsapi.org/v2/everything?"
+                    f"q=cryptocurrency&apiKey={self.api_keys['newsapi']}"
                 )
                 async with session.get(url) as response:
                     if response.status == 200:
@@ -201,7 +202,8 @@ class MacroProcessor(ComponenteBase):
                         "tipo": "dxy_change",
                         "plugin": "crypto_trading",
                         "message": (
-                            f"DXY cambió {macro['dxy_change_percent']:.2f}%, riesgo {riesgo}"
+                            f"DXY cambió {macro['dxy_change_percent']:.2f}%, "
+                            f"riesgo {riesgo}"
                         )
                     })
 
