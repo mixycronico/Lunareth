@@ -1,5 +1,14 @@
 from plugins.comunicador_inteligente.main import QLearningAgent
-rl_model = QLearningAgent(actions=["responder", "analizar", "optimizar"])
+import pickle
+
+# Acciones definidas en el sistema
+acciones = ["responder", "analizar", "optimizar"]
+
+# Crear agente Q-learning con configuración por defecto
+modelo = QLearningAgent(actions=acciones)
+
+# Guardar el modelo
 with open("plugins/comunicador_inteligente/models/rl.pkl", "wb") as f:
-    pickle.dump(rl_model, f)
-    
+    pickle.dump(modelo, f)
+
+print("Modelo RL guardado (configuración por defecto).")
