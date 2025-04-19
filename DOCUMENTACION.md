@@ -1,365 +1,422 @@
-Documentación para Desarrolladores de CoreC
-CoreC es un sistema distribuido biomimético diseñado para emular la resiliencia, adaptabilidad y modularidad de los organismos vivos. En su Etapa 1, CoreC ofrece un núcleo autónomo (CoreCNucleus) que orquesta entidades celulares (CeluEntidadCoreC, MicroCeluEntidadCoreC) y módulos esenciales (Registro, Ejecución, Sincronización, Auditoría). Con soporte opcional para OpenRouter para análisis y chat, y una infraestructura preparada para plugins, CoreC es una base robusta para aplicaciones escalables.
-Esta documentación está dirigida a desarrolladores que deseen entender, configurar, ejecutar, probar, monitorear y extender CoreC. Cubre todos los aspectos técnicos, desde la arquitectura hasta los detalles de implementación, con ejemplos prácticos y mejores prácticas.
-
-Tabla de Contenidos
+Documentación Completa de CoreC
+Índice
   1	Introducción
   2	Arquitectura
-  3	Componentes Principales
-  4	Requisitos Previos
-  5	Configuración
-  6	Ejecución
-  7	Pruebas
-  8	Monitoreo
-  9	Extensión del Sistema
-  10	Mejores Prácticas
-  11	Solución de Problemas
-  12	Contribución
-  13	Licencia
+  ◦	Entidades
+  ◦	Bloques Simbióticos
+  ◦	Núcleo
+  ◦	Módulos
+  ◦	Plugins
+  ◦	Comunicación
+  ◦	Almacenamiento
+  3	Requisitos
+  4	Instalación
+  ◦	Entorno Linux
+  ◦	Configuración de Dependencias
+  ◦	Despliegue con Docker
+  5	Uso
+  ◦	Iniciar CoreC
+  ◦	Monitoreo
+  ◦	Pruebas
+  6	Configuración
+  ◦	corec_config.json
+  ◦	plugins_config.json
+  7	Desarrollo de Plugins
+  ◦	Estructura de un Plugin
+  ◦	Ejemplo: Plugin de Alerta
+  8	Escalabilidad y Rendimiento
+  ◦	Multi-Nodo
+  ◦	Optimización de Recursos
+  9	Solución de Problemas
+  10	Futuras Mejoras
+  11	Alineación con la Visión
 
-Introducción
-CoreC es un sistema distribuido inspirado en la biología, donde el núcleo (CoreCNucleus) actúa como el cerebro, coordinando entidades y módulos para procesar datos, gestionar recursos y mantener la estabilidad. Su diseño biomimético permite:
-  •	Autonomía: Funciona sin dependencias externas, con OpenRouter como apoyo opcional.
-  •	Modularidad: Preparado para extenderse mediante plugins.
-  •	Resiliencia: Soporta fallos con espejos, regeneración de enjambres y fallbacks.
-  •	Escalabilidad: Diseñado para instancias distribuidas y alta carga.
-En la Etapa 1, CoreC ofrece un núcleo funcional con soporte para plugins vacío, listo para añadir funcionalidades específicas (como CLI, alertas, trading) en la Etapa 2.
+1. Introducción
+CoreC es un ecosistema digital bioinspirado diseñado para procesar y coordinar millones de entidades ultraligeras (~1 KB) en bloques simbióticos (~1 MB, ~5 MB para bloques inteligentes) dentro de un límite de 1 GB de RAM para ~1,000,000 entidades. Inspirado en la eficiencia de GNOME 2, CoreC es plug-and-play, escalable multi-nodo, y ofrece un desempeño legendario (>99.99% uptime, ~10-20 ms latencia). Su arquitectura modular permite extender funcionalidades mediante plugins sin modificar el núcleo ni la configuración base (corec_config.json).
+Objetivos
+  •	Eficiencia: Operar con recursos mínimos (~100-150 MB en reposo, ~0.9-1 GB en carga alta).
+  •	Modularidad: Plugins plug-and-play en subfolders dentro de plugins (por ejemplo, plugins/alerts).
+  •	Escalabilidad: Soporte multi-nodo con Redis Cluster y PostgreSQL particionado.
+  •	Simplicidad: Configuración y despliegue intuitivos, como GNOME 2.
+Casos de Uso
+  •	Procesamiento distribuido de sensores IoT.
+  •	Análisis en tiempo real (por ejemplo, detección de anomalías, trading).
+  •	Simulaciones bioinspiradas (por ejemplo, redes neuronales ligeras).
+  •	Sistemas embebidos (por ejemplo, Raspberry Pi 5).
 
-Arquitectura
-CoreC emula un organismo vivo, con componentes que interactúan como sistemas biológicos:
-  •	CoreCNucleus: El cerebro central, que inicializa, coordina y detiene módulos y entidades.
-  •	CeluEntidadCoreC: Entidades similares a neuronas que procesan datos para canales específicos.
-  •	MicroCeluEntidadCoreC: Micro-células adaptativas con ADN basado en redes neuronales (MicroNanoDNA) para tareas dinámicas.
+2. Arquitectura
+CoreC está estructurado como un organismo digital, con entidades (“almas”) formando bloques simbióticos coordinados por un núcleo, módulos, y plugins.
+2.1 Entidades
+  •	Descripción: Unidades mínimas de procesamiento (~0.8-1.2 KB), como células en un organismo.
+  •	Tipos:
+  ◦	MicroCeluEntidadCoreC: Ejecuta cálculos simples (por ejemplo, random.random()).
+  ▪	Estructura: Tupla (id: str, canal: int, funcion: Callable, activo: bool).
+  ▪	RAM: ~0.8-1.2 KB.
+  ▪	Funciones: Cálculo, filtrado dinámico (umbral ajustado por carga, desviación, errores), fusión (herencia de función), autoreparación (bit de estado, reinicio tras 2 fallos).
+  ◦	CeluEntidadCoreC: Ejecuta procesadores avanzados (por ejemplo, ProcesadorSensor, ProcesadorFiltro).
+  ▪	Estructura: Tupla (id: str, canal: int, procesador: Callable, activo: bool).
+  ▪	RAM: ~1-1.5 KB.
+  ▪	Funciones: Procesamiento complejo, filtrado, integración con plugins.
+  •	Total: ~1,000,000 entidades (~980,000 en bloques de 1 MB, ~20,000 en bloques de 5 MB).
+2.2 Bloques Simbióticos
+  •	Descripción: Grupos de ~1000 entidades (~1 MB) o ~2000 entidades con red neuronal (~5 MB), como tejidos vivos que coordinan tareas.
+  •	Tipos:
+  ◦	Estándar: ~1 MB, ~1000 entidades, para cálculo, fusión, reparación, escritura agregada en PostgreSQL.
+  ◦	Inteligente: ~5 MB, ~2000 entidades + red neuronal (~1 MB), para análisis avanzado (por ejemplo, predicciones).
+  •	Funciones:
+  ◦	Cálculo distribuido: Agrega resultados de entidades (por ejemplo, promedio de valores).
+  ◦	Fusión: Combina bloques débiles (fitness < 0.2) con bloques fuertes (fitness > 0.5).
+  ◦	Reparación: Regenera entidades defectuosas (>5% errores), heredando funciones.
+  ◦	Escritura: Almacena datos agregados en PostgreSQL (~1-10 ops/s).
+  •	RAM: ~980 MB para 980 bloques estándar + 50 MB para 10 bloques inteligentes.
+2.3 Núcleo
+  •	Archivo: corec/nucleus.py
+  •	Descripción: El CoreCNucleus es el cerebro que coordina entidades, bloques, módulos, y plugins.
+  •	Funciones:
+  ◦	Carga dinámica de módulos (corec/modules) y plugins (plugins/*).
+  ◦	Inicializa Redis (broker, caché, streams) y PostgreSQL (corec_db).
+  ◦	Gestiona tareas Celery (~1000 tareas/s).
+  ◦	Publica alertas críticas (por ejemplo, anomalías).
+  •	RAM: ~50 MB.
+2.4 Módulos
+  •	Ubicación: corec/modules
+  •	Descripción: Componentes esenciales del núcleo, implementados como clases (ModuloBase).
   •	Módulos:
-  ◦	Registro: Gestiona el registro de entidades y enjambres.
-  ◦	Ejecución: Orquesta la ejecución de entidades.
-  ◦	Sincronización: Maneja balanceo de carga y limpieza de nodos.
-  ◦	Auditoría: Monitorea la salud del sistema y genera alertas.
-  •	OpenRouter: IA externa opcional para análisis avanzado y capacidades conversacionales, con fallbacks locales.
-  •	PluginManager: Infraestructura para cargar plugins dinámicamente, aunque actualmente vacía.
-  •	Almacenamiento:
-  ◦	PostgreSQL: Almacena nodos, eventos y auditoría.
-  ◦	Redis: Gestiona streams para comunicación entre entidades.
-La arquitectura sigue principios biomiméticos:
-  •	Núcleo como cerebro: CoreCNucleus toma decisiones y coordina.
-  •	Entidades como células: Procesan datos de forma distribuida.
-  •	Módulos como órganos: Ejecutan funciones especializadas.
-  •	Enjambres como tejidos: Grupos de micro-células que colaboran.
-
-Componentes Principales
-CoreCNucleus
-  •	Ubicación: src/core/nucleus.py
-  •	Propósito: Orquesta el sistema, inicializando módulos, entidades y OpenRouter.
-  •	Funcionalidades:
-  ◦	Inicializa y detiene el sistema (inicializar, detener).
-  ◦	Registra entidades (registrar_celu_entidad, registrar_micro_celu_entidad).
-  ◦	Proporciona procesadores para canales (get_procesador).
-  ◦	Ofrece análisis y chat vía OpenRouter (razonar, responder_chat).
-  ◦	Publica alertas en el canal alertas (publicar_alerta).
-  •	Dependencias: PostgreSQL, Redis, OpenRouter (opcional).
-CeluEntidadCoreC
-  •	Ubicación: src/core/celu_entidad.py
-  •	Propósito: Procesa datos para un canal específico, similar a una neurona.
-  •	Funcionalidades:
-  ◦	Inicializa y actualiza configuraciones (inicializar, _actualizar_config).
-  ◦	Obtiene datos de la base de datos (obtener_datos).
-  ◦	Procesa datos usando un procesador (procesar).
-  ◦	Publica resultados en eventos (comunicar).
-  ◦	Envía heartbeats a nodos para canales críticos o espejos (_enviar_heartbeat).
-  •	Dependencias: PostgreSQL.
-MicroCeluEntidadCoreC
-  •	Ubicación: src/core/micro_celu.py
-  •	Propósito: Ejecuta tareas dinámicas en enjambres, con ADN adaptativo.
-  •	Funcionalidades:
-  ◦	Procesa datos con una función personalizada (procesar).
-  ◦	Entrena una red neuronal (MicroNanoDNA) para optimizar resultados.
-  ◦	Publica resultados en Redis streams (comunicar).
-  ◦	Se regenera si falla repetidamente.
-  •	Dependencias: Redis, PostgreSQL.
-MicroNanoDNA
-  •	Ubicación: src/core/micro_nano_dna.py
-  •	Propósito: Proporciona ADN adaptativo para micro-células.
-  •	Funcionalidades:
-  ◦	Valida parámetros (_validar_parametros).
-  ◦	Mutación y recombinación genética (mutar, recombinar, heredar).
-  ◦	Entrena una red neuronal (NanoNeuralNet) (entrenar_red).
-  •	Dependencias: PyTorch.
-Módulos
-  •	Ubicación: src/core/modules/
-  •	Propósito: Ejecutan funciones especializadas.
-  •	Módulos:
-  ◦	Registro (registro.py): Registra entidades y gestiona enjambres.
-  ◦	Ejecución (ejecucion.py): Orquesta la ejecución de entidades.
-  ◦	Sincronización (sincronizacion.py): Limpia nodos inactivos y balancea carga.
-  ◦	Auditoría (auditoria.py): Monitorea errores y micro-células débiles, generando alertas.
-  •	Dependencias: PostgreSQL, Redis.
-PluginManager
-  •	Ubicación: src/plugins/plugin_manager.py
-  •	Propósito: Carga y gestiona plugins dinámicamente (actualmente vacío).
-  •	Funcionalidades:
-  ◦	Escanea src/plugins/ para plugins (cargar_plugins).
-  ◦	Registra canales de plugins (register_plugin_channels).
-  ◦	Proporciona procesadores para canales (get_processor).
-  •	Dependencias: Ninguna (directorio src/plugins/ está vacío).
-OpenRouterClient
-  •	Ubicación: src/utils/openrouter.py
-  •	Propósito: Proporciona análisis y chat mediante OpenRouter, con fallbacks locales.
-  •	Funcionalidades:
-  ◦	Envía consultas a OpenRouter (query).
-  ◦	Analiza datos (analyze) con respaldo local si falla.
-  ◦	Maneja interacciones conversacionales (chat) con respuestas básicas si no está disponible.
-  •	Dependencias: aiohttp (opcional).
-Base de Datos
+  ◦	registro.py: Gestiona bloques simbióticos, registra entidades.
+  ◦	ejecucion.py: Ejecuta tareas distribuidas con Celery.
+  ◦	sincronización.py: Fusiona y adapta bloques según carga y fitness.
+  ◦	auditoria.py: Detecta anomalías en bloques (usando IsolationForest).
+  •	RAM: ~10-20 MB por módulo (~40-80 MB total).
+2.5 Plugins
+  •	Ubicación: plugins/* (cada plugin en su subfolder, por ejemplo, plugins/alerts).
+  •	Descripción: Extensiones opcionales cargadas dinámicamente por el PluginManager sin modificar corec_config.json.
+  •	Características:
+  ◦	Plug-and-play: Copiar un folder a plugins y reiniciar CoreC.
+  ◦	Configuración: plugins//config.json para parámetros propios (por ejemplo, bases de datos como trading_db).
+  ◦	Comunicación: Usa protocolo binario (!Ibf?, ~9 bytes) vía Redis streams.
+  •	RAM: ~10-20 KB por plugin (sin base propia), ~50-100 KB con base propia.
+2.6 Comunicación
+  •	Protocolo: Binario (!Ibf?: ID uint32, canal uint8, valor float32, estado bool, ~9 bytes).
+  •	Mecanismo: Redis streams (~0.2-0.3 MB/s, ~50-100 MB RAM).
+  •	Flujo:
+  ◦	Entidades envían mensajes binarios a bloques.
+  ◦	Bloques coordinan con otros bloques o plugins vía Redis.
+  ◦	Plugins acceden a streams para tareas específicas (por ejemplo, alertas).
+  •	Prioridad: Canales críticos (2: seguridad, 3: IA, 5: alertas) usan colas rápidas.
+2.7 Almacenamiento
+  •	Base de datos: PostgreSQL (corec_db para el núcleo, bases propias para plugins).
   •	Tablas:
-  ◦	nodos: Almacena información de nodos (ID, actividad, carga, espejos).
-  ◦	eventos: Registra eventos generados por entidades.
-  ◦	auditoria: Guarda logs de auditoría para errores y alertas.
-  •	Índices: idx_eventos_canal, idx_eventos_timestamp para consultas eficientes.
-  •	Ubicación: schema.sql
+  ◦	bloques: Almacena estado de bloques (id, canal, num_entidades, fitness, timestamp, instance_id).
+  ◦	Particionada por rango de tiempo (bloques_2025_04).
+  •	Escrituras: ~1-10 ops/s por bloque, agregadas (~95% menos que por entidad).
+  •	RAM: ~50 MB.
+  •	Disco: ~100-200 MB.
 
-Requisitos Previos
-  •	Python: 3.11+
-  •	Docker: Para despliegue en contenedores.
-  •	PostgreSQL: Versión 15, para almacenamiento persistente.
-  •	Redis: Versión 7.2, para streams.
-  •	Dependencias de Python: Listadas en requirements.txt.
-  •	Clave API de OpenRouter (opcional): Para análisis y chat.
-  •	Sistema Operativo: Linux, macOS o Windows (con WSL para Docker en Windows).
-Instala Docker:
-  •	Ubuntu: sudo apt-get install docker.io docker-compose
-  •	macOS: brew install docker docker-compose
-  •	Windows: Descarga Docker Desktop
-Instala Python:
-  •	Ubuntu: sudo apt-get install python3.11 python3-pip
-  •	macOS: brew install python@3.11
-  •	Windows: Descarga desde python.org
+3. Requisitos
+Hardware
+  •	Mínimo: 2 GB RAM, 2 núcleos, 10 GB disco.
+  •	Recomendado: 4 GB RAM, 4 núcleos, 20 GB disco (por ejemplo, Raspberry Pi 5, servidor pequeño).
+Software
+  •	Sistema operativo: Linux (Ubuntu 22.04, Debian 11, Raspberry Pi OS 64-bit).
+  •	Dependencias:
+  ◦	Python 3.9
+  ◦	Docker, Docker Compose
+  ◦	Redis 7.0
+  ◦	PostgreSQL 13
+  ◦	Bibliotecas Python: celery, redis, aioredis, psycopg2-binary, zstd, scikit-learn, torch, jq
+Red
+  •	Puertos: 6379 (Redis), 5432 (PostgreSQL), 8000 (métricas).
 
-Configuración
-Estructura del Proyecto
-corec_v4/
-├── src/
-│   ├── core/              # Núcleo y componentes principales
-│   ├── plugins/           # Infraestructura para plugins (vacía)
-│   ├── utils/             # Utilidades (logging, config, OpenRouter)
-├── configs/
-│   ├── core/              # Configuraciones del núcleo
-│   │   ├── corec_config_corec1.json
-│   │   └── secrets/       # Credenciales sensibles
-├── scripts/               # Scripts de operación
-├── tests/                 # Pruebas unitarias
-├── docker/                # Configuraciones de Docker
-├── requirements.txt       # Dependencias
-├── .env                   # Variables de entorno
-├── .gitignore             # Archivos ignorados
-├── setup.py               # Instalación del paquete
-├── schema.sql             # Esquema de la base de datos
-└── main.py                # Punto de entrada
-Configuración del Entorno
-  1	Variables de Entorno:
-  ◦	Copia el archivo de ejemplo: cp .env.example .env
+4. Instalación
+4.1 Entorno Linux
+  1	Actualiza el sistema: sudo apt update
+  2	
+  3	Instala dependencias del sistema: sudo apt install -y python3.9 python3-pip python3-dev libpq-dev gcc g++ docker.io docker-compose jq
+  4	sudo systemctl enable docker
+  5	sudo systemctl start docker
+  6	sudo usermod -aG docker $USER
+  7	
+  8	Descarga el código de CoreC (por ejemplo, desde tu servidor HelloAmigo): git clone  corec
+  9	cd corec
+  10	
+4.2 Configuración de Dependencias
+  1	Instala Redis: sudo apt install -y redis-server
+  2	sudo sed -i 's/# requirepass .*/requirepass secure_password/' /etc/redis/redis.conf
+  3	sudo systemctl restart redis
+  4	
+  5	Instala PostgreSQL: sudo apt install -y postgresql postgresql-contrib
+  6	sudo -u postgres psql -c "CREATE DATABASE corec_db;"
+  7	sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'your_password';"
+  8	
+  9	Instala dependencias de Python: pip install -r requirements.txt
+  10	
+  11	Ejecuta el script de configuración: chmod +x setup.sh
+  12	./setup.sh
+  13	
+4.3 Despliegue con Docker
+  1	Actualiza configs/corec_config.json con credenciales reales: {
+  2	    "instance_id": "corec1",
+  3	    "db_config": {
+  4	        "dbname": "corec_db",
+  5	        "user": "postgres",
+  6	        "password": "your_real_password",
+  7	        "host": "localhost",
+  8	        "port": "5432"
+  9	    },
+  10	    "redis_config": {
+  11	        "host": "localhost",
+  12	        "port": 6379,
+  13	        "username": "",
+  14	        "password": "your_real_redis_password"
+  15	    },
+  16	    ...
+  17	}
+  18	
+  19	Inicia CoreC: ./run.sh
+  20	
+  21	Verifica los logs: docker-compose logs corec
+  22	
+
+5. Uso
+5.1 Iniciar CoreC
+  1	Ejecuta: ./run.sh
+  2	
+  ◦	Inicia los servicios corec, celery, redis, y postgres.
+  3	Inicia workers de Celery (en otra terminal): celery -A corec.core.celery_app worker --loglevel=info
+  4	
+5.2 Monitoreo
+  •	Logs: docker-compose logs corec
+  •	
+  ◦	Busca mensajes como [CoreCNucleus-corec1] Inicializado, [ModuloRegistro] Bloque registrado.
+  •	Prometheus (opcional):
+  ◦	Configura Prometheus y Grafana: docker run -d -p 9090:9090 prom/prometheus
+  ◦	docker run -d -p 3000:3000 grafana/grafana
   ◦	
-  ◦	Edita .env: OPENROUTER_API_KEY=tu_clave_api_aquí
-  ◦	ENVIRONMENT=development
-  ◦	INSTANCE_ID=corec1
+  ◦	Edita monitoring/prometheus.yml para métricas de Celery, Redis, y PostgreSQL.
+5.3 Pruebas
+  •	Ejecuta: python -m tests.test_corec
+  •	
+  •	Valida:
+  ◦	RAM: ~0.9-1 GB para ~1,000,000 entidades.
+  ◦	CPU: ~0.3-0.5 núcleo.
+  ◦	Red: ~0.2-0.3 MB/s.
+  ◦	Escrituras: ~1-10 ops/s por bloque.
+
+6. Configuración
+6.1 corec_config.json
+Define el núcleo, bloques, y conexiones.
+{
+    "instance_id": "corec1",
+    "db_config": {
+        "dbname": "corec_db",
+        "user": "postgres",
+        "password": "your_real_password",
+        "host": "localhost",
+        "port": "5432"
+    },
+    "redis_config": {
+        "host": "localhost",
+        "port": 6379,
+        "username": "",
+        "password": "your_real_redis_password"
+    },
+    "bloques": [
+        {
+            "id": "enjambre_sensor",
+            "canal": 1,
+            "entidades": 980000,
+            "max_size_mb": 1,
+            "entidades_por_bloque": 1000,
+            "autoreparacion": {
+                "max_errores": 0.05,
+                "min_fitness": 0.2
+            }
+        },
+        {
+            "id": "nodo_seguridad",
+            "canal": 2,
+            "entidades": 1000,
+            "max_size_mb": 1,
+            "entidades_por_bloque": 1000,
+            "autoreparacion": {
+                "max_errores": 0.02,
+                "min_fitness": 0.5
+            }
+        },
+        {
+            "id": "ia_analisis",
+            "canal": 3,
+            "entidades": 20000,
+            "max_size_mb": 5,
+            "entidades_por_bloque": 2000,
+            "plugin": "procesador_inteligente"
+        }
+    ],
+    "modules": ["registro", "ejecucion", "sincronización", "auditoria"],
+    "rol": "generica"
+}
+  •	instance_id: Identificador único del nodo.
+  •	db_config: Conexión a PostgreSQL (corec_db).
+  •	redis_config: Conexión a Redis (broker, streams).
+  •	bloques: Define bloques iniciales (estándar e inteligentes).
+  •	modules: Lista de módulos activos.
+  •	rol: Función del nodo (por ejemplo, “generica”, “sensor”, “analisis”).
+6.2 plugins_config.json
+Configuraciones globales opcionales para plugins (complementa plugins//config.json).
+{
+    "alerts": {
+        "enabled": true,
+        "bloque": "alerts_notificaciones",
+        "canal": 5
+    }
+}
+
+7. Desarrollo de Plugins
+7.1 Estructura de un Plugin
+  •	Ubicación: plugins/ (por ejemplo, plugins/alerts).
+  •	Archivos:
+  ◦	main.py: Punto de entrada con una clase que implementa inicializar(nucleus, config).
+  ◦	config.json (opcional): Configuración propia (por ejemplo, base de datos, canal).
+  •	Carga: El PluginManager en nucleus.py escanea plugins/*/ y carga main.py dinámicamente.
+  •	Plug-and-play: Copiar un folder a plugins y reiniciar CoreC activa el plugin sin modificar corec_config.json.
+7.2 Ejemplo: Plugin de Alerta
+El plugin Alerts detecta valores extremos en bloques simbióticos y envía notificaciones a Redis streams.
+`plugins/alerts/main.py`
+from corec.core import logging, asyncio, enviar_mensaje_redis, serializar_mensaje, deserializar_mensaje, random
+from corec.blocks import BloqueSimbiotico
+from corec.entities import crear_entidad
+from typing import Dict, Any
+
+class AlertsPlugin:
+    def __init__(self, nucleus, config):
+        self.nucleus = nucleus
+        self.logger = logging.getLogger("AlertsPlugin")
+        self.bloque_id = config.get("bloque", "alerts_notificaciones")
+        self.canal = config.get("canal", 5)  # Canal 5 para alertas
+        self.umbral_alerta = config.get("umbral_alerta", 0.9)
+
+    async def inicializar(self):
+        """Inicializa el plugin y registra su bloque."""
+        entidades = []
+        for i in range(1000):  # Bloque estándar de 1 MB
+            async def funcion():
+                return {"valor": random.random()}
+            entidades.append(crear_entidad(f"m{i}", self.canal, funcion))
+        bloque = BloqueSimbiotico(self.bloque_id, self.canal, entidades, max_size=1024, nucleus=self.nucleus)
+        modulo_registro = self.nucleus.modulos.get("registro")
+        if modulo_registro:
+            modulo_registro.bloques[self.bloque_id] = bloque
+            self.logger.info(f"Bloque alertas {self.bloque_id} registrado con 1000 entidades")
+
+    async def procesar(self, datos: Dict[str, Any], carga: float):
+        """Procesa valores y envía alertas si superan el umbral."""
+        bloque = self.nucleus.modulos.get("registro").bloques.get(self.bloque_id)
+        resultados = await bloque.procesar(carga)
+        valores = [r["valor"] for r in resultados["mensajes"] if r.get("activo")]
+        max_valor = max(valores) if valores else 0.0
+        if max_valor > self.umbral_alerta:
+            mensaje = await serializar_mensaje(0, self.canal, max_valor, True)
+            await enviar_mensaje_redis(self.nucleus.redis_client, "alertas", mensaje, prioridad="critical")
+            self.logger.info(f"Alerta enviada: valor {max_valor} supera umbral {self.umbral_alerta}")
+        return {"alertas": valores}
+
+def inicializar(nucleus, config):
+    """Punto de entrada del plugin."""
+    plugin = AlertsPlugin(nucleus, config)
+    nucleus.registrar_plugin("alerts", plugin)
+`plugins/alerts/config.json`
+{
+    "bloque": "alerts_notificaciones",
+    "enabled": true,
+    "canal": 5,
+    "umbral_alerta": 0.9
+}
+Desglose del Plugin de Alerta
+  •	Propósito: Monitorea valores generados por entidades en un bloque simbiótico (~1 MB, ~1000 entidades) y envía alertas si algún valor supera un umbral (0.9).
+  •	Estructura:
+  ◦	main.py: Define AlertsPlugin con:
+  ▪	__init__: Configura el bloque, canal, y umbral.
+  ▪	inicializar: Crea un bloque con 1000 entidades y lo registra.
+  ▪	procesar: Analiza valores y envía alertas críticas a Redis streams.
+  ▪	inicializar: Punto de entrada para el PluginManager.
+  ◦	config.json: Especifica el bloque (alerts_notificaciones), canal (5), y umbral (0.9).
+  •	Uso:
+  ◦	Copia plugins/alerts/ a tu servidor HelloAmigo.
+  ◦	Reinicia CoreC: ./run.sh
   ◦	
-  2	Configuraciones:
-  ◦	corec_config_corec1.json: {
-  ◦	  "instance_id": "corec1",
-  ◦	  "rol": "generica",
-  ◦	  "redis_config": {
-  ◦	    "host": "redis",
-  ◦	    "port": 6379
-  ◦	  },
-  ◦	  "modulos": ["registro", "ejecucion", "sincronizacion", "auditoria"]
+  ◦	Verifica logs: docker-compose logs corec
+  ◦	
+  ▪	Busca [AlertsPlugin] Alerta enviada si un valor supera 0.9.
+  •	Consumo:
+  ◦	RAM: ~10-20 KB (sin base propia).
+  ◦	CPU: ~0.001-0.01% núcleo por ejecución.
+  ◦	Red: ~0.01 MB/s (~10 mensajes/s en alertas críticas).
+
+8. Escalabilidad y Rendimiento
+8.1 Multi-Nodo
+  •	Redis Cluster:
+  ◦	Configura múltiples nodos Redis: docker run -d -p 7000-7005:7000-7005 redis:7.0 --cluster-enabled yes
+  ◦	
+  ◦	Actualiza redis_config en corec_config.json: {
+  ◦	    "redis_config": {
+  ◦	        "host": "redis-cluster",
+  ◦	        "port": 7000,
+  ◦	        "username": "",
+  ◦	        "password": "secure_password"
+  ◦	    }
   ◦	}
   ◦	
-  ◦	db_config.yaml: host: "postgres"
-  ◦	port: 5432
-  ◦	database: "corec_db"
-  ◦	user: "corec_user"
-  ◦	password: "secure_password"
+  •	PostgreSQL Particionado:
+  ◦	Usa particiones por tiempo (bloques_2025_04) y canal para escalar escrituras.
+  ◦	Configura réplicas para nodos adicionales: docker run -d -p 5433:5432 postgres:13 --replication
   ◦	
-  ◦	redis_config.yaml: host: "redis"
-  ◦	port: 6379
-  ◦	
-  ◦	openrouter.yaml: enabled: true
-  ◦	api_key: "tu_clave_api_aquí"
-  ◦	endpoint: "https://openrouter.ai/api/v1"
-  ◦	model: "nous-hermes-2"
-  ◦	max_tokens: 1000
-  ◦	temperature: 0.7
-  ◦	
-  3	Base de Datos:
-  ◦	Ejecuta el esquema SQL para crear las tablas: ./scripts/init_db.sh
-  ◦	
-  ◦	Verifica las tablas: docker exec -it corec_v4-postgres-1 psql -U corec_user -d corec_db -c "\dt"
-  ◦	
-  ◦	Deberías ver nodos, eventos, y auditoria.
-  4	Instala Dependencias: pip install -r requirements.txt
-  5	
+8.2 Optimización de Recursos
+  •	RAM:
+  ◦	Reposo: ~100-150 MB (1 bloque activo).
+  ◦	Carga media: ~160-260 MB (10 bloques).
+  ◦	Carga alta: ~0.9-1 GB (~980 bloques estándar + 10 inteligentes).
+  •	CPU: ~0.3-0.5 núcleo para ~1000 tareas/s.
+  •	Disco: ~50-100 MB (particiones optimizadas).
+  •	Red: ~0.2-0.3 MB/s (~1000 mensajes/s).
+  •	Técnicas:
+  ◦	Carga dinámica: Entidades inactivas liberan RAM (~0.1 KB por entidad).
+  ◦	Escrituras agregadas: ~95% menos ops/s que por entidad.
+  ◦	Compresión zstd: ~0.1 KB por mensaje.
 
-Ejecución
-Con Docker
-  1	Inicia el Sistema: ./scripts/start.sh
-  2	 Esto lanza corec1, PostgreSQL y Redis.
-  3	Verifica los Logs: docker logs corec_v4-corec1-1
-  4	 Busca [CoreCNucleus-corec1] Inicializado.
-  5	Inspecciona la Base de Datos: docker exec -it corec_v4-postgres-1 psql -U corec_user -d corec_db -c "SELECT * FROM nodos;"
-  6	docker exec -it corec_v4-postgres-1 psql -U corec_user -d corec_db -c "SELECT * FROM eventos;"
-  7	
-  8	Detiene el Sistema: ./scripts/stop.sh
-  9	
-Sin Docker
-  1	Inicia PostgreSQL y Redis localmente:
-  ◦	PostgreSQL: sudo service postgresql start
-  ◦	Redis: redis-server
-  2	Ejecuta el Núcleo: python main.py
-  3	
-  4	Verifica los Logs: Revisa corec.log en la raíz del proyecto.
-
-Pruebas
-CoreC incluye pruebas unitarias para validar el núcleo, entidades, módulos y OpenRouter.
-Ejecutar Pruebas
-pytest tests/
-Estructura de Pruebas
-  •	tests/core/test_nucleus.py: Prueba la inicialización y funciones de CoreCNucleus.
-  •	tests/core/test_celu_entidad.py: Valida el procesamiento de CeluEntidadCoreC.
-  •	tests/core/test_micro_celu.py: Verifica MicroCeluEntidadCoreC y su ADN.
-  •	tests/core/test_modules.py: Comprueba los módulos.
-  •	tests/core/test_openrouter.py: Asegura que OpenRouter funcione con fallbacks.
-  •	tests/plugins/test_plugin_manager.py: Confirma que PluginManager maneja un directorio vacío.
-Ejemplo de Prueba
-# tests/core/test_nucleus.py
-@pytest.mark.asyncio
-async def test_nucleus_inicializar():
-    nucleus = CoreCNucleus(instance_id="test_corec1")
-    await nucleus.inicializar()
-    assert len(nucleus.modulos) == 4
-    await nucleus.detener()
-
-Monitoreo
-CoreC ofrece varias formas de monitorear su estado:
-Logs
-  •	Ubicación: corec.log
-  •	Contenido: Inicialización, errores, eventos de módulos y entidades.
-  •	Ejemplo: 2025-04-17 12:00:00 [CoreCNucleus-corec1] INFO: Inicializado
-  •	2025-04-17 12:00:01 [CeluEntidad-nano_test_corec1] INFO: Iniciada en canal test_canal
-  •	
-Base de Datos
-  •	Tablas:
-  ◦	nodos: Estado de entidades (ID, carga, actividad).
-  ◦	eventos: Resultados de procesamiento.
-  ◦	auditoria: Alertas y errores.
-  •	Consulta: docker exec -it corec_v4-postgres-1 psql -U corec_user -d corec_db -c "SELECT * FROM auditoria;"
-  •	
-Métricas
-  •	Prometheus: Medidores en src/utils/metrics.py:
-  ◦	corec_celu_count: Número de CeluEntidadCoreC.
-  ◦	corec_micro_count: Número de MicroCeluEntidadCoreC.
-  •	Integración: Configura Prometheus y Grafana para visualizar métricas (Etapa 2).
-
-Extensión del Sistema
-CoreC está diseñado para ser extensible mediante plugins, aunque en la Etapa 1 el directorio src/plugins/ está vacío.
-Estructura de un Plugin
-Un plugin típico incluye:
-  •	Directorio: src/plugins//
-  •	plugin.json: Configuración del plugin: {
-  •	  "name": "",
-  •	  "version": "1.0.0",
-  •	  "description": "Descripción",
-  •	  "type": "processor",
-  •	  "channels": ["canal1", "canal2"],
-  •	  "dependencies": [],
-  •	  "config_file": "configs/plugins//.yaml",
-  •	  "main_class": ".processors.."
-  •	}
-  •	
-  •	Procesador: Clase que extiende ProcesadorBase en src/plugins//processors/.
-  •	Configuración: Archivo YAML en configs/plugins//.
-Creando un Plugin
-  1	Crea el directorio src/plugins//.
-  2	Añade plugin.json con la configuración.
-  3	Implementa una clase procesadora: # src/plugins//processors/.py
-  4	from ....core.processors.base import ProcesadorBase
-  5	from ....utils.logging import logger
-  6	
-  7	class NombreProcessor(ProcesadorBase):
-  8	    def __init__(self, config, redis_client, db_config):
-  9	        super().__init__()
-  10	        self.config = config
-  11	        self.logger = logger.getLogger("NombreProcessor")
-  12	
-  13	    async def inicializar(self, nucleus):
-  14	        self.nucleus = nucleus
-  15	        self.logger.info("NombreProcessor inicializado")
-  16	
-  17	    async def procesar(self, datos, contexto):
-  18	        return {"estado": "ok", "mensaje": "Procesado"}
-  19	
-  20	    async def detener(self):
-  21	        self.logger.info("NombreProcessor detenido")
-  22	
-  23	Crea la configuración en configs/plugins//.yaml: channels:
-  24	  - "canal1"
-  25	
-  26	Instala dependencias del plugin (si las hay): pip install -r src/plugins//requirements.txt
-  27	
-Ejemplo de Uso
-En la Etapa 2, podrías crear plugins para:
-  •	CLI: Visualización interactiva con Textual.
-  •	Alertas: Notificaciones externas para el canal alertas.
-  
-Mejores Prácticas
-  •	Configuración Segura:
-  ◦	Mantén las credenciales en configs/core/secrets/ fuera del control de versiones.
-  ◦	Usa .env para claves API sensibles.
-  •	Pruebas:
-  ◦	Escribe pruebas para nuevos componentes en tests/.
-  ◦	Valida fallbacks de OpenRouter con enabled: false.
-  •	Monitoreo:
-  ◦	Revisa corec.log regularmente.
-  ◦	Configura alertas para errores en auditoria (Etapa 2).
-  •	Escalabilidad:
-  ◦	Ajusta max_enjambre_por_canal en ModuloRegistro para alta carga.
-  ◦	Usa Kubernetes para instancias múltiples (Etapa 2).
-  •	Resiliencia:
-  ◦	Habilita espejos para canales críticos en canales_criticos.
-  ◦	Monitorea micro-células débiles (fitness < 0.1).
-
-Solución de Problemas
-  •	Error: “FATAL: database corec_db does not exist”:
-  ◦	Crea la base de datos: docker exec -it corec_v4-postgres-1 psql -U postgres -c "CREATE DATABASE corec_db;"
+9. Solución de Problemas
+  •	ImportError: No module named ‘corec.modules’:
+  ◦	Verifica que corec/modules/__init__.py existe (vacío).
+  ◦	Solución: touch corec/modules/__init__.py
   ◦	
-  •	Error: “Connection refused”:
-  ◦	Asegúrate de que PostgreSQL y Redis estén corriendo: docker ps
+  •	Redis ConnectionError:
+  ◦	Confirma que Redis está activo: redis-cli -h localhost -p 6379 -a secure_password ping
   ◦	
-  ◦	Verifica host en db_config.yaml (postgres) y redis_config.yaml (redis).
-  •	OpenRouter no responde:
-  ◦	Confirma que enabled: true y la clave API en openrouter.yaml son correctos.
-  ◦	Prueba con enabled: false para usar fallbacks.
-  •	Pruebas fallan:
-  ◦	Revisa los logs de pytest: pytest tests/ -v
+  ◦	Actualiza redis_config en corec_config.json.
+  •	PostgreSQL OperationalError:
+  ◦	Verifica credenciales en corec_config.json.
+  ◦	Asegúrate de que PostgreSQL está corriendo: sudo systemctl status postgresql
   ◦	
-  ◦	Asegúrate de que la base de datos esté inicializada (./scripts/init_db.sh).
-  •	Micro-células no se registran:
-  ◦	Verifica max_enjambre_por_canal en ModuloRegistro.
-  ◦	Inspecciona Redis streams: docker exec -it corec_v4-redis-1 redis-cli XREAD STREAMS corec_stream_corec1 0
+  •	Plugin no carga:
+  ◦	Confirma que plugins//main.py tiene inicializar(nucleus, config).
+  ◦	Verifica config.json (por ejemplo, enabled: true).
+  ◦	Revisa logs: docker-compose logs corec
+  ◦	
+  •	RAM excede 1 GB:
+  ◦	Reduce entidades activas (~1,000,000 → ~500,000).
+  ◦	Limita workers de Celery: # corec/core.py
+  ◦	worker_concurrency = 2
   ◦	
 
-Contribución
-Para contribuir a CoreC:
-  1	Fork el repositorio.
-  2	Crea una rama: git checkout -b feature/tu-funcionalidad.
-  3	Realiza cambios y escribe pruebas.
-  4	Commit: git commit -m "Añade tu funcionalidad".
-  5	Push: git push origin feature/tu-funcionalidad.
-  6	Abre un pull request.
-Sigue las convenciones de código:
-  •	Usa PEP 8 para el estilo.
-  •	Documenta funciones con docstrings.
-  •	Incluye pruebas en tests/.
+10. Futuras Mejoras
+  •	Expansión: ~3,333,333 entidades con ~2 GB RAM y compresión binaria (~0.5 KB por entidad).
+  •	CLI: Gestión de plugins (corec plugin add ).
+  •	Visualización: Panel de Grafana para bloques, entidades, y alertas.
+  •	Raspberry Pi: Imagen Docker optimizada (python:3.9-slim, workers = 2).
+  •	Modo Orgánico: Sinapsis artificial y mutación de entidades (por ejemplo, evolución de funciones).
 
-Licencia
-CoreC está licenciado bajo la Licencia MIT. Consulta el archivo LICENSE para más detalles.
+11. Alineación con la Visión
+  •	Eficiencia (9 de abril de 2025): Entidades como “almas” (~1 KB) forman bloques simbióticos (~1 MB, ~5 MB), dentro de 1 GB, emulando la ligereza de GNOME 2.
+  •	Escalabilidad (13 de abril de 2025): ~1000 bloques distribuidos con Celery y Redis soportan multi-nodo.
+  •	Simplicidad (14 de abril de 2025): Plug-and-play con plugins en subfolders (plugins/alerts), sin modificar corec_config.json.
+  •	Desempeño legendario (17 de abril de 2025): Latencia baja (~10-20 ms), autoreparación, y estabilidad (>99.99% uptime).
 
-CoreC: Un sistema vivo, donde la biología y la tecnología se fusionan para crear soluciones adaptativas y escalables.

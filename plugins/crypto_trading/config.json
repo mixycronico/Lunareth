@@ -1,0 +1,76 @@
+{
+  "crypto_trading": {
+    "exchange_config": {
+      "exchanges": [
+        {"name": "binance", "api_key": "tu_api_key_binance", "api_secret": "tu_api_secret_binance", "symbols": ["BTC/USDT", "ETH/USDT", "SOL/USDT", "ADA/USDT"]},
+        {"name": "kucoin", "api_key": "tu_api_key_kucoin", "api_secret": "tu_api_secret_kucoin", "symbols": ["BTC/USDT", "ETH/USDT", "SOL/USDT", "ADA/USDT"]},
+        {"name": "bybit", "api_key": "tu_api_key_bybit", "api_secret": "tu_api_secret_bybit", "symbols": ["BTC/USDT", "ETH/USDT", "SOL/USDT", "ADA/USDT"]},
+        {"name": "okx", "api_key": "tu_api_key_okx", "api_secret": "tu_api_secret_okx", "symbols": ["BTC/USDT", "ETH/USDT", "SOL/USDT", "ADA/USDT"]},
+        {"name": "kraken", "api_key": "tu_api_key_kraken", "api_secret": "tu_api_secret_kraken", "symbols": ["BTC/USD", "ETH/USD", "SOL/USD", "ADA/USD"]}
+      ],
+      "fetch_interval": 300,
+      "circuit_breaker": {"max_failures": 3, "reset_timeout": 900}
+    },
+    "capital_config": {
+      "min_contribution": 100,
+      "max_active_ratio": 0.6,
+      "phases": [
+        {"name": "conservative", "min": 0, "max": 10000, "risk_per_trade": 0.01},
+        {"name": "moderate", "min": 10000, "max": 50000, "risk_per_trade": 0.02},
+        {"name": "aggressive", "min": 50000, "max": 1000000, "risk_per_trade": 0.03}
+      ],
+      "circuit_breaker": {"max_failures": 3, "reset_timeout": 900}
+    },
+    "settlement_config": {
+      "settlement_time": "23:59",
+      "circuit_breaker": {"max_failures": 3, "reset_timeout": 900}
+    },
+    "macro_config": {
+      "symbols": ["^GSPC", "^IXIC", "^VIX", "GC=F", "CL=F"],
+      "altcoin_symbols": ["SOL", "ADA", "XRP"],
+      "update_interval": 300,
+      "api_keys": {
+        "alpha_vantage": "tu_api_key_alpha_vantage",
+        "coinmarketcap": "tu_api_key_coinmarketcap",
+        "newsapi": "tu_api_key_newsapi"
+      },
+      "circuit_breaker": {"max_failures": 3, "reset_timeout": 900}
+    },
+    "monitor_config": {
+      "symbols": ["BTC/USDT", "ETH/USDT", "SOL/USDT", "ADA/USDT"],
+      "update_interval": 60,
+      "circuit_breaker": {"max_failures": 3, "reset_timeout": 900}
+    },
+    "predictor_config": {
+      "lstm_window": 60,
+      "lstm_hidden_size": 50,
+      "lstm_layers": 2,
+      "max_datos": 1000,
+      "model_path": "plugins/crypto_trading/models/lstm_model.pth",
+      "retrain_interval": 86400,
+      "circuit_breaker": {"max_failures": 3, "reset_timeout": 900}
+    },
+    "analyzer_config": {
+      "analysis_interval": 300,
+      "auto_execute": true,
+      "circuit_breaker": {"max_failures": 3, "reset_timeout": 900}
+    },
+    "execution_config": {
+      "risk_per_trade": 0.02,
+      "take_profit": 0.05,
+      "stop_loss": 0.02,
+      "circuit_breaker": {"max_failures": 3, "reset_timeout": 900}
+    },
+    "user_config": {
+      "jwt_secret": "secure_secret",
+      "circuit_breaker": {"max_failures": 3, "reset_timeout": 900}
+    },
+    "db_config": {
+      "dbname": "trading_db",
+      "user": "trading_user",
+      "password": "secure_password",
+      "host": "localhost",
+      "port": "5432"
+    }
+  }
+}

@@ -1,8 +1,0 @@
-macro_api:
-enabled: true
-alpha_vantage_key: "F0BH61XQ9KDFF90E"  # Reemplazar
-coinmarketcap_key: "d8f22b55-dd3f-4ba0-8dfd-b726fa185d4a"  # Reemplazar
-newsapi_key: "271a1e28d1ac4899a7b85684fdb13eeb"  # Reemplazar con clave de NewsAPI
-active_hours_start: "07:00"
-active_hours_end: "17:00"
-timezone: "America/New_York"

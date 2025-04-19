@@ -1,0 +1,20 @@
+{
+  "codex": {
+    "intervalo_revision": 300,
+    "directorio_objetivo": "plugins/",
+    "exclude_patterns": ["tests/*", "*.pyc", "__pycache__/*"],
+    "languages": ["python", "javascript"],
+    "max_file_size": 1000000,
+    "circuit_breaker": {"max_failures": 3, "reset_timeout": 900},
+    "redis_ttl": 86400,
+    "website_templates": {
+      "react": "utils/templates/react_app",
+      "fastapi": "utils/templates/fastapi_app"
+    },
+    "plugin_templates": {
+      "corec_plugin": "utils/templates/plugin"
+    },
+    "website_output_dir": "generated_websites/",
+    "plugin_output_dir": "plugins/"
+  }
+}

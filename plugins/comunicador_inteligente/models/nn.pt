@@ -1,0 +1,4 @@
+import torch
+from plugins.comunicador_inteligente.main import RedNeuronalLigera
+nn_model = RedNeuronalLigera()
+torch.save(nn_model.state_dict(), "plugins/comunicador_inteligente/models/nn.pt")

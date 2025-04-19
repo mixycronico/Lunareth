@@ -1,0 +1,5 @@
+from plugins.comunicador_inteligente.main import QLearningAgent
+rl_model = QLearningAgent(actions=["responder", "analizar", "optimizar"])
+with open("plugins/comunicador_inteligente/models/rl.pkl", "wb") as f:
+    pickle.dump(rl_model, f)
+    
