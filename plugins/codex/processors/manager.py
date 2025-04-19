@@ -4,17 +4,20 @@
 plugins/codex/processors/manager.py
 Gestiona optimización, generación de websites y plugins en Codex.
 """
+
 import os
 import json
 import asyncio
 import logging
+import fnmatch
+
+from typing import Dict, Any
 from corec.core import ComponenteBase, zstd
 from plugins.codex.processors.reviser import CodexReviser
 from plugins.codex.processors.generator import CodexGenerator
 from plugins.codex.processors.memory import CodexMemory
 from plugins.codex.utils.helpers import CircuitBreaker
-import fnmatch
-from typing import Dict, Any
+
 
 class CodexManager(ComponenteBase):
     def __init__(self, nucleus, config):
@@ -35,8 +38,14 @@ class CodexManager(ComponenteBase):
 
     async def inicializar(self):
         os.makedirs("plugins/codex/logs", exist_ok=True)
-        os.makedirs(self.config.get("website_output_dir", "generated_websites/"), exist_ok=True)
-        os.makedirs(self.config.get("plugin_output_dir", "plugins/"), exist_ok=True)
+        os.makedirs(
+            self.config.get("website_output_dir", "generated_websites/"),
+            exist_ok=True
+        )
+        os.makedirs(
+            self.config.get("plugin_output_dir", "plugins/"),
+            exist_ok=True
+        )
         self.logger.info("Inicializando CodexManager...")
 
     async def ejecutar(self):
@@ -50,7 +59,9 @@ class CodexManager(ComponenteBase):
                     if not any(ruta.endswith(ext) for ext in [".py", ".js"]):
                         continue
                     if os.path.getsize(ruta) > self.max_file_size:
-                        self.logger.warning(f"Archivo {ruta} excede max_file_size")
+                        self.logger.warning(
+                            f"Archivo {ruta} excede max_file_size"
+                        )
                         continue
                     codigo = await self._leer_archivo(ruta)
                     if await self.memory.necesita_revision(ruta, codigo):
@@ -58,10 +69,15 @@ class CodexManager(ComponenteBase):
                         if nuevo and nuevo != codigo:
                             await self._escribir_archivo(ruta, nuevo)
                             await self.memory.guardar_revision(ruta, nuevo)
-                            await self.redis_client.xadd("corec_commands", {
-                                "comando": f"codex revised {ruta}",
-                                "data": zstd.compress(json.dumps({"ruta": ruta}).encode())
-                            })
+                            await self.redis_client.xadd(
+                                "corec_commands",
+                                {
+                                    "comando": f"codex revised {ruta}",
+                                    "data": zstd.compress(
+                                        json.dumps({"ruta": ruta}).encode()
+                                    )
+                                }
+                            )
             except Exception as e:
                 self.logger.error(f"Error en ejecución: {e}")
                 self.circuit_breaker.register_failure()
@@ -78,21 +94,24 @@ class CodexManager(ComponenteBase):
                 if nuevo:
                     await self._escribir_archivo(ruta, nuevo)
                     await self.memory.guardar_revision(ruta, nuevo)
-                    await self.redis_client.xadd("corec_commands", {
-                        "comando": f"codex revised {ruta}"
-                    })
+                    await self.redis_client.xadd(
+                        "corec_commands",
+                        {"comando": f"codex revised {ruta}"}
+                    )
                     return {"status": "ok", "file": ruta}
             elif action == "generate_website":
                 result = await self.generator.generar_website(params)
-                await self.redis_client.xadd("corec_commands", {
-                    "comando": f"codex website_generated {result['output_dir']}"
-                })
+                await self.redis_client.xadd(
+                    "corec_commands",
+                    {"comando": f"codex website_generated {result['output_dir']}"}
+                )
                 return result
             elif action == "generate_plugin":
                 result = await self.generator.generar_plugin(params)
-                await self.redis_client.xadd("corec_commands", {
-                    "comando": f"codex plugin_generated {result['output_dir']}"
-                })
+                await self.redis_client.xadd(
+                    "corec_commands",
+                    {"comando": f"codex plugin_generated {result['output_dir']}"}
+                )
                 return result
             return {"status": "error", "message": "Acción no soportada"}
         except Exception as e:
@@ -104,7 +123,8 @@ class CodexManager(ComponenteBase):
         for root, _, files in os.walk(self.directorio):
             for file in files:
                 ruta = os.path.join(root, file)
-                if not any(fnmatch.fnmatch(ruta, pattern) for pattern in self.exclude_patterns):
+                if not any(fnmatch.fnmatch(ruta, pattern)
+                           for pattern in self.exclude_patterns):
                     archivos.append(ruta)
         return archivos
 
