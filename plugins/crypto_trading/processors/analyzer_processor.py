@@ -9,6 +9,7 @@ from corec.core import ComponenteBase, zstd, serializar_mensaje
 from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
 import json
+import asyncio
 import logging
 from typing import Dict, Any
 
