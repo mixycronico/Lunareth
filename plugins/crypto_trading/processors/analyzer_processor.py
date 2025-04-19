@@ -5,6 +5,7 @@ plugins/crypto_trading/processors/analyzer_processor.py
 Analiza métricas de CoreC y trading, proponiendo y ejecutando optimizaciones automáticamente.
 Incluye Sharpe Ratio para evaluación de rendimiento ajustado al riesgo.
 """
+
 from corec.core import ComponenteBase, zstd, serializar_mensaje
 from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
@@ -105,7 +106,6 @@ class AnalyzerProcessor(ComponenteBase):
                     }
                 }
                 metrics["trading"]["sharpe_ratio"] = await self.calculate_sharpe_ratio(metrics["trading"]["profits"])
-                context = "Análisis del sistema CoreC y trading para optimización, incluyendo Sharpe Ratio"
                 recommendations = []
                 if metrics["predictor"]["mse"] > 15:
                     recommendations.append({"plugin": "predictor_temporal", "action": "retrain_model", "details": "MSE alto, reentrenar LSTM"})
@@ -120,7 +120,7 @@ class AnalyzerProcessor(ComponenteBase):
                 if metrics["macro"]["dxy_change"] > 0.5:
                     recommendations.append({"plugin": "capital_pool", "action": "reduce_risk", "details": "DXY alto, reducir riesgo a 1%"})
                 insight = {
-                    "timestamp": datetime.utcnow().timestamp(),
+                    "timestamp": datetime.datetime.utcnow().timestamp(),
                     "metrics": metrics,
                     "recommendations": recommendations,
                     "analysis": "Análisis completado con recomendaciones generadas"
