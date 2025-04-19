@@ -8,14 +8,12 @@ from corec.core import ComponenteBase, zstd, serializar_mensaje
 from ..utils.db import TradingDB
 from ..utils.helpers import CircuitBreaker
 import aiohttp
-import asyncio
 import json
 import logging
 import hmac
 import hashlib
-import backoff
-from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from typing import Dict, Any
+from datetime import datetime
 
 class ExchangeProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
