@@ -1,5 +1,13 @@
-from sklearn.naive_bayes import GaussianNB
 import pickle
-bayes_model = GaussianNB()
+from sklearn.naive_bayes import GaussianNB
+
+X = [[0.1], [0.5], [0.9]]
+y = ["bajo", "medio", "alto"]
+
+modelo = GaussianNB()
+modelo.fit(X, y)
+
 with open("plugins/comunicador_inteligente/models/bayes.pkl", "wb") as f:
-    pickle.dump(bayes_model, f)
+    pickle.dump(modelo, f)
+
+print("Modelo Bayes reentrenado y guardado.")
