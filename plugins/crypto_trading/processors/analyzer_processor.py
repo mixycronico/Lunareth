@@ -57,7 +57,9 @@ class AnalyzerProcessor(ComponenteBase):
             elif plugin == "alert_manager" and action == "adjust_thresholds":
                 data = {"action": "update_threshold", "vix_threshold": 22}
             elif plugin == "corec" and action == "regenerate_swarm":
-                await self.nucleus.modulo_registro.regenerar_enjambre("crypto_trading_data", 100)
+                await self.nucleus.modulo_registro.regenerar_enjambre(
+                    "crypto_trading_data", 100
+                )
                 self.logger.info(f"Ejecutada acción: {plugin} - {action} 🌟")
                 return True
             else:
@@ -96,16 +98,23 @@ class AnalyzerProcessor(ComponenteBase):
             try:
                 m = self.metrics_cache
                 metrics = {
-                    "predictor": {"mse": m.get("predictor_temporal", {}).get("mse", 0)},
+                    "predictor": {
+                        "mse": m.get("predictor_temporal", {}).get("mse", 0)
+                    },
                     "trading": {
                         "roi": m.get("settlement_data", {}).get("roi_percent", 0),
                         "trades": m.get("trading_results", {}).get("total_trades", 0),
                         "profits": m.get("trading_results", {}).get("profits", [])
                     },
-                    "capital": {"pool_total": m.get("capital_data", {}).get("pool_total", 0)},
+                    "capital": {
+                        "pool_total": m.get("capital_data", {}).get("pool_total", 0)
+                    },
                     "alerts": {
                         "count": len(m.get("alert_data", [])),
-                        "high_severity": sum(1 for a in m.get("alert_data", []) if a["severity"] == "high")
+                        "high_severity": sum(
+                            1 for a in m.get("alert_data", [])
+                            if a["severity"] == "high"
+                        )
                     },
                     "corec": {
                         "nodes": m.get("eventos", {}).get("nodes", 0),
@@ -113,7 +122,9 @@ class AnalyzerProcessor(ComponenteBase):
                     },
                     "macro": {
                         "vix": m.get("macro_data", {}).get("vix_price", 0),
-                        "dxy_change": m.get("macro_data", {}).get("dxy_change_percent", 0)
+                        "dxy_change": m.get(
+                            "macro_data", {}
+                        ).get("dxy_change_percent", 0)
                     }
                 }
 
@@ -121,7 +132,6 @@ class AnalyzerProcessor(ComponenteBase):
                     metrics["trading"]["profits"]
                 )
 
-                # Generar recomendaciones
                 r = []
                 if metrics["predictor"]["mse"] > 15:
                     r.append({
@@ -167,9 +177,11 @@ class AnalyzerProcessor(ComponenteBase):
                     "analysis": "Análisis completado con recomendaciones generadas"
                 }
 
-                payload = zstd.compress(json.dumps(insight).encode())
                 msg = await serializar_mensaje(
-                    int(insight["timestamp"] % 1000000), self.canal, 0.0, True
+                    int(insight["timestamp"] % 1000000),
+                    self.canal,
+                    0.0,
+                    True
                 )
 
                 await self.redis_client.xadd("crypto_trading_data", {"data": msg})
@@ -187,10 +199,15 @@ class AnalyzerProcessor(ComponenteBase):
                         await self.nucleus.publicar_alerta({
                             "tipo": tipo,
                             "plugin": "crypto_trading",
-                            "message": f"{'Ejecutada' if success else 'Falló'} acción: {rec['plugin']} - {rec['action']}"
+                            "message": (
+                                f"{'Ejecutada' if success else 'Falló'} acción: "
+                                f"{rec['plugin']} - {rec['action']}"
+                            )
                         })
 
-                self.logger.info(f"Análisis completado: {len(r)} recomendaciones generadas")
+                self.logger.info(
+                    f"Análisis completado: {len(r)} recomendaciones generadas"
+                )
 
             except Exception as e:
                 self.logger.error(f"Error en análisis: {e}")
