@@ -6,15 +6,17 @@ Analiza métricas de CoreC y trading, proponiendo y ejecutando optimizaciones au
 Incluye Sharpe Ratio para evaluación de rendimiento ajustado al riesgo.
 """
 
-from corec.core import ComponenteBase, zstd, serializar_mensaje
-from ..utils.db import TradingDB
-from ..utils.helpers import CircuitBreaker
 import json
 import datetime
-import numpy as np
 import asyncio
 import logging
 from typing import Dict, Any, List
+
+import numpy as np
+from corec.core import ComponenteBase, zstd, serializar_mensaje
+from ..utils.db import TradingDB
+from ..utils.helpers import CircuitBreaker
+
 
 class AnalyzerProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
@@ -22,11 +24,14 @@ class AnalyzerProcessor(ComponenteBase):
         self.config = config.get("crypto_trading", {})
         self.redis_client = redis_client
         self.logger = logging.getLogger("AnalyzerProcessor")
-        self.analysis_interval = self.config.get("analyzer_config", {}).get("analysis_interval", 300)
-        self.auto_execute = self.config.get("analyzer_config", {}).get("auto_execute", True)
+
+        analyzer_cfg = self.config.get("analyzer_config", {})
+        self.analysis_interval = analyzer_cfg.get("analysis_interval", 300)
+        self.auto_execute = analyzer_cfg.get("auto_execute", True)
+
         self.circuit_breaker = CircuitBreaker(
-            self.config.get("analyzer_config", {}).get("circuit_breaker", {}).get("max_failures", 3),
-            self.config.get("analyzer_config", {}).get("circuit_breaker", {}).get("reset_timeout", 900)
+            analyzer_cfg.get("circuit_breaker", {}).get("max_failures", 3),
+            analyzer_cfg.get("circuit_breaker", {}).get("reset_timeout", 900)
         )
         self.plugin_db = TradingDB(self.config.get("db_config", {}))
         self.metrics_cache = {}
@@ -41,23 +46,28 @@ class AnalyzerProcessor(ComponenteBase):
             plugin = recommendation["plugin"]
             action = recommendation["action"]
             details = recommendation["details"]
+
             if plugin == "predictor_temporal" and action == "retrain_model":
-                datos_comprimidos = zstd.compress(json.dumps({"action": "retrain"}).encode())
-                await self.redis_client.xadd("crypto_trading_data", {"data": datos_comprimidos})
+                data = {"action": "retrain"}
             elif plugin == "trading_execution" and action == "adjust_strategy":
                 risk = 0.03 if "aumentar riesgo" in details.lower() else 0.01
-                datos_comprimidos = zstd.compress(json.dumps({"action": "update_risk", "risk_per_trade": risk}).encode())
-                await self.redis_client.xadd("crypto_trading_data", {"data": datos_comprimidos})
+                data = {"action": "update_risk", "risk_per_trade": risk}
             elif plugin == "capital_pool" and action == "reduce_risk":
-                datos_comprimidos = zstd.compress(json.dumps({"action": "update_phase", "phase": "conservative"}).encode())
-                await self.redis_client.xadd("crypto_trading_data", {"data": datos_comprimidos})
+                data = {"action": "update_phase", "phase": "conservative"}
+            elif plugin == "alert_manager" and action == "adjust_thresholds":
+                data = {"action": "update_threshold", "vix_threshold": 22}
             elif plugin == "corec" and action == "regenerate_swarm":
                 await self.nucleus.modulo_registro.regenerar_enjambre("crypto_trading_data", 100)
-            elif plugin == "alert_manager" and action == "adjust_thresholds":
-                datos_comprimidos = zstd.compress(json.dumps({"action": "update_threshold", "vix_threshold": 22}).encode())
-                await self.redis_client.xadd("crypto_trading_data", {"data": datos_comprimidos})
+                self.logger.info(f"Ejecutada acción: {plugin} - {action} 🌟")
+                return True
+            else:
+                return False
+
+            compressed = zstd.compress(json.dumps(data).encode())
+            await self.redis_client.xadd("crypto_trading_data", {"data": compressed})
             self.logger.info(f"Ejecutada acción: {plugin} - {action} 🌟")
             return True
+
         except Exception as e:
             self.logger.error(f"Error ejecutando acción: {e}")
             await self.nucleus.publicar_alerta({
@@ -71,78 +81,117 @@ class AnalyzerProcessor(ComponenteBase):
         if not profits or len(profits) < 2:
             return 0.0
         returns = np.array(profits) / 1000.0
-        mean_return = np.mean(returns)
-        std_return = np.std(returns)
-        if std_return == 0:
+        mean = np.mean(returns)
+        std = np.std(returns)
+        if std == 0:
             return 0.0
-        sharpe = (mean_return / std_return) * np.sqrt(252)
-        return sharpe
+        return (mean / std) * np.sqrt(252)
 
     async def analyze_system(self):
         while True:
             if not self.circuit_breaker.check():
                 await asyncio.sleep(60)
                 continue
+
             try:
+                m = self.metrics_cache
                 metrics = {
-                    "predictor": {"mse": self.metrics_cache.get("predictor_temporal", {}).get("mse", 0)},
+                    "predictor": {"mse": m.get("predictor_temporal", {}).get("mse", 0)},
                     "trading": {
-                        "roi": self.metrics_cache.get("settlement_data", {}).get("roi_percent", 0),
-                        "trades": self.metrics_cache.get("trading_results", {}).get("total_trades", 0),
-                        "profits": self.metrics_cache.get("trading_results", {}).get("profits", [])
+                        "roi": m.get("settlement_data", {}).get("roi_percent", 0),
+                        "trades": m.get("trading_results", {}).get("total_trades", 0),
+                        "profits": m.get("trading_results", {}).get("profits", [])
                     },
-                    "capital": {"pool_total": self.metrics_cache.get("capital_data", {}).get("pool_total", 0)},
+                    "capital": {"pool_total": m.get("capital_data", {}).get("pool_total", 0)},
                     "alerts": {
-                        "count": len(self.metrics_cache.get("alert_data", [])),
-                        "high_severity": sum(1 for a in self.metrics_cache.get("alert_data", []) if a["severity"] == "high")
+                        "count": len(m.get("alert_data", [])),
+                        "high_severity": sum(1 for a in m.get("alert_data", []) if a["severity"] == "high")
                     },
                     "corec": {
-                        "nodes": self.metrics_cache.get("eventos", {}).get("nodes", 0),
-                        "load": self.metrics_cache.get("auditoria", {}).get("load", 0)
+                        "nodes": m.get("eventos", {}).get("nodes", 0),
+                        "load": m.get("auditoria", {}).get("load", 0)
                     },
                     "macro": {
-                        "vix": self.metrics_cache.get("macro_data", {}).get("vix_price", 0),
-                        "dxy_change": self.metrics_cache.get("macro_data", {}).get("dxy_change_percent", 0)
+                        "vix": m.get("macro_data", {}).get("vix_price", 0),
+                        "dxy_change": m.get("macro_data", {}).get("dxy_change_percent", 0)
                     }
                 }
-                metrics["trading"]["sharpe_ratio"] = await self.calculate_sharpe_ratio(metrics["trading"]["profits"])
-                recommendations = []
+
+                metrics["trading"]["sharpe_ratio"] = await self.calculate_sharpe_ratio(
+                    metrics["trading"]["profits"]
+                )
+
+                # Generar recomendaciones
+                r = []
                 if metrics["predictor"]["mse"] > 15:
-                    recommendations.append({"plugin": "predictor_temporal", "action": "retrain_model", "details": "MSE alto, reentrenar LSTM"})
+                    r.append({
+                        "plugin": "predictor_temporal",
+                        "action": "retrain_model",
+                        "details": "MSE alto, reentrenar LSTM"
+                    })
                 if metrics["trading"]["roi"] < 10:
-                    recommendations.append({"plugin": "trading_execution", "action": "adjust_strategy", "details": "Aumentar riesgo a 3% o priorizar altcoins"})
+                    r.append({
+                        "plugin": "trading_execution",
+                        "action": "adjust_strategy",
+                        "details": "Aumentar riesgo a 3% o priorizar altcoins"
+                    })
                 if metrics["trading"]["sharpe_ratio"] < 1.0:
-                    recommendations.append({"plugin": "trading_execution", "action": "adjust_strategy", "details": "Sharpe Ratio bajo, optimizar riesgo-retorno"})
+                    r.append({
+                        "plugin": "trading_execution",
+                        "action": "adjust_strategy",
+                        "details": "Sharpe Ratio bajo, optimizar riesgo-retorno"
+                    })
                 if metrics["alerts"]["high_severity"] > 2:
-                    recommendations.append({"plugin": "alert_manager", "action": "adjust_thresholds", "details": "Muchas alertas altas, aumentar umbral VIX"})
+                    r.append({
+                        "plugin": "alert_manager",
+                        "action": "adjust_thresholds",
+                        "details": "Muchas alertas altas, aumentar umbral VIX"
+                    })
                 if metrics["corec"]["load"] > 0.6:
-                    recommendations.append({"plugin": "corec", "action": "regenerate_swarm", "details": "Carga alta, regenerar micro-celus"})
+                    r.append({
+                        "plugin": "corec",
+                        "action": "regenerate_swarm",
+                        "details": "Carga alta, regenerar micro-celus"
+                    })
                 if metrics["macro"]["dxy_change"] > 0.5:
-                    recommendations.append({"plugin": "capital_pool", "action": "reduce_risk", "details": "DXY alto, reducir riesgo a 1%"})
+                    r.append({
+                        "plugin": "capital_pool",
+                        "action": "reduce_risk",
+                        "details": "DXY alto, reducir riesgo a 1%"
+                    })
+
                 insight = {
                     "timestamp": datetime.datetime.utcnow().timestamp(),
                     "metrics": metrics,
-                    "recommendations": recommendations,
+                    "recommendations": r,
                     "analysis": "Análisis completado con recomendaciones generadas"
                 }
-                datos_comprimidos = zstd.compress(json.dumps(insight).encode())
-                mensaje = await serializar_mensaje(int(insight["timestamp"] % 1000000), self.canal, 0.0, True)
-                await self.redis_client.xadd("crypto_trading_data", {"data": mensaje})
+
+                payload = zstd.compress(json.dumps(insight).encode())
+                msg = await serializar_mensaje(
+                    int(insight["timestamp"] % 1000000), self.canal, 0.0, True
+                )
+
+                await self.redis_client.xadd("crypto_trading_data", {"data": msg})
                 await self.plugin_db.save_insight(
                     timestamp=insight["timestamp"],
                     metrics=metrics,
-                    recommendations=recommendations,
+                    recommendations=r,
                     analysis=insight["analysis"]
                 )
+
                 if self.auto_execute:
-                    for rec in recommendations:
-                        executed = await self.execute_action(rec)
+                    for rec in r:
+                        success = await self.execute_action(rec)
+                        tipo = "action_executed" if success else "action_failed"
                         await self.nucleus.publicar_alerta({
-                            "tipo": "action_executed" if executed else "action_failed",
+                            "tipo": tipo,
                             "plugin": "crypto_trading",
-                            "message": f"{'Ejecutada' if executed else 'Falló'} acción: {rec['plugin']} - {rec['action']}"
+                            "message": f"{'Ejecutada' if success else 'Falló'} acción: {rec['plugin']} - {rec['action']}"
                         })
-                self.logger.info(f"Análisis completado: {len(recommendations)} recomendaciones generadas")
+
+                self.logger.info(f"Análisis completado: {len(r)} recomendaciones generadas")
+
             except Exception as e:
                 self.logger.error(f"Error en análisis: {e}")
                 self.circuit_breaker.register_failure()
@@ -151,12 +200,14 @@ class AnalyzerProcessor(ComponenteBase):
                     "plugin": "crypto_trading",
                     "message": str(e)
                 })
+
             await asyncio.sleep(self.analysis_interval)
 
     async def manejar_evento(self, mensaje: Dict[str, Any]):
         try:
             self.metrics_cache[mensaje["tipo"]] = mensaje
-            await self.redis_client.setex(f"analyzer:{mensaje['tipo']}", 300, json.dumps(mensaje))
+            key = f"analyzer:{mensaje['tipo']}"
+            await self.redis_client.setex(key, 300, json.dumps(mensaje))
             self.logger.debug(f"Métrica recibida: {mensaje['tipo']}")
         except Exception as e:
             self.logger.error(f"Error manejando evento: {e}")
