@@ -30,11 +30,15 @@ class CoreCNucleus:
             self.logger.info("[Nucleus] Inicializando núcleo")
             init_postgresql(self.db_config)
             if self.redis_config:
-                self.redis_client = await aioredis.from_url(
-                    f"redis://{self.redis_config['host']}:{self.redis_config['port']}",
-                    username=self.redis_config.get("username"),
-                    password=self.redis_config.get("password")
-                )
+                try:
+                    self.redis_client = await aioredis.from_url(
+                        f"redis://{self.redis_config['host']}:{self.redis_config['port']}",
+                        username=self.redis_config.get("username"),
+                        password=self.redis_config.get("password")
+                    )
+                except Exception as e:
+                    self.logger.error(f"[Nucleus] Error conectando a Redis: {e}")
+                    self.redis_client = None
 
             # Inicializar módulos
             self.modules = {
@@ -111,7 +115,7 @@ class CoreCNucleus:
             cmd = PluginCommand(**comando)
             resultado = await self.plugins[nombre].manejar_comando(cmd)
             self.logger.info(f"[Nucleus] Comando ejecutado en '{nombre}': {comando}")
-            return resultado
+            return resultado  # Retornar resultado
         except ValidationError as e:
             self.logger.error(f"[Nucleus] Comando inválido para '{nombre}': {e}")
             return {"status": "error", "message": f"Comando inválido: {e}"}
@@ -135,7 +139,7 @@ class CoreCNucleus:
         try:
             for nombre, bloque in self.bloques_plugins.items():
                 carga = random.random()  # TODO: Calcular carga real
-                resultado = await bloque.procesar(carga)
+                await bloque.procesar(carga)
                 self.logger.debug(
                     f"[Nucleus] Bloque '{bloque.id}' procesado, "
                     f"fitness: {bloque.fitness:.2f}"
