@@ -21,6 +21,8 @@ async def test_modulo_registro_inicializar(nucleus):
         nucleus.config["bloques"] = [{"id": "test_block", "canal": 1, "entidades": 1000}]
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         assert mock_bloque.called
+        assert mock_init_db.called  # Usar mock_init_db
+        assert mock_redis_url.called  # Usar mock_redis_url
         assert "test_block" in registro.bloques
         assert mock_alerta.called
         assert mock_logger.called
