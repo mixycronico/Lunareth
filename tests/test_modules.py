@@ -21,8 +21,8 @@ async def test_modulo_registro_inicializar(nucleus):
         nucleus.config["bloques"] = [{"id": "test_block", "canal": 1, "entidades": 1000}]
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         assert mock_bloque.called
-        assert mock_init_db.called  # Usar mock_init_db
-        assert mock_redis_url.called  # Usar mock_redis_url
+        assert mock_init_db.called
+        assert mock_redis_url.called
         assert "test_block" in registro.bloques
         assert mock_alerta.called
         assert mock_logger.called
@@ -76,13 +76,13 @@ async def test_modulo_sincronizacion_redirigir_entidades(nucleus):
     sincronizacion = ModuloSincronizacion()
     await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
-    nucleus.modules["registro"] = registro  # Simular inicialización
+    nucleus.modules["registro"] = registro
     async def test_func(): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(1000)]
     bloque1 = BloqueSimbiotico("block1", 1, entidades[:500], nucleus=nucleus)
     bloque2 = BloqueSimbiotico("block2", 1, entidades[500:], nucleus=nucleus)
-    bloque1.fitness = 0.2  # Bajo fitness
-    bloque2.fitness = 0.9  # Alto fitness
+    bloque1.fitness = 0.2
+    bloque2.fitness = 0.9
     registro.bloques["block1"] = bloque1
     registro.bloques["block2"] = bloque2
     with patch.object(sincronizacion.logger, "info") as mock_logger, \
@@ -114,13 +114,13 @@ async def test_modulo_sincronizacion_adaptar_bloque_fusionar(nucleus):
     sincronizacion = ModuloSincronizacion()
     await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
-    nucleus.modules["registro"] = registro  # Simular inicialización
+    nucleus.modules["registro"] = registro
     async def test_func(): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(1000)]
     bloque1 = BloqueSimbiotico("block1", 1, entidades[:500], nucleus=nucleus)
     bloque2 = BloqueSimbiotico("block2", 1, entidades[500:], nucleus=nucleus)
-    bloque1.fitness = 0.1  # Bajo fitness
-    bloque2.fitness = 0.6  # Alto fitness
+    bloque1.fitness = 0.1
+    bloque2.fitness = 0.6
     registro.bloques["block1"] = bloque1
     registro.bloques["block2"] = bloque2
     with patch.object(sincronizacion.logger, "info") as mock_logger, \
@@ -151,7 +151,7 @@ async def test_modulo_ejecucion_encolar_tareas(nucleus):
     ejecucion = ModuloEjecucion()
     await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
-    nucleus.modules["registro"] = registro  # Simular inicialización
+    nucleus.modules["registro"] = registro
     async def test_func(): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
     bloque = BloqueSimbiotico("test_block", 1, entidades, nucleus=nucleus)
