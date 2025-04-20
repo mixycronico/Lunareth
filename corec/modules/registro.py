@@ -28,7 +28,9 @@ class ModuloRegistro(ComponenteBase):
                     self.logger.debug(f"[Registro] Configuración validada: id={config.id}, canal={config.canal}, entidades={config.entidades}")
                     entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
                     self.logger.debug(f"[Registro] Creadas {len(entidades)} entidades para bloque {config.id}")
+                    self.logger.debug(f"[Registro] Intentando crear BloqueSimbiotico para {config.id}")
                     bloque = BloqueSimbiotico(config.id, config.canal, entidades, self.nucleus, max_size_mb=1.0)
+                    self.logger.debug(f"[Registro] BloqueSimbiotico creado para {config.id}")
                     self.bloques[config.id] = bloque
                     self.logger.info(f"[Registro] Bloque '{config.id}' registrado")
                     await self.nucleus.publicar_alerta({
