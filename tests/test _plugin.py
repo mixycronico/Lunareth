@@ -66,3 +66,25 @@ async def test_plugin_comando_invalido(nucleus):
     assert resultado["status"] == "error"
     assert "Comando inválido" in resultado["message"]
     assert nucleus.logger.error.called
+
+
+@pytest.mark.asyncio
+async def test_plugin_bloque_procesamiento(nucleus):
+    """Prueba el procesamiento del bloque simbiótico de un plugin."""
+    class TestPlugin:
+        async def inicializar(self, nucleus, config):
+            self.nucleus = nucleus
+            self.config = config
+            nucleus.registrar_plugin("test_plugin", self)
+
+        async def manejar_comando(self, comando):
+            return {"status": "success", "action": comando["action"]}
+
+    plugin = TestPlugin()
+    await plugin.inicializar(nucleus, {})
+    bloque = nucleus.bloques_plugins["test_plugin"]
+    resultado = await bloque.procesar(carga=0.5)
+    assert resultado["bloque_id"] == "test_plugin_block"
+    assert len(resultado["mensajes"]) == 250  # carga=0.5 procesa la mitad de 500
+    assert resultado["fitness"] >= 0.0
+    assert nucleus.publicar_alerta.called
