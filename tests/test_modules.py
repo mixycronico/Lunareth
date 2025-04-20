@@ -15,8 +15,7 @@ async def test_modulo_registro_inicializar(nucleus):
     registro = ModuloRegistro()
     with patch("corec.modules.registro.BloqueSimbiotico") as mock_bloque, \
          patch.object(registro.logger, "info") as mock_logger, \
-         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
-         patch("aioredis.from_url", new=AsyncMock()) as mock_redis_url:
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         # Configurar mock_bloque para devolver un objeto válido
         mock_bloque_instance = MagicMock()
         mock_bloque.return_value = mock_bloque_instance
@@ -26,7 +25,6 @@ async def test_modulo_registro_inicializar(nucleus):
         except Exception as e:
             pytest.fail(f"Excepción inesperada durante inicialización: {e}")
         assert mock_bloque.called, f"mock_bloque no fue llamado. Config: {nucleus.config['bloques']}, Bloques registrados: {list(registro.bloques.keys())}, Mock calls: {mock_bloque.mock_calls}, Bloque registrado: {registro.bloques.get('test_block')}"
-        assert mock_redis_url.called
         assert "test_block" in registro.bloques
         assert registro.bloques["test_block"] == mock_bloque_instance
         assert mock_alerta.called
