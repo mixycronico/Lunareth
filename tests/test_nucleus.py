@@ -1,164 +1,177 @@
-import logging
-import random
-import aioredis
-from typing import Dict
-from corec.core import ComponenteBase, cargar_config, PluginBlockConfig, PluginCommand
-from corec.db import init_postgresql
+import pytest
+from unittest.mock import patch, AsyncMock, MagicMock
+from corec.nucleus import CoreCNucleus
 from corec.blocks import BloqueSimbiotico
-from corec.modules.registro import ModuloRegistro
-from corec.modules.sincronizacion import ModuloSincronizacion
-from corec.modules.ejecucion import ModuloEjecucion
-from corec.modules.auditoria import ModuloAuditoria
-from pydantic import ValidationError
-from corec.entities import crear_entidad
 
+@pytest.mark.asyncio
+async def test_nucleus_inicializar_exitoso(mock_postgresql):
+    """Prueba la inicialización exitosa del núcleo."""
+    nucleus = CoreCNucleus("config.yml")
+    with patch("corec.nucleus.init_postgresql") as mock_init_db, \
+         patch("corec.nucleus.aioredis.from_url", return_value=AsyncMock()) as mock_redis, \
+         patch("corec.nucleus.cargar_config", return_value={
+             "db_config": {"host": "localhost"},
+             "redis_config": {"host": "localhost", "port": 6379},
+             "bloques": [],
+             "plugins": {}
+         }), \
+         patch.object(nucleus.logger, "info") as mock_logger, \
+         patch("corec.nucleus.ModuloRegistro") as mock_registro, \
+         patch("corec.nucleus.ModuloSincronizacion") as mock_sincro, \
+         patch("corec.nucleus.ModuloEjecucion") as mock_ejecucion, \
+         patch("corec.nucleus.ModuloAuditoria") as mock_auditoria:
+        await nucleus.inicializar()
+        assert mock_init_db.called
+        assert mock_redis.called
+        assert mock_logger.called
+        assert len(nucleus.modules) == 4
 
-class CoreCNucleus:
-    def __init__(self, config_path: str):
-        self.logger = logging.getLogger("CoreCNucleus")
-        self.config = cargar_config(config_path)
-        self.db_config = self.config.get("db_config", {})
-        self.redis_config = self.config.get("redis_config", {})
-        self.redis_client = None
-        self.modules: Dict[str, ComponenteBase] = {}
-        self.plugins: Dict[str, ComponenteBase] = {}
-        self.bloques_plugins: Dict[str, BloqueSimbiotico] = {}
+@pytest.mark.asyncio
+async def test_nucleus_inicializar_redis_error(mock_postgresql):
+    """Prueba la inicialización con un error en Redis."""
+    nucleus = CoreCNucleus("config.yml")
+    with patch("corec.nucleus.init_postgresql") as mock_init_db, \
+         patch("corec.nucleus.aioredis.from_url", side_effect=Exception("Redis Error")) as mock_redis, \
+         patch("corec.nucleus.cargar_config", return_value={
+             "db_config": {"host": "localhost"},
+             "redis_config": {"host": "localhost", "port": 6379},
+             "bloques": [],
+             "plugins": {}
+         }), \
+         patch.object(nucleus.logger, "error") as mock_logger, \
+         patch("corec.nucleus.ModuloRegistro") as mock_registro, \
+         patch("corec.nucleus.ModuloSincronizacion") as mock_sincro, \
+         patch("corec.nucleus.ModuloEjecucion") as mock_ejecucion, \
+         patch("corec.nucleus.ModuloAuditoria") as mock_auditoria:
+        await nucleus.inicializar()
+        assert mock_init_db.called
+        assert mock_redis.called
+        assert mock_logger.called
+        assert nucleus.redis_client is None
 
-    async def inicializar(self):
-        """Inicializa el núcleo, configurando base de datos, módulos y plugins."""
-        try:
-            self.logger.info("[Nucleus] Inicializando núcleo")
-            init_postgresql(self.db_config)
-            if self.redis_config:
-                try:
-                    self.redis_client = await aioredis.from_url(
-                        f"redis://{self.redis_config['host']}:{self.redis_config['port']}",
-                        username=self.redis_config.get("username"),
-                        password=self.redis_config.get("password")
-                    )
-                except Exception as e:
-                    self.logger.error(f"[Nucleus] Error conectando a Redis: {e}")
-                    self.redis_client = None
+@pytest.mark.asyncio
+async def test_nucleus_inicializar_bloque_exitoso(mock_postgresql):
+    """Prueba la inicialización con un bloque exitoso."""
+    nucleus = CoreCNucleus("config.yml")
+    with patch("corec.nucleus.init_postgresql") as mock_init_db, \
+         patch("corec.nucleus.aioredis.from_url", return_value=AsyncMock()) as mock_redis, \
+         patch("corec.nucleus.cargar_config", return_value={
+             "db_config": {"host": "localhost"},
+             "redis_config": {"host": "localhost", "port": 6379},
+             "bloques": [{"id": "block_1", "canal": 1, "entidades": 1}],
+             "plugins": {}
+         }), \
+         patch("corec.nucleus.PluginBlockConfig") as mock_config, \
+         patch("corec.nucleus.crear_entidad") as mock_entidad, \
+         patch("corec.nucleus.BloqueSimbiotico") as mock_bloque, \
+         patch("corec.nucleus.ModuloRegistro") as mock_registro, \
+         patch("corec.nucleus.ModuloSincronizacion") as mock_sincro, \
+         patch("corec.nucleus.ModuloEjecucion") as mock_ejecucion, \
+         patch("corec.nucleus.ModuloAuditoria") as mock_auditoria:
+        mock_registro.return_value = MagicMock(inicializar=AsyncMock(), registrar_bloque=AsyncMock())
+        await nucleus.inicializar()
+        assert mock_registro.return_value.registrar_bloque.called
 
-            # Inicializar módulos
-            self.modules = {
-                "registro": ModuloRegistro(),
-                "sincronizacion": ModuloSincronizacion(),
-                "ejecucion": ModuloEjecucion(),
-                "auditoria": ModuloAuditoria()
-            }
-            for nombre, modulo in self.modules.items():
-                await modulo.inicializar(self)
-                self.logger.info(f"[Nucleus] Módulo '{nombre}' inicializado")
+@pytest.mark.asyncio
+async def test_nucleus_inicializar_bloque_config_invalida(mock_postgresql):
+    """Prueba la inicialización con un bloque de configuración inválida."""
+    nucleus = CoreCNucleus("config.yml")
+    with patch("corec.nucleus.init_postgresql") as mock_init_db, \
+         patch("corec.nucleus.aioredis.from_url", return_value=AsyncMock()) as mock_redis, \
+         patch("corec.nucleus.cargar_config", return_value={
+             "db_config": {"host": "localhost"},
+             "redis_config": {"host": "localhost", "port": 6379},
+             "bloques": [{"id": "block_1", "canal": 1, "entidades": 1}],
+             "plugins": {}
+         }), \
+         patch("corec.nucleus.PluginBlockConfig", side_effect=ValidationError("Invalid config", [])) as mock_config, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
+         patch("corec.nucleus.ModuloRegistro") as mock_registro, \
+         patch("corec.nucleus.ModuloSincronizacion") as mock_sincro, \
+         patch("corec.nucleus.ModuloEjecucion") as mock_ejecucion, \
+         patch("corec.nucleus.ModuloAuditoria") as mock_auditoria:
+        mock_registro.return_value = MagicMock(inicializar=AsyncMock(), registrar_bloque=AsyncMock())
+        await nucleus.inicializar()
+        assert mock_alerta.called
 
-            # Cargar bloques desde config
-            for bloque_conf in self.config.get("bloques", []):
-                try:
-                    config = PluginBlockConfig(**bloque_conf)
-                    entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
-                    bloque = BloqueSimbiotico(config.id, config.canal, entidades, self)
-                    await self.modules["registro"].registrar_bloque(
-                        config.id, config.canal, config.entidades
-                    )
-                except ValidationError as e:
-                    self.logger.error(f"[Nucleus] Configuración inválida para bloque: {e}")
-                    await self.publicar_alerta({
-                        "tipo": "error_registro",
-                        "bloque_id": bloque_conf.get("id", "desconocido"),
-                        "mensaje": str(e),
-                        "timestamp": random.random()
-                    })
+@pytest.mark.asyncio
+async def test_nucleus_registrar_plugin_exitoso():
+    """Prueba el registro exitoso de un plugin."""
+    nucleus = CoreCNucleus("config.yml")
+    plugin = MagicMock()
+    with patch("corec.nucleus.cargar_config", return_value={
+        "plugins": {"test_plugin": {"bloque": {"id": "block_1", "canal": 1, "entidades": 1}}}
+    }), \
+         patch("corec.nucleus.PluginBlockConfig") as mock_config, \
+         patch("corec.nucleus.crear_entidad") as mock_entidad, \
+         patch("corec.nucleus.BloqueSimbiotico") as mock_bloque, \
+         patch.object(nucleus.logger, "info") as mock_logger:
+        nucleus.registrar_plugin("test_plugin", plugin)
+        assert nucleus.plugins["test_plugin"] == plugin
+        assert mock_logger.called
 
-            # Cargar plugins desde config
-            for nombre, conf in self.config.get("plugins", {}).items():
-                if conf.get("enabled", False):
-                    try:
-                        bloque_conf = conf.get("bloque", {})
-                        config = PluginBlockConfig(**bloque_conf)
-                        entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
-                        bloque = BloqueSimbiotico(config.id, config.canal, entidades, self)
-                        self.bloques_plugins[nombre] = bloque
-                        await self.modules["registro"].registrar_bloque(
-                            config.id, config.canal, config.entidades
-                        )
-                    except ValidationError as e:
-                        self.logger.error(f"[Nucleus] Configuración de bloque inválida para '{nombre}': {e}")
+@pytest.mark.asyncio
+async def test_nucleus_registrar_plugin_config_invalida():
+    """Prueba el registro de un plugin con configuración inválida."""
+    nucleus = CoreCNucleus("config.yml")
+    plugin = MagicMock()
+    with patch("corec.nucleus.cargar_config", return_value={
+        "plugins": {"test_plugin": {"bloque": {"id": "block_1", "canal": 1, "entidades": 1}}}
+    }), \
+         patch("corec.nucleus.PluginBlockConfig", side_effect=ValidationError("Invalid config", [])) as mock_config, \
+         patch.object(nucleus.logger, "error") as mock_logger:
+        nucleus.registrar_plugin("test_plugin", plugin)
+        assert nucleus.plugins["test_plugin"] == plugin
+        assert mock_logger.called
 
-        except Exception as e:
-            self.logger.error(f"[Nucleus] Error inicializando núcleo: {e}")
+@pytest.mark.asyncio
+async def test_nucleus_ejecutar_plugin_exitoso():
+    """Prueba la ejecución exitosa de un plugin."""
+    nucleus = CoreCNucleus("config.yml")
+    plugin = MagicMock(manejar_comando=AsyncMock(return_value={"status": "success"}))
+    nucleus.plugins["test_plugin"] = plugin
+    with patch("corec.nucleus.PluginCommand") as mock_command, \
+         patch.object(nucleus.logger, "info") as mock_logger:
+        result = await nucleus.ejecutar_plugin("test_plugin", {"action": "test"})
+        assert result == {"status": "success"}
+        assert mock_logger.called
 
-    def registrar_plugin(self, nombre: str, plugin: ComponenteBase):
-        """Registra un plugin en el núcleo."""
-        try:
-            self.plugins[nombre] = plugin
-            conf = self.config.get("plugins", {}).get(nombre, {})
-            bloque_conf = conf.get("bloque", {})
-            if bloque_conf:
-                try:
-                    config = PluginBlockConfig(**bloque_conf)
-                    entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
-                    bloque = BloqueSimbiotico(config.id, config.canal, entidades, self)  # Usar config.id
-                    self.bloques_plugins[nombre] = bloque
-                    self.logger.info(f"[Nucleus] Plugin '{nombre}' registrado con bloque")
-                except ValidationError as e:
-                    self.logger.error(f"[Nucleus] Configuración de bloque inválida para '{nombre}': {e}")
-            else:
-                self.logger.info(f"[Nucleus] Plugin '{nombre}' registrado sin bloque")
-        except Exception as e:
-            self.logger.error(f"[Nucleus] Error registrando plugin '{nombre}': {e}")
+@pytest.mark.asyncio
+async def test_nucleus_ejecutar_plugin_no_encontrado():
+    """Prueba la ejecución de un plugin no encontrado."""
+    nucleus = CoreCNucleus("config.yml")
+    with pytest.raises(ValueError, match="Plugin 'test_plugin' no encontrado"):
+        await nucleus.ejecutar_plugin("test_plugin", {"action": "test"})
 
-    async def ejecutar_plugin(self, nombre: str, comando: dict) -> dict:
-        """Ejecuta un comando en un plugin registrado."""
-        if nombre not in self.plugins:
-            raise ValueError(f"Plugin '{nombre}' no encontrado")
-        try:
-            cmd = PluginCommand(**comando)
-            resultado = await self.plugins[nombre].manejar_comando(cmd)
-            self.logger.info(f"[Nucleus] Comando ejecutado en '{nombre}': {comando}")
-            return resultado
-        except ValidationError as e:
-            self.logger.error(f"[Nucleus] Comando inválido para '{nombre}': {e}")
-            return {"status": "error", "message": f"Comando inválido: {e}"}
-        except Exception as e:
-            self.logger.error(f"[Nucleus] Error ejecutando comando en '{nombre}': {e}")
-            return {"status": "error", "message": str(e)}
+@pytest.mark.asyncio
+async def test_nucleus_ejecutar_plugin_comando_invalido():
+    """Prueba la ejecución de un plugin con un comando inválido."""
+    nucleus = CoreCNucleus("config.yml")
+    plugin = MagicMock()
+    nucleus.plugins["test_plugin"] = plugin
+    with patch("corec.nucleus.PluginCommand", side_effect=ValidationError("Invalid command", [])) as mock_command, \
+         patch.object(nucleus.logger, "error") as mock_logger:
+        result = await nucleus.ejecutar_plugin("test_plugin", {"action": "test"})
+        assert result["status"] == "error"
+        assert mock_logger.called
 
-    async def publicar_alerta(self, alerta: dict):
-        """Publica una alerta en el canal corec_alerts."""
-        try:
-            self.logger.warning(f"[Alerta] {alerta}")
-            if self.redis_client:
-                await self.redis_client.xadd("corec_alerts", alerta)
-            else:
-                self.logger.error("[Alerta] Redis client no inicializado")
-        except Exception as e:
-            self.logger.error(f"[Alerta] Error publicando en corec_alerts: {e}")
+@pytest.mark.asyncio
+async def test_nucleus_publicar_alerta_exitoso():
+    """Prueba la publicación exitosa de una alerta."""
+    nucleus = CoreCNucleus("config.yml")
+    nucleus.redis_client = AsyncMock()
+    with patch.object(nucleus.logger, "warning") as mock_logger:
+        await nucleus.publicar_alerta({"tipo": "test"})
+        assert nucleus.redis_client.xadd.called
+        assert mock_logger.called
 
-    async def coordinar_bloques(self):
-        """Coordina bloques simbióticos, priorizando tareas activas."""
-        try:
-            for nombre, bloque in self.bloques_plugins.items():
-                carga = random.random()  # TODO: Calcular carga real
-                await bloque.procesar(carga)
-                self.logger.debug(
-                    f"[Nucleus] Bloque '{bloque.id}' procesado, "
-                    f"fitness: {bloque.fitness:.2f}"
-                )
-        except Exception as e:
-            self.logger.error(f"[Nucleus] Error coordinando bloques: {e}")
-            await self.publicar_alerta({
-                "tipo": "error_coordinacion",
-                "mensaje": str(e),
-                "timestamp": random.random()
-            })
-
-    async def detener(self):
-        """Detiene el núcleo y cierra conexiones."""
-        try:
-            for modulo in self.modules.values():
-                await modulo.detener()
-            if self.redis_client:
-                await self.redis_client.close()
-            self.logger.info("[Nucleus] Núcleo detenido")
-        except Exception as e:
-            self.logger.error(f"[Nucleus] Error deteniendo núcleo: {e}")
+@pytest.mark.asyncio
+async def test_nucleus_detener_exitoso():
+    """Prueba la detención exitosa del núcleo."""
+    nucleus = CoreCNucleus("config.yml")
+    nucleus.redis_client = AsyncMock()
+    nucleus.modules = {"modulo1": MagicMock(detener=AsyncMock())}
+    with patch.object(nucleus.logger, "info") as mock_logger:
+        await nucleus.detener()
+        assert nucleus.redis_client.close.called
+        assert mock_logger.called
