@@ -27,7 +27,7 @@ async def test_bloque_procesar(nucleus):
         resultado = await bloque.procesar(carga=0.5)
         assert resultado["bloque_id"] == "test_block"
         assert len(resultado["mensajes"]) == 100
-        assert resultado["fitness"] == 0.7
+        assert resultado["fitness"] == pytest.approx(0.7)  # Usar pytest.approx
         assert mock_alerta.called
 
 
@@ -42,7 +42,7 @@ async def test_bloque_procesar_con_errores(nucleus):
         resultado = await bloque.procesar(carga=0.5)
         assert resultado["bloque_id"] == "test_block"
         assert len(resultado["mensajes"]) == 50  # Solo las entidades pares
-        assert resultado["fitness"] == 0.7
+        assert resultado["fitness"] == pytest.approx(0.7)  # Usar pytest.approx
         assert mock_alerta.called
 
 
@@ -70,7 +70,7 @@ async def test_bloque_reparar(nucleus):
     bloque.fallos = 1
     entidades[0].estado = "inactiva"
     with patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
-        await bloque.reparar(errores=10)
+        await bloque.reparar()  # Eliminar argumento 'errores'
         assert entidades[0].estado == "activa"
         assert bloque.fallos == 0
         assert mock_alerta.called
@@ -86,7 +86,7 @@ async def test_bloque_escribir_postgresql(nucleus, mock_postgresql):
         await bloque.escribir_postgresql(mock_postgresql)
         assert mock_postgresql.cursor.called
         assert mock_postgresql.commit.called
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called  # Usar mock_alerta
         assert len(bloque.mensajes) == 0
 
 
@@ -101,4 +101,4 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_postgresql):
         await bloque.escribir_postgresql(mock_postgresql)
         assert mock_postgresql.cursor.called
         assert not mock_postgresql.commit.called
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called  # Usar mock_alerta
