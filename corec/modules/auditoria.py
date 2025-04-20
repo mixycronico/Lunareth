@@ -1,4 +1,5 @@
 import logging
+import time
 from sklearn.ensemble import IsolationForest
 import psycopg2
 from corec.core import ComponenteBase
