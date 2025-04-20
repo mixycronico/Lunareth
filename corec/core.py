@@ -27,7 +27,10 @@ class PluginCommand(BaseModel):
 def cargar_config(config_path: str) -> dict:
     try:
         with open(config_path, "r") as f:
-            return yaml.safe_load(f) or {}
+            config = yaml.safe_load(f)
+            if config is None:
+                config = {}
+            return config
     except Exception as e:
         print(f"Error cargando configuración: {e}")
         return {}
