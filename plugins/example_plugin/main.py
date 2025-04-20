@@ -27,9 +27,19 @@ class ExamplePlugin(ComponenteBase):
                 return result
             else:
                 self.logger.error(f"[ExamplePlugin] Acción no soportada: {action}")
+                await self.nucleus.publicar_alerta({
+                    "tipo": "comando_invalido",
+                    "action": action,
+                    "timestamp": random.random()
+                })
                 return {"status": "error", "message": "Acción no soportada"}
         except Exception as e:
             self.logger.error(f"[ExamplePlugin] Error manejando comando: {e}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "error_comando",
+                "mensaje": str(e),
+                "timestamp": random.random()
+            })
             return {"status": "error", "message": str(e)}
 
     async def procesar_bloque(self, bloque_id: str) -> dict:
