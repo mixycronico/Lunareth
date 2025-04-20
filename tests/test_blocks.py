@@ -1,7 +1,5 @@
 import logging
 import time
-import random
-import psycopg2
 from typing import List, Dict, Any
 from corec.entities import Entidad
 
