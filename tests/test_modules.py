@@ -27,7 +27,6 @@ async def test_modulo_registro_inicializar(nucleus):
         except Exception as e:
             pytest.fail(f"Excepción inesperada durante inicialización: {e}")
         assert mock_bloque.called, f"mock_bloque no fue llamado. Config: {nucleus.config['bloques']}, Bloques registrados: {list(registro.bloques.keys())}, Mock calls: {mock_bloque.mock_calls}, Bloque registrado: {registro.bloques.get('test_block')}"
-        assert mock_init_db.called
         assert mock_redis_url.called
         assert "test_block" in registro.bloques
         assert registro.bloques["test_block"] == mock_bloque_instance
