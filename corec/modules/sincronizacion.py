@@ -53,7 +53,7 @@ class ModuloSincronizacion(ModuloBase):
             return
         if source.canal != canal or target.canal != canal:
             self.logger.error(
-                f"[Sincronizacion] Canales incompatibles: {source.canal} vs {target.canal}"
+                f"[Sincronizacion] Canales no compatibles: {source.canal} vs {target.canal}"
             )
             return
         try:
@@ -65,15 +65,15 @@ class ModuloSincronizacion(ModuloBase):
             )
             if len(source.entidades) < cfg.entidades:
                 self.logger.warning(
-                    f"[Sincronizacion] No hay suficientes entidades en {source_block}"
+                    f"[Sincronizacion] No suficientes entidades en {source_block}"
                 )
                 return
             transferidas = source.entidades[:cfg.entidades]
             source.entidades = source.entidades[cfg.entidades:]
             target.entidades.extend(transferidas)
             self.logger.info(
-                f"[Sincronizacion] Redirigidas {cfg.entidades} entidades de {source_block} "
-                f"a {target_block}"
+                f"[Sincronizacion] Redirigidas {cfg.entidades} entidades de "
+                f"{source_block} a {target_block}"
             )
             await self.nucleus.publicar_alerta({
                 "tipo": "entidades_redirigidas",
