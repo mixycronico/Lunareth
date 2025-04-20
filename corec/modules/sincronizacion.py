@@ -48,7 +48,7 @@ class ModuloSincronizacion(ModuloBase):
         source, target = reg.get(source_block), reg.get(target_block)
         if not source or not target:
             self.logger.error(
-                f"[Sincronizacion] Bloques no encontrados: {source_block}, {target_block}"
+                f"[Sincronizacion] No se encontraron bloques: {source_block}, {target_block}"
             )
             return
         if source.canal != canal or target.canal != canal:
@@ -126,7 +126,9 @@ class ModuloSincronizacion(ModuloBase):
             for i in range(faltan):
                 async def tmp(): return {"valor": random.random()}
                 b.entidades.append(crear_entidad(f"m{len(b.entidades)}", b.canal, tmp))
-            self.logger.info(f"[Sincronizacion] Ampliado {bid} a {len(b.entidades)} entidades")
+            self.logger.info(
+                f"[Sincronizacion] Ampliado {bid} a {len(b.entidades)} entidades"
+            )
             await self.nucleus.publicar_alerta({
                 "tipo": "bloque_ampliado",
                 "bloque_id": bid,
