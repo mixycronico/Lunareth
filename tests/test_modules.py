@@ -96,7 +96,7 @@ async def test_modulo_sincronizacion_redirigir_entidades_error(nucleus):
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
          patch("corec.modules.sincronizacion.random.random", side_effect=Exception("Error")):
         await asyncio.wait_for(sincronizacion.redirigir_entidades(bloque1, bloque2, 0.1, canal=2), timeout=5)
-        assert mock_alerta.called
+        assert mock_alerta.call_count == 2  # Una para la redirección fallida, otra para el error
         assert mock_logger.called
 
 
@@ -168,7 +168,7 @@ async def test_modulo_ejecucion_encolar_tareas_error(nucleus):
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
          patch("corec.modules.ejecucion.random.uniform", side_effect=Exception("Error")):
         await asyncio.wait_for(ejecucion.encolar_bloque(bloque), timeout=5)
-        assert mock_alerta.called
+        assert mock_alerta.call_count == 2  # Una para el encolado fallido, otra para el error
         assert mock_logger.called
 
 
@@ -197,6 +197,7 @@ async def test_modulo_auditoria_detectar_anomalias(nucleus):
     auditoria = ModuloAuditoria()
     await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
+    registro.bloques = {"block1": {"fitness": -1.0, "num_entidades": 10}}
     nucleus.modules["registro"] = registro
     with patch.object(auditoria.logger, "info") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
@@ -216,7 +217,7 @@ async def test_modulo_auditoria_detectar_anomalias_error(nucleus):
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
          patch("corec.modules.auditoria.random.random", side_effect=Exception("Error")):
         await asyncio.wait_for(auditoria.detectar_anomalias(), timeout=5)
-        assert mock_alerta.called
+        assert mock_alerta.call_count == 1  # Solo para el error
         assert mock_logger.called
 
 
