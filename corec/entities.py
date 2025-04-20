@@ -1,5 +1,4 @@
-from typing import Callable, Any
-import random
+from typing import Callable
 
 
 class Entidad:
