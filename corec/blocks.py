@@ -1,8 +1,6 @@
 import logging
 import time
 import statistics
-import json
-import zstd
 import psycopg2
 import asyncio
 from typing import Dict, Any, List
@@ -140,6 +138,7 @@ class BloqueSimbiotico:
             await self.nucleus.publicar_alerta({
                 "tipo": "bloque_escrito",
                 "bloque_id": self.id,
+                "mensajes": len(out["mensajes"]),  # Usar out para evitar F841
                 "timestamp": time.time()
             })
         except Exception as e:
