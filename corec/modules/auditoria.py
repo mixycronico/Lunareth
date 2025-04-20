@@ -16,7 +16,7 @@ class ModuloAuditoria(ComponenteBase):
     async def inicializar(self, nucleus):
         """Inicializa el módulo de auditoría."""
         self.nucleus = nucleus
-        # Detector de bloques
+        # Detector para bloques
         self.detector = BloqueSimbiotico("x", 0, []).detector
         self.logger.info("[Auditoria] listo")
 
