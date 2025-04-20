@@ -1,163 +1,31 @@
-# CoreC
-
-> **Un ecosistema bioinspirado** para el procesamiento masivo de **entidades ultraligeras** y coordinación en **bloques simbióticos**, optimizado para alta concurrencia y baja latencia.
-
----
-
-## 🌟 Características clave
-
-- **Entidades ligeras** (~1 KB cada una)  
-- **Bloques simbióticos** de 1 MB (≈ 1000 entidades) o 5 MB (≈ 2000 entidades + IA)  
-- **Concurrencia asíncrona** con asyncio  
-- **Tareas distribuidas** mediante Celery + Redis Streams  
-- **Almacenamiento particionado** en PostgreSQL con Zstd  
-- **Modularidad total**: núcleo y módulos desacoplados  
-
----
-
-## 🏛 Arquitectura en un vistazo
-
-┌─────────────────────────────────────────────┐
-│                 Bootstrap                  │
-│     (corec/bootstrap.py → run.sh)          │
-└───────────────┬─────────────────────────────┘
-│
-▼
-CoreCNucleus (corec/nucleus.py)
-├─ Carga de configuración JSON
-├─ init_postgresql(db_config)
-├─ init_redis(redis_config)
-├─ Registro dinámico de módulos
-└─ Loop principal: asyncio.gather(modulos)
-│
-▼
-┌────────────────────────────────────┐
-│           Módulos CoreC           │
-│ (corec/modules/*.py heredan de)   │
-│             ModuloBase            │
-└────────────────────────────────────┘
-
-- **Entidades** (`corec/entities.py`)  
-  - `MicroCeluEntidadCoreC`: tuplas `(id, canal, func, activo)` → cálculos rápidos  
-  - `CeluEntidadCoreC`: tuplas `(id, canal, procesador, activo)` → procesamiento con datos  
-
-- **Bloques** (`corec/blocks.py`)  
-  - Ciclo:  
-    1. procesar entidades (`asyncio.gather`),  
-    2. ajustar umbral (desviación + carga + errores),  
-    3. autoreparación si >5 % fallos,  
-    4. escribir resultados en PostgreSQL (Zstd + INSERT ON CONFLICT)  
-
-- **Comunicación**  
-  - Formato binario: `!Ibf?` (4 bytes ID, 1 byte canal, 4 bytes float, 1 byte bool)  
-  - Redis Streams para mensajería de alta velocidad  
-
-- **Almacenamiento**  
-  - Tabla `bloques` particionada por rango de `timestamp`  
-  - Índices `(canal, timestamp DESC)`  
-  - Compresión Zstd nivel 3 para payloads JSON  
-
----
-
-## 🚀 Instalación rápida
-
-1. **Clona** el repositorio  
-   ```bash
-   git clone https://github.com/tu_usuario/corec.git
-   cd corec
-
-   2.	Instala dependencias Python
-
-pip install -r requirements.txt
+🌱 CoreC: Un Framework Bioinspirado para la Innovación Modular
 
 
-   3.	Configura configs/corec_config.json
-
-{
-  "instance_id": "corec1",
-  "db_config": {
-    "dbname": "corec_db",
-    "user": "postgres",
-    "password": "YOUR_PG_PASSWORD",
-    "host": "localhost",
-    "port": 5432
-  },
-  "redis_config": {
-    "host": "localhost",
-    "port": 6379,
-    "username": "corec_user",
-    "password": "YOUR_REDIS_PASSWORD"
-  },
-  "bloques": [
-    { "id": "sensor_swarm", "canal": 1, "entidades": 980000, "max_size_mb": 1 },
-    { "id": "ia_analysis",  "canal": 3, "entidades": 20000,  "max_size_mb": 5 }
-  ]
-}
-
-
-   4.	Arranca CoreC
-
-bash run.sh
-
-
-   5.	Inicia workers de Celery (otra terminal)
-
-celery -A corec.core.celery_app worker --loglevel=info
-
-
-   6.	(Opcional) Docker Compose
-
-docker-compose up -d
-
-
-
-⸻
-
-🧪 Pruebas y Calidad
-   •	Ejecuta tests unitarios con pytest:
-
-pytest -q
-
-
-   •	Estilo y tipado:
-
-flake8 corec/  
-mypy corec/
-
-
-
-⸻
-
-🔧 Uso y Monitoreo
-   •	Logs:
-   •	Local: tail -f logs/corec.log
-   •	Docker: docker-compose logs -f corec
-   •	Indicadores clave:
-   •	[CoreCNucleus] Inicializado
-   •	[ModuloRegistro] Bloque registrado
-   •	Métricas: integra con Prometheus + Grafana para latencia, throughput y uso de memoria
-
-⸻
-
-⚙️ Configuración avanzada
-   •	Multi‑Nodo: apuntar redis_config.host a un Redis Cluster y usar réplicas PostgreSQL
-   •	Variables de entorno: reemplaza credenciales sensibles (POSTGRES_PASSWORD, REDIS_PASSWORD)
-   •	Ajustes de rendimiento:
-   •	reduce worker_concurrency en celery_app.conf
-   •	ajusta particiones de PostgreSQL para rangos de tiempo más pequeños
-
-⸻
-
-🔮 Futuras mejoras
-   •	CLI interactivo para gestión en caliente
-   •	Evolución orgánica de entidades (mutación dinámica)
-   •	WebAssembly para procesadores custom ultraligeros
-   •	Dashboard integrado con métricas de bloques y fitness
-
-⸻
-
-👥 Desarrolladores
-
-Moises Alvarenga & Luna
-CoreC © 2025 — Todos los derechos reservados
+Bienvenido a CoreC, un framework que respira vida en tus ideas, inspirado en la armonía y la adaptabilidad de los sistemas biológicos. Diseñado con elegancia y potencia, CoreC es la base ideal para construir aplicaciones modulares que escalan con gracia, procesan datos con agilidad y se adaptan dinámicamente a tus necesidades. Ya sea que estés creando herramientas conversacionales, sistemas analíticos o soluciones personalizadas, CoreC te ofrece un lienzo flexible para dar forma a tus proyectos con creatividad y eficiencia.
+🌟 ¿Qué es CoreC?
+CoreC es más que un framework; es un ecosistema vivo que combina concurrencia, resiliencia y modularidad en un diseño intuitivo. Imagina un sistema donde pequeñas unidades de procesamiento, como células, trabajan juntas en armonía, organizadas en bloques simbióticos que se adaptan y evolucionan según la carga de trabajo. Cada plugin que conectes a CoreC se convierte en parte de este ecosistema, aprovechando su capacidad para procesar tareas en paralelo, comunicarse de forma fluida y persistir datos con precisión.
+Con CoreC, tus plugins no solo funcionan, sino que florecen. El núcleo orquesta todo, desde la asignación de recursos hasta la coordinación de tareas, dejando que tú te enfoques en lo que realmente importa: dar vida a tus ideas.
+✨ Características principales
+	•	Modularidad intuitiva: Crea plugins personalizados que se integran sin esfuerzo con el núcleo, cada uno con su propio bloque simbiótico para procesar tareas específicas.
+	•	Adaptabilidad bioinspirada: Los bloques simbióticos redistribuyen recursos dinámicamente, asegurando que las tareas críticas reciban la atención que necesitan, como un organismo que optimiza su energía.
+	•	Concurrencia elegante: Procesa millones de operaciones en paralelo con una latencia mínima, manteniendo tu sistema ágil y receptivo.
+	•	Resiliencia natural: Los bloques se autorreparan ante errores, garantizando una operación continua y confiable.
+	•	Comunicación fluida: Un sistema de mensajería ligero conecta plugins y módulos, permitiendo interacciones rápidas y coordinadas.
+	•	Persistencia optimizada: Guarda datos de manera eficiente, como recuerdos cuidadosamente archivados, listos para ser recuperados cuando los necesites.
+🌍 ¿Por qué elegir CoreC?
+CoreC es para quienes buscan un equilibrio entre potencia y simplicidad, entre innovación y estabilidad. Es el compañero perfecto para desarrolladores que quieren construir sistemas que no solo resuelvan problemas, sino que lo hagan con estilo. Con CoreC, puedes:
+	•	Desatar tu creatividad: Diseña plugins que reflejen tu visión, desde herramientas analíticas hasta interfaces conversacionales, todo respaldado por un núcleo robusto.
+	•	Escalar sin esfuerzo: Deja que CoreC gestione los recursos, adaptándose a cargas de trabajo cambiantes sin intervención manual.
+	•	Confiar en la estabilidad: Con mecanismos de autorreparación y monitoreo integrado, tu sistema sigue funcionando incluso en los momentos más exigentes.
+	•	Disfrutar la experiencia: CoreC no solo es funcional, sino también bello, con una arquitectura que invita a explorar y experimentar.
+🚀 Primeros pasos
+	1	Instala CoreC: Configura tu entorno con unas pocas líneas de comandos, ya sea en Linux o con Docker, y estarás listo para empezar.
+	2	Crea tu primer plugin: Define un plugin que aproveche un bloque simbiótico, configurándolo para procesar las tareas que imaginas.
+	3	Explora y personaliza: Usa el núcleo para orquestar tus plugins, monitorear su rendimiento y ajustar su comportamiento con comandos intuitivos.
+	4	Hazlo tuyo: Experimenta con la redirección dinámica de recursos, conecta plugins conversacionales, y descubre cómo CoreC da vida a tus ideas.
+🌿 Únete al ecosistema
+CoreC es más que un proyecto; es una invitación a construir con propósito y creatividad. Únete a nuestra comunidad de desarrolladores que están llevando sus ideas al siguiente nivel, inspirados por la belleza de los sistemas vivos. Comparte tus plugins, explora nuevas posibilidades, y contribuye a hacer que CoreC crezca aún más.
+¡Empieza hoy y deja que CoreC sea el latido de tus proyectos!
+🌟 Agradecimientos
+CoreC es una creación de Moisés Alvarenga y Luna, diseñada con pasión y cuidado para empoderar a los creadores. Gracias por elegir CoreC y por ser parte de esta aventura bioinspirada.
 
