@@ -48,15 +48,39 @@
   "plugins": {
     "codex": {
       "enabled": true,
-      "path": "plugins/codex/config.json"
+      "path": "plugins/codex/config.json",
+      "bloque": {
+        "bloque_id": "codex_block",
+        "canal": 5,
+        "entidades": 500,
+        "max_size_mb": 3,
+        "max_errores": 0.05,
+        "min_fitness": 0.5
+      }
     },
-    "interface_system": {
+    "comm_system": {
       "enabled": true,
-      "path": "plugins/interface_system/config.json"
+      "path": "plugins/comm_system/config.json",
+      "bloque": {
+        "bloque_id": "comm_block",
+        "canal": 4,
+        "entidades": 500,
+        "max_size_mb": 2,
+        "max_errores": 0.05,
+        "min_fitness": 0.5
+      }
     },
     "crypto_trading": {
       "enabled": true,
-      "path": "plugins/crypto_trading/config.json"
+      "path": "plugins/crypto_trading/config.json",
+      "bloque": {
+        "bloque_id": "trading_block",
+        "canal": 3,
+        "entidades": 2000,
+        "max_size_mb": 5,
+        "max_errores": 0.1,
+        "min_fitness": 0.3
+      }
     }
   }
 }
