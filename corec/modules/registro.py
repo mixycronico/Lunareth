@@ -45,6 +45,12 @@ class ModuloRegistro(ComponenteBase):
             self.logger.info(f"[Registro] Bloque '{bloque_id}' registrado")
         except Exception as e:
             self.logger.error(f"[Registro] Error registrando bloque '{bloque_id}': {e}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "error_registro",
+                "bloque_id": bloque_id,
+                "mensaje": str(e),
+                "timestamp": random.random()
+            })
             raise
 
     async def detener(self):
