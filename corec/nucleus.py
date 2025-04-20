@@ -17,7 +17,7 @@ from corec.entities import crear_entidad
 
 class PluginBlockConfig(BaseModel):
     """Configuración de un bloque simbiótico para un plugin."""
-    bloque_id: str = Field(..., regex=r"^[a-zA-Z0-9_-]+$")
+    bloque_id: str = Field(..., pattern=r"^[a-zA-Z0-9_-]+$")
     canal: int = Field(..., ge=1, le=10)
     entidades: int = Field(..., ge=100, le=10000)
     max_size_mb: int = Field(..., ge=1, le=10)
@@ -144,7 +144,7 @@ class CoreCNucleus:
                     )
             except Exception as e:
                 self.logger.error(f"[Nucleus] Error coordinando bloques: {e}")
-                await self.nucleus.publicar_alerta({
+                await self.publicar_alerta({  # Cambiado de self.nucleus a self
                     "tipo": "error_coordinacion",
                     "mensaje": str(e)
                 })
