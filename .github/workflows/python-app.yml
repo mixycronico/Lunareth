@@ -58,7 +58,7 @@ jobs:
         run: |
           echo "Linting with flake8..."
           flake8 plugins/crypto_trading corec --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 plugins/crypto_trading corec --count --exit-zero --max-complexity=15 --max-line-length=100 --statistics
+          flake8 plugins/crypto_trading corec --count --exit-zero --max-complexity=15 --max-line-length=120 --statistics
 
       - name: Run Tests
         env:
