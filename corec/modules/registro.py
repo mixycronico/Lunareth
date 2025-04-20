@@ -3,13 +3,13 @@ import asyncio
 import random
 import time
 from pydantic import ValidationError
-from corec.core import ModuloBase
+from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
 from corec.nucleus import PluginBlockConfig
 
 
-class ModuloRegistro(ModuloBase):
+class ModuloRegistro(ComponenteBase):
     def __init__(self):
         self.logger = logging.getLogger("ModuloRegistro")
         self.bloques = {}
