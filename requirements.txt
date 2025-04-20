@@ -2,7 +2,7 @@ aiohttp==3.9.5
 aioredis==2.0.0
 backoff==2.2.1
 black==24.4.2
-celery==5.2.0
+celery==5.3.6
 click==8.1.7
 click-completion
 fastapi==0.110.0
