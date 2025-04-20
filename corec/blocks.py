@@ -5,6 +5,7 @@ import psycopg2
 import asyncio
 from typing import Dict, Any, List
 from pydantic import BaseModel, ValidationError
+from unittest.mock import MagicMock
 
 from sklearn.ensemble import IsolationForest
 from corec.entities import MicroCeluEntidadCoreC, crear_entidad, procesar_entidad
