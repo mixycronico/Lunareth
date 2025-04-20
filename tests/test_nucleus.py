@@ -19,7 +19,7 @@ async def test_nucleus_inicializar_exitoso(mock_postgresql, mock_config):
     """Prueba la inicialización exitosa del núcleo."""
     nucleus = CoreCNucleus("config.yml")
     with patch("corec.nucleus.init_postgresql") as mock_init_db, \
-            patch("corec.nucleus.aioredis.from_url", return_value=AsyncMock()) as mock_redis, \
+            patch("corec.nucleus.aioredis.from_url", new_callable=AsyncMock) as mock_redis, \
             patch("corec.nucleus.cargar_config", return_value=mock_config), \
             patch.object(nucleus.logger, "info") as mock_logger, \
             patch("corec.nucleus.ModuloRegistro") as mock_registro, \
@@ -42,7 +42,7 @@ async def test_nucleus_inicializar_redis_error(mock_postgresql, mock_config):
     """Prueba la inicialización con un error en Redis."""
     nucleus = CoreCNucleus("config.yml")
     with patch("corec.nucleus.init_postgresql") as mock_init_db, \
-            patch("corec.nucleus.aioredis.from_url", side_effect=Exception("Redis Error")) as mock_redis, \
+            patch("corec.nucleus.aioredis.from_url", side_effect=Exception("Redis Error"), new_callable=AsyncMock) as mock_redis, \
             patch("corec.nucleus.cargar_config", return_value=mock_config), \
             patch.object(nucleus.logger, "error") as mock_logger, \
             patch("corec.nucleus.ModuloRegistro") as mock_registro, \
