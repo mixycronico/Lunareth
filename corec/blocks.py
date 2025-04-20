@@ -138,7 +138,7 @@ class BloqueSimbiotico:
             await self.nucleus.publicar_alerta({
                 "tipo": "bloque_escrito",
                 "bloque_id": self.id,
-                "mensajes": len(out["mensajes"]),  # Usar out para evitar F841
+                "mensajes": len(out["mensajes"]),
                 "timestamp": time.time()
             })
         except Exception as e:
