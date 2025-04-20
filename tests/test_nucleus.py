@@ -12,6 +12,7 @@ async def test_nucleus_inicializar(nucleus, mock_redis):
         mock_logging.return_value.info = MagicMock()
         await asyncio.wait_for(nucleus.inicializar(), timeout=5)
         assert mock_init_db.called
+        assert mock_redis_url.called  # Resolver F841
         assert "registro" in nucleus.modules
         assert "sincronizacion" in nucleus.modules
         assert "ejecucion" in nucleus.modules
