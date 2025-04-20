@@ -19,6 +19,7 @@ async def test_modulo_registro_inicializar(nucleus):
         assert "test_block" in registro.bloques
         assert nucleus.publicar_alerta.called
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -33,6 +34,7 @@ async def test_modulo_registro_registrar_bloque(nucleus):
         assert len(registro.bloques["new_block"].entidades) == 500
         assert nucleus.publicar_alerta.called
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -45,6 +47,7 @@ async def test_modulo_registro_registrar_bloque_config_invalida(nucleus):
         assert "invalid_block" not in registro.bloques
         assert nucleus.publicar_alerta.called
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -55,6 +58,7 @@ async def test_modulo_sincronizacion_inicializar(nucleus):
         await sincronizacion.inicializar(nucleus)
         assert sincronizacion.nucleus == nucleus
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -77,6 +81,7 @@ async def test_modulo_sincronizacion_redirigir_entidades(nucleus):
         assert len(bloque2.entidades) == 700
         assert nucleus.publicar_alerta.called
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -88,6 +93,7 @@ async def test_modulo_sincronizacion_redirigir_entidades_error(nucleus):
         await sincronizacion.redirigir_entidades("block1", "block2", 200, 1)
         assert mock_logger.called
         assert not nucleus.publicar_alerta.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -111,6 +117,7 @@ async def test_modulo_sincronizacion_adaptar_bloque_fusionar(nucleus):
         assert any("fus_" in bid for bid in registro.bloques)
         assert nucleus.publicar_alerta.called
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -121,6 +128,7 @@ async def test_modulo_ejecucion_inicializar(nucleus):
         await ejecucion.inicializar(nucleus)
         assert ejecucion.nucleus == nucleus
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -133,6 +141,7 @@ async def test_modulo_ejecucion_encolar_tareas(nucleus):
         assert mock_task.delay.called
         assert nucleus.publicar_alerta.called
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -144,6 +153,7 @@ async def test_modulo_ejecucion_encolar_tareas_error(nucleus):
         await ejecucion.ejecutar()
         assert nucleus.publicar_alerta.called
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -155,6 +165,7 @@ async def test_modulo_auditoria_inicializar(nucleus):
         assert auditoria.nucleus == nucleus
         assert auditoria.detector is not None
         assert mock_logger.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -170,6 +181,7 @@ async def test_modulo_auditoria_detectar_anomalias(nucleus, mock_postgresql):
         await auditoria.detectar_anomalias()
         assert mock_postgresql.cursor.called
         assert nucleus.publicar_alerta.called
+    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -182,3 +194,4 @@ async def test_modulo_auditoria_detectar_anomalias_error(nucleus, mock_postgresq
         await auditoria.detectar_anomalias()
         assert mock_postgresql.cursor.called
         assert not nucleus.publicar_alerta.called
+    await nucleus.detener()
