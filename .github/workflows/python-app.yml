@@ -30,6 +30,9 @@ jobs:
     - name: List test files
       run: ls -l tests/
 
+    - name: Collect tests
+      run: pytest tests/ --collect-only
+
     - name: Run Flake8
       run: flake8 corec/ tests/ --max-line-length=300
 
