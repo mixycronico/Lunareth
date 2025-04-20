@@ -1,9 +1,7 @@
 import logging
 import random
-import asyncio
 import aioredis
-from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 from corec.core import ComponenteBase, cargar_config, PluginBlockConfig, PluginCommand
 from corec.db import init_postgresql
 from corec.blocks import BloqueSimbiotico
@@ -30,11 +28,12 @@ class CoreCNucleus:
         try:
             self.logger.info("[Nucleus] Inicializando núcleo")
             init_postgresql(self.db_config)
-            self.redis_client = await aioredis.from_url(
-                f"redis://{self.redis_config['host']}:{self.redis_config['port']}",
-                username=self.redis_config.get("username"),
-                password=self.redis_config.get("password")
-            )
+            if self.redis_config:
+                self.redis_client = await aioredis.from_url(
+                    f"redis://{self.redis_config['host']}:{self.redis_config['port']}",
+                    username=self.redis_config.get("username"),
+                    password=self.redis_config.get("password")
+                )
 
             # Inicializar módulos
             self.modules = {
@@ -120,7 +119,10 @@ class CoreCNucleus:
         """Publica una alerta en el canal corec_alerts."""
         try:
             self.logger.warning(f"[Alerta] {alerta}")
-            await self.redis_client.xadd("corec_alerts", alerta)
+            if self.redis_client:
+                await self.redis_client.xadd("corec_alerts", alerta)
+            else:
+                self.logger.error("[Alerta] Redis client no inicializado")
         except Exception as e:
             self.logger.error(f"[Alerta] Error publicando en corec_alerts: {e}")
 
@@ -138,7 +140,8 @@ class CoreCNucleus:
             self.logger.error(f"[Nucleus] Error coordinando bloques: {e}")
             await self.publicar_alerta({
                 "tipo": "error_coordinacion",
-                "mensaje": str(e)
+                "mensaje": str(e),
+                "timestamp": random.random()
             })
 
     async def detener(self):
