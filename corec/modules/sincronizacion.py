@@ -58,4 +58,21 @@ class ModuloSincronizacion(ComponenteBase):
                 nuevo_id = f"fus_{random.randint(1000, 9999)}"
                 nuevas_entidades = bloque.entidades + bloque_mejor.entidades
                 nuevo_bloque = BloqueSimbiotico(nuevo_id, bloque.canal, nuevas_entidades, bloque.max_size_mb, self.nucleus)
-                registro
+                registro.bloques[nuevo_id] = nuevo_bloque
+                del registro.bloques[bloque_id]
+                del registro.bloques[bloque_mejor.id]
+                self.logger.info(f"[Sincronizacion] Bloques {bloque_id} y {bloque_mejor.id} fusionados en {nuevo_id}")
+                await self.nucleus.publicar_alerta({
+                    "tipo": "bloques_fusionados",
+                    "bloque_id": nuevo_id,
+                    "origen_ids": [bloque_id, bloque_mejor.id],
+                    "timestamp": random.random()
+                })
+            else:
+                self.logger.info(f"[Sincronizacion] No se requiere fusión para {bloque_id}")
+        except Exception as e:
+            self.logger.error(f"[Sincronizacion] Error adaptando bloque {bloque_id}: {e}")
+
+    async def detener(self):
+        """Detiene el módulo de sincronización."""
+        self.logger.info("[Sincronizacion] Detenido")
