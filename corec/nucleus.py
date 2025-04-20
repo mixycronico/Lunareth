@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, Any
 from pydantic import BaseModel, Field, ValidationError
 
-from corec.core import ModuloBase, cargar_config
+from corec.core import ComponenteBase, cargar_config
 from corec.db import init_postgresql
 from corec.redis_client import init_redis
 from corec.blocks import BloqueSimbiotico
@@ -49,7 +49,7 @@ class CoreCNucleus:
             name = file.stem
             m = importlib.import_module(f"corec.modules.{name}")
             cls = getattr(m, f"Modulo{name.capitalize()}", None)
-            if cls and issubclass(cls, ModuloBase):
+            if cls and issubclass(cls, ComponenteBase):
                 inst = cls()
                 await inst.inicializar(self)
                 self.modules[name] = inst
