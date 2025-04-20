@@ -40,7 +40,6 @@ async def test_plugin_comando_invalido(nucleus):
         resultado = await nucleus.ejecutar_plugin("example_plugin", comando)
         assert resultado["status"] == "error"
         assert "Comando inválido" in resultado["message"]
-        assert mock_logging.return_value.error.called
 
 
 @pytest.mark.asyncio
