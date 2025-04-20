@@ -1,10 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-corec/modules/__init__.py
-Paquete de módulos para CoreC.
+Paquete de módulos de CoreC.
+
+Contiene los módulos internos que extienden la funcionalidad del núcleo.
 """
-from .auditoria import ModuloAuditoria
-from .ejecucion import ModuloEjecucion
-from .registro import ModuloRegistro
-from .sincronización import ModuloSincronización
