@@ -1,8 +1,18 @@
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad
 from corec.nucleus import CoreCNucleus
+
+
+@pytest.fixture
+def mock_config():
+    return {
+        "db_config": {"host": "localhost"},
+        "redis_config": {"host": "localhost", "port": 6379},
+        "bloques": [],
+        "plugins": {}
+    }
 
 
 @pytest.fixture
