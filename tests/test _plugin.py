@@ -8,6 +8,7 @@ async def test_plugin_inicializar(nucleus):
     """Prueba la inicialización del plugin example_plugin."""
     with patch("corec.nucleus.logging.getLogger") as mock_logging:
         plugin = await inicializar(nucleus, {})
+        assert plugin.nucleus == nucleus  # Usar la variable plugin
         assert "example_plugin" in nucleus.plugins
         assert "example_plugin" in nucleus.bloques_plugins
         bloque = nucleus.bloques_plugins["example_plugin"]
@@ -22,6 +23,7 @@ async def test_plugin_manejar_comando(nucleus):
     """Prueba el manejo de comandos por example_plugin."""
     with patch("corec.nucleus.logging.getLogger") as mock_logging:
         plugin = await inicializar(nucleus, {})
+        assert plugin.nucleus == nucleus  # Usar la variable plugin
         comando = {"action": "test_action", "params": {"key": "value"}}
         resultado = await nucleus.ejecutar_plugin("example_plugin", comando)
         assert resultado == {"status": "success", "action": "test_action"}
@@ -33,6 +35,7 @@ async def test_plugin_comando_invalido(nucleus):
     """Prueba el manejo de un comando inválido por example_plugin."""
     with patch("corec.nucleus.logging.getLogger") as mock_logging:
         plugin = await inicializar(nucleus, {})
+        assert plugin.nucleus == nucleus  # Usar la variable plugin
         comando = {}  # Falta 'action'
         resultado = await nucleus.ejecutar_plugin("example_plugin", comando)
         assert resultado["status"] == "error"
@@ -45,6 +48,7 @@ async def test_plugin_bloque_procesamiento(nucleus):
     """Prueba el procesamiento del bloque simbiótico de example_plugin."""
     with patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         plugin = await inicializar(nucleus, {})
+        assert plugin.nucleus == nucleus  # Usar la variable plugin
         bloque = nucleus.bloques_plugins["example_plugin"]
         resultado = await bloque.procesar(carga=0.5)
         assert resultado["bloque_id"] == "example_plugin_block"
