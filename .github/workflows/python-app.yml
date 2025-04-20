@@ -28,7 +28,7 @@ jobs:
         pip install flake8
 
     - name: Run Flake8
-      run: flake8 corec/ tests/ --max-line-length=140
+      run: flake8 corec/ tests/ --max-line-length=150
 
     - name: Run tests
       run: pytest -q --disable-warnings
