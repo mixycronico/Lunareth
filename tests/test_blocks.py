@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, patch
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
