@@ -1,3 +1,4 @@
+import pytest
 import logging
 import random
 import aioredis
