@@ -2,11 +2,11 @@ import logging
 import asyncio
 import time
 from typing import Dict, Any
-from corec.core import ModuloBase, celery_app
+from corec.core import ComponenteBase, celery_app
 from corec.blocks import BloqueSimbiotico
 
 
-class ModuloEjecucion(ModuloBase):
+class ModuloEjecucion(ComponenteBase):
     def __init__(self):
         self.logger = logging.getLogger("ModuloEjecucion")
         self.nucleus = None
