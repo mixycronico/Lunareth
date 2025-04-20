@@ -1,77 +1,67 @@
 import logging
-import asyncio
-import random
-import time
-from pydantic import ValidationError
+from typing import Dict
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
-from corec.entities import crear_entidad
-from corec.nucleus import PluginBlockConfig
+from pydantic import ValidationError
+from corec.core import PluginBlockConfig
 
 
 class ModuloRegistro(ComponenteBase):
     def __init__(self):
         self.logger = logging.getLogger("ModuloRegistro")
-        self.bloques = {}
         self.nucleus = None
+        self.bloques: Dict[str, BloqueSimbiotico] = {}
 
     async def inicializar(self, nucleus):
-        """Inicializa el módulo de registro y registra bloques."""
+        """Inicializa el módulo de registro."""
         self.nucleus = nucleus
-        self.logger.info("[Registro] listo")
-        for cfg in self.nucleus.config.get("bloques", []):
-            await self.registrar_bloque(cfg["id"], cfg["canal"], cfg["entidades"])
-
-    async def registrar_bloque(self, bloque_id: str, canal: int, cantidad: int):
-        """Registra un bloque simbiótico con entidades especificadas."""
         try:
-            # Validar configuración (reutilizamos PluginBlockConfig de nucleus)
-            cfg = PluginBlockConfig(
-                bloque_id=bloque_id,
-                canal=canal,
-                entidades=cantidad,
-                max_size_mb=1,  # Valor por defecto
-                max_errores=0.05,  # Valor por defecto
-                min_fitness=0.2  # Valor por defecto
-            )
-            size = 1000
-            resto = cfg.entidades
-            idx = 0
-            while resto > 0:
-                cnt = min(size, resto)
-                entidades = []
-                for i in range(cnt):
-                    async def tmp(): return {"valor": random.random()}
-                    entidades.append(crear_entidad(f"m{idx}", cfg.canal, tmp))
-                    idx += 1
-                bid = bloque_id if idx == cnt else f"{bloque_id}_{idx // size}"
-                bloque = BloqueSimbiotico(bid, cfg.canal, entidades, nucleus=self.nucleus)
-                self.bloques[bid] = bloque
-                resto -= cnt
-                self.logger.info(f"[Registro] {bid} ({cnt} entidades)")
-                await self.nucleus.publicar_alerta({
-                    "tipo": "bloque_registrado",
-                    "bloque_id": bid,
-                    "entidades": cnt,
-                    "canal": cfg.canal,
-                    "timestamp": time.time()
-                })
-        except ValidationError as e:
-            self.logger.error(f"[Registro] Configuración inválida para '{bloque_id}': {e}")
+            for bloque_conf in nucleus.config.get("bloques", []):
+                try:
+                    config = PluginBlockConfig(**bloque_conf)
+                    bloque = BloqueSimbiotico(config.id, config.canal, [], nucleus)
+                    self.bloques[config.id] = bloque
+                    self.logger.info(f"[Registro] Bloque '{config.id}' registrado")
+                    await nucleus.publicar_alerta({
+                        "tipo": "bloque_registrado",
+                        "bloque_id": config.id,
+                        "entidades": config.entidades,
+                        "canal": config.canal,
+                        "timestamp": random.random()
+                    })
+                except ValidationError as e:
+                    self.logger.error(f"[Registro] Configuración inválida para bloque: {e}")
+                    await nucleus.publicar_alerta({
+                        "tipo": "error_registro",
+                        "bloque_id": bloque_conf.get("id", "desconocido"),
+                        "mensaje": str(e),
+                        "timestamp": random.random()
+                    })
+        except Exception as e:
+            self.logger.error(f"[Registro] Error inicializando: {e}")
+
+    async def registrar_bloque(self, bloque_id: str, canal: int, entidades: int):
+        """Registra un nuevo bloque simbiótico."""
+        try:
+            bloque = BloqueSimbiotico(bloque_id, canal, [], self.nucleus)
+            self.bloques[bloque_id] = bloque
+            self.logger.info(f"[Registro] Bloque '{bloque_id}' registrado")
+            await self.nucleus.publicar_alerta({
+                "tipo": "bloque_registrado",
+                "bloque_id": bloque_id,
+                "entidades": entidades,
+                "canal": canal,
+                "timestamp": random.random()
+            })
+        except Exception as e:
+            self.logger.error(f"[Registro] Error registrando bloque '{bloque_id}': {e}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_registro",
                 "bloque_id": bloque_id,
                 "mensaje": str(e),
-                "timestamp": time.time()
+                "timestamp": random.random()
             })
-
-    async def ejecutar(self):
-        """Ejecuta el registro y escritura de bloques."""
-        while True:
-            for b in self.bloques.values():
-                await b.escribir_postgresql(self.nucleus.db_config)
-            await asyncio.sleep(300)  # Escribir cada 5 minutos
 
     async def detener(self):
         """Detiene el módulo de registro."""
-        self.logger.info("[Registro] detenido")
+        self.logger.info("[Registro] Detenido")
