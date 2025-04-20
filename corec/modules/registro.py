@@ -18,8 +18,11 @@ class ModuloRegistro(ComponenteBase):
         """Inicializa el módulo de registro."""
         self.nucleus = nucleus
         try:
-            for bloque_conf in nucleus.config.get("bloques", []):
+            bloques_conf = nucleus.config.get("bloques", [])
+            self.logger.info(f"[Registro] Procesando {len(bloques_conf)} bloques de configuración")
+            for bloque_conf in bloques_conf:
                 try:
+                    self.logger.debug(f"[Registro] Configuración de bloque: {bloque_conf}")
                     config = PluginBlockConfig(**bloque_conf)
                     entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
                     bloque = BloqueSimbiotico(config.id, config.canal, entidades, self.nucleus, max_size_mb=1.0)
@@ -33,7 +36,7 @@ class ModuloRegistro(ComponenteBase):
                         "timestamp": random.random()
                     })
                 except ValidationError as e:
-                    self.logger.error(f"[Registro] Configuración inválida para bloque: {e}")
+                    self.logger.error(f"[Registro] Configuración inválida para bloque {bloque_conf.get('id', 'desconocido')}: {e}")
                     await self.nucleus.publicar_alerta({
                         "tipo": "error_registro",
                         "bloque_id": bloque_conf.get("id", "desconocido"),
@@ -41,9 +44,15 @@ class ModuloRegistro(ComponenteBase):
                         "timestamp": random.random()
                     })
                 except Exception as e:
-                    self.logger.error(f"[Registro] Error registrando bloque: {e}")
+                    self.logger.error(f"[Registro] Error inesperado al registrar bloque {bloque_conf.get('id', 'desconocido')}: {e}")
+                    await self.nucleus.publicar_alerta({
+                        "tipo": "error_registro",
+                        "bloque_id": bloque_conf.get("id", "desconocido"),
+                        "mensaje": str(e),
+                        "timestamp": random.random()
+                    })
         except Exception as e:
-            self.logger.error(f"[Registro] Error inicializando: {e}")
+            self.logger.error(f"[Registro] Error inicializando módulo: {e}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_inicializacion",
                 "mensaje": str(e),
