@@ -73,7 +73,7 @@ class BloqueSimbiotico:
             if isinstance(r, Exception):
                 err += 1
                 self.logger.warning(f"[{self.id}] Error en entidad: {r}")
-                continue
+                continue  # No añadir mensajes de entidades fallidas
             try:
                 m = await deserializar_mensaje(r)
                 MessageData(**m)  # Validar datos
@@ -105,13 +105,19 @@ class BloqueSimbiotico:
     async def reparar(self, errores: int):
         """Repara entidades inactivas y publica alerta."""
         repaired = False
+        new_mensajes = []
         for i, msg in enumerate(self.mensajes):
             if not msg["activo"]:
                 self.fallos += 1
                 if self.fallos >= 2:
                     self.entidades[i] = crear_entidad(f"m{time.time_ns()}", self.canal, self.entidades[i][2])
-                    self.fallos = 0
+                    self.fallos = 0  # Reiniciar fallos después de reparar
                     repaired = True
+                else:
+                    new_mensajes.append(msg)
+            else:
+                new_mensajes.append(msg)
+        self.mensajes = new_mensajes
         if repaired:
             self.logger.info(f"[{self.id}] Reparado ({errores} errores)")
             await self.nucleus.publicar_alerta({
@@ -120,7 +126,8 @@ class BloqueSimbiotico:
                 "errores": errores,
                 "timestamp": time.time()
             })
-        self.mensajes.clear()
+        if not self.mensajes:  # Limpiar mensajes si no hay activos
+            self.mensajes.clear()
 
     async def escribir_postgresql(self, db_config: Dict[str, Any]):
         """Escribe resultados en PostgreSQL y publica alerta."""
@@ -149,6 +156,7 @@ class BloqueSimbiotico:
             })
         except Exception as e:
             self.logger.error(f"[{self.id}] Error PG: {e}")
+            self.mensajes.clear()  # Limpiar mensajes en caso de error
             await self.nucleus.publicar_alerta({
                 "tipo": "error_postgresql",
                 "bloque_id": self.id,
