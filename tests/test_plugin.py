@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from plugins.example_plugin.main import inicializar
 
 
@@ -33,7 +33,7 @@ async def test_plugin_manejar_comando(nucleus):
 async def test_plugin_comando_invalido(nucleus):
     """Prueba el manejo de un comando inválido por example_plugin."""
     with patch("corec.nucleus.logging.getLogger") as mock_logging:
-        mock_logging.return_value.error = AsyncMock()  # Configurar error como AsyncMock
+        mock_logging.return_value.error = MagicMock()  # Configurar error como MagicMock
         plugin = await inicializar(nucleus, {})
         assert plugin.nucleus == nucleus  # Usar la variable plugin
         comando = {}  # Falta 'action'
