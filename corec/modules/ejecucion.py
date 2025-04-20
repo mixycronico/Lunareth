@@ -2,7 +2,6 @@ import logging
 import time
 from corec.core import ComponenteBase
 from corec.celery import celery_app
-from corec.blocks import BloqueSimbiotico
 
 
 class ModuloEjecucion(ComponenteBase):
