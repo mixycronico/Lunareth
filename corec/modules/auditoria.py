@@ -43,7 +43,8 @@ class ModuloAuditoria(ComponenteBase):
                         await self.nucleus.publicar_alerta(alerta)
                         self.logger.info(f"[Auditoria] anomalía en {bid}")
             cur.close()
-            conn.close()
+            if not isinstance(conn, MagicMock):  # Cerrar solo conexiones reales
+                conn.close()
         except Exception as e:
             self.logger.error(f"[Auditoria] error: {e}")
 
