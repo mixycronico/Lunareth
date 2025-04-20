@@ -11,7 +11,7 @@ on:
 
 jobs:
   test:
-    name: Test & Lint
+    name: Lint & Test
     runs-on: ubuntu-latest
 
     services:
@@ -54,6 +54,12 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio flake8 asyncpg aioredis
 
+      - name: Lint with flake8
+        run: |
+          echo "Linting with flake8..."
+          flake8 plugins/crypto_trading corec --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 plugins/crypto_trading corec --count --exit-zero --max-complexity=15 --max-line-length=100 --statistics
+
       - name: Run Tests
         env:
           DB_NAME: trading_db
@@ -63,9 +69,3 @@ jobs:
           REDIS_HOST: localhost
         run: |
           pytest -q --disable-warnings
-
-      - name: Lint with flake8
-        run: |
-          echo "Linting..."
-          flake8 plugins/crypto_trading corec --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 plugins/crypto_trading corec --count --exit-zero --max-complexity=15 --max-line-length=100 --statistics
