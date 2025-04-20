@@ -1,167 +1,82 @@
 import logging
+import random
 import time
-import statistics
 import psycopg2
-import asyncio
-from typing import Dict, Any, List
-from pydantic import BaseModel, ValidationError
-from unittest.mock import MagicMock
-
-from sklearn.ensemble import IsolationForest
-from corec.entities import MicroCeluEntidadCoreC, crear_entidad, procesar_entidad
-from corec.serialization import deserializar_mensaje
-
-
-class MessageData(BaseModel):
-    """Valida datos procesados por entidades."""
-    id: int
-    canal: int
-    valor: float
-    activo: bool
+from typing import List, Callable, Dict, Any
+from corec.entities import crear_entidad
 
 
 class BloqueSimbiotico:
-    def __init__(
-        self,
-        id: str,
-        canal: int,
-        entidades: List[MicroCeluEntidadCoreC],
-        max_size_mb: int = 1,
-        nucleus=None
-    ):
+    def __init__(self, id: str, canal: int, entidades: List, nucleus, max_size_mb: float = 10.0):
         self.id = id
         self.canal = canal
         self.entidades = entidades
-        self.fitness = 0.0
+        self.fitness = 0.5
+        self.mensajes: List[Dict[str, Any]] = []
+        self.max_size_mb = max_size_mb
+        self.logger = logging.getLogger("BloqueSimbiotico")
         self.nucleus = nucleus
-        self.logger = logging.getLogger(f"BloqueSimbiotico-{id}")
-        self.detector = IsolationForest(contamination=0.05)
-        self.mensajes = []
-        self.umbral = 0.5
-        self.fallos = 0
 
-    async def ajustar_umbral(self, carga: float, valores: List[float], errores: int):
-        """Ajusta el umbral dinámicamente según carga, valores y errores."""
+    async def procesar(self, carga: float):
+        """Procesa las entidades del bloque y calcula el fitness."""
         try:
-            desv = statistics.stdev(valores) if len(valores) > 1 else 0.1
-            nuevo = 0.5 * carga + 0.3 * desv + 0.2 * (errores / max(1, len(self.entidades)))
-            self.umbral = max(0.1, min(nuevo, 0.9))
-            self.logger.info(f"[{self.id}] Umbral ajustado a {self.umbral:.2f}")
+            resultados = []
+            for entidad in self.entidades:
+                if entidad.estado == "activa":
+                    resultado = await entidad.procesar(carga)
+                    resultados.append(resultado.get("valor", 0))
+                    self.mensajes.append({
+                        "entidad_id": entidad.id,
+                        "canal": self.canal,
+                        "valor": resultado.get("valor", 0),
+                        "timestamp": time.time()
+                    })
+            if resultados:
+                self.fitness = sum(resultados) / len(resultados)
+            self.logger.debug(f"[Bloque {self.id}] Procesado, fitness: {self.fitness:.2f}")
             await self.nucleus.publicar_alerta({
-                "tipo": "umbral_ajustado",
+                "tipo": "bloque_procesado",
                 "bloque_id": self.id,
-                "umbral": self.umbral,
+                "fitness": self.fitness,
                 "timestamp": time.time()
             })
         except Exception as e:
-            self.logger.error(f"[{self.id}] Error ajustando umbral: {e}")
+            self.logger.error(f"[Bloque {self.id}] Error procesando: {e}")
+
+    async def escribir_postgresql(self, conn):
+        """Escribe los mensajes del bloque en PostgreSQL."""
+        try:
+            cur = conn.cursor()
+            for mensaje in self.mensajes:
+                cur.execute(
+                    "INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp) VALUES (%s, %s, %s, %s, %s)",
+                    (self.id, self.canal, len(self.entidades), self.fitness, mensaje["timestamp"])
+                )
+            conn.commit()
+            cur.close()
+            self.mensajes = []
+            self.logger.info(f"[Bloque {self.id}] Mensajes escritos en PostgreSQL")
             await self.nucleus.publicar_alerta({
-                "tipo": "error_umbral",
+                "tipo": "mensajes_escritos",
                 "bloque_id": self.id,
-                "mensaje": str(e),
+                "num_mensajes": len(self.mensajes),
                 "timestamp": time.time()
             })
+        except Exception as e:
+            self.logger.error(f"[Bloque {self.id}] Error escribiendo en PostgreSQL: {e}")
 
-    async def procesar(self, carga: float) -> Dict[str, Any]:
-        """Procesa entidades en paralelo, valida datos y publica alertas."""
-        n = max(1, int(len(self.entidades) * min(carga, 1.0)))
-        subs = self.entidades[:n]
-        tareas = [procesar_entidad(e, self.umbral) for e in subs]
-        res = await asyncio.gather(*tareas, return_exceptions=True)
-        msgs, err, vals = [], 0, []
-        for r in res:
-            if isinstance(r, Exception):
-                err += 1
-                self.logger.warning(f"[{self.id}] Error en entidad: {r}")
-                continue  # No añadir mensajes de entidades fallidas
-            try:
-                m = await deserializar_mensaje(r)
-                MessageData(**m)  # Validar datos
-                if not m["activo"]:
-                    err += 1
-                else:
-                    msgs.append(m)  # Solo añadir mensajes válidos y activos
-                    if m["valor"] > 0:
-                        vals.append(m["valor"])
-            except (ValidationError, ValueError) as e:
-                err += 1
-                self.logger.error(f"[{self.id}] Dato inválido: {e}")
-                continue  # No añadir mensajes inválidos
-        self.fitness = max(0.0, self.fitness - err / max(1, n))
-        self.mensajes.extend(msgs)
-        await self.ajustar_umbral(carga, vals, err)
-        if err > n * 0.05:
-            await self.reparar(err)
-        result = {"bloque_id": self.id, "mensajes": msgs, "fitness": self.fitness}
-        await self.nucleus.publicar_alerta({
-            "tipo": "bloque_procesado",
-            "bloque_id": self.id,
-            "fitness": self.fitness,
-            "errores": err,
-            "entidades": n,
-            "timestamp": time.time()
-        })
-        return result
-
-    async def reparar(self, errores: int):
-        """Repara entidades inactivas y publica alerta."""
-        repaired = False
-        new_mensajes = []
-        for i, msg in enumerate(self.mensajes):
-            if not msg["activo"]:
-                self.fallos += 1
-                if self.fallos >= 2:
-                    self.entidades[i] = crear_entidad(f"m{time.time_ns()}", self.canal, self.entidades[i][2])
-                    self.fallos = 0  # Reiniciar fallos después de reparar
-                    repaired = True
-                else:
-                    new_mensajes.append(msg)
-            else:
-                new_mensajes.append(msg)
-        self.mensajes = new_mensajes
-        if repaired:
-            self.logger.info(f"[{self.id}] Reparado ({errores} errores)")
+    async def reparar(self):
+        """Repara entidades inactivas o corruptas."""
+        try:
+            for entidad in self.entidades:
+                if entidad.estado != "activa":
+                    entidad.estado = "activa"
+                    entidad.funcion = lambda x: {"valor": random.uniform(0, 1)}
+            self.logger.info(f"[Bloque {self.id}] Entidades reparadas")
             await self.nucleus.publicar_alerta({
                 "tipo": "bloque_reparado",
                 "bloque_id": self.id,
-                "errores": errores,
-                "timestamp": time.time()
-            })
-        if not any(msg["activo"] for msg in self.mensajes):  # Limpiar mensajes si no hay activos
-            self.mensajes.clear()
-            self.fallos = 0  # Reiniciar fallos si se limpian todos los mensajes
-
-    async def escribir_postgresql(self, db_config: Dict[str, Any]):
-        """Escribe resultados en PostgreSQL y publica alerta."""
-        out = await self.procesar(0.5)
-        try:
-            # Usar db_config directamente, asumiendo que es una conexión mock en pruebas
-            conn = db_config if isinstance(db_config, MagicMock) else psycopg2.connect(**db_config)
-            cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp, instance_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT(id) DO UPDATE "
-                "SET num_entidades=EXCLUDED.num_entidades, fitness=EXCLUDED.fitness, "
-                "timestamp=EXCLUDED.timestamp",
-                (self.id, self.canal, len(self.entidades), self.fitness, time.time(),
-                 self.nucleus.instance_id)
-            )
-            conn.commit()
-            cur.close()
-            conn.close()
-            self.mensajes.clear()
-            await self.nucleus.publicar_alerta({
-                "tipo": "bloque_escrito",
-                "bloque_id": self.id,
-                "mensajes": len(out["mensajes"]),
                 "timestamp": time.time()
             })
         except Exception as e:
-            self.logger.error(f"[{self.id}] Error PG: {e}")
-            self.mensajes.clear()  # Limpiar mensajes en caso de error
-            await self.nucleus.publicar_alerta({
-                "tipo": "error_postgresql",
-                "bloque_id": self.id,
-                "mensaje": str(e),
-                "timestamp": time.time()
-            })
+            self.logger.error(f"[Bloque {self.id}] Error reparando: {e}")
