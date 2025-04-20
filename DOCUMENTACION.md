@@ -1,4 +1,5 @@
 #Documentación Técnica de CoreC
+
 Índice
 	1	Introducción
 	2	Arquitectura 2.1. Entidades 2.2. Bloques Simbióticos 2.3. Núcleo (CoreCNucleus) 2.4. Módulos 2.5. Comunicación 2.6. Almacenamiento
