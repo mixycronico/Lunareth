@@ -14,7 +14,7 @@ class BloqueSimbiotico:
         self.nucleus = nucleus
         self.mensajes: List[Dict[str, Any]] = []
         self.fitness: float = 0.0
-        self.fallos = 0  # Aseguramos que fallos esté inicializado
+        self.fallos = 0
 
     async def procesar(self, carga: float) -> Dict[str, Any]:
         """Procesa las entidades del bloque con una carga dada."""
@@ -24,7 +24,7 @@ class BloqueSimbiotico:
         try:
             for entidad in self.entidades:
                 try:
-                    mensaje = await entidad.procesar(carga)  # Aseguramos que procesar sea asíncrono
+                    mensaje = await entidad.procesar(carga)
                     if isinstance(mensaje.get("valor"), (int, float)):
                         self.mensajes.append({
                             "entidad_id": entidad.id,
@@ -59,7 +59,7 @@ class BloqueSimbiotico:
         """Repara el bloque simbiótico reactivando entidades inactivas."""
         try:
             for entidad in self.entidades:
-                if entidad.estado == "inactiva":
+                if hasattr(entidad, "estado") and entidad.estado == "inactiva":
                     entidad.estado = "activa"
                     self.logger.info(f"[Bloque {self.id}] Entidad {entidad.id} reactivada")
             self.fallos = 0
@@ -73,6 +73,7 @@ class BloqueSimbiotico:
 
     async def escribir_postgresql(self, conn):
         """Escribe los mensajes del bloque en PostgreSQL."""
+        cur = None
         try:
             cur = conn.cursor()
             for mensaje in self.mensajes:
@@ -82,6 +83,7 @@ class BloqueSimbiotico:
                 )
             conn.commit()
             self.mensajes = []
+            self.logger.info(f"[Bloque {self.id}] Mensajes escritos en PostgreSQL")
             await self.nucleus.publicar_alerta({
                 "tipo": "mensajes_escritos",
                 "bloque_id": self.id,
@@ -97,4 +99,5 @@ class BloqueSimbiotico:
                 "timestamp": time.time()
             })
         finally:
-            cur.close()
+            if cur is not None:
+                cur.close()
