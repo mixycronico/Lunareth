@@ -5,6 +5,7 @@ from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 from pydantic import ValidationError
 from corec.core import PluginBlockConfig
+from corec.entities import crear_entidad
 
 
 class ModuloRegistro(ComponenteBase):
@@ -20,7 +21,8 @@ class ModuloRegistro(ComponenteBase):
             for bloque_conf in nucleus.config.get("bloques", []):
                 try:
                     config = PluginBlockConfig(**bloque_conf)
-                    bloque = BloqueSimbiotico(config.id, config.canal, [], nucleus)
+                    entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
+                    bloque = BloqueSimbiotico(config.id, config.canal, entidades, nucleus)
                     self.bloques[config.id] = bloque
                     self.logger.info(f"[Registro] Bloque '{config.id}' registrado")
                     await nucleus.publicar_alerta({
@@ -44,7 +46,8 @@ class ModuloRegistro(ComponenteBase):
     async def registrar_bloque(self, bloque_id: str, canal: int, entidades: int):
         """Registra un nuevo bloque simbiótico."""
         try:
-            bloque = BloqueSimbiotico(bloque_id, canal, [], self.nucleus)
+            entidades_list = [crear_entidad(f"ent_{i}", canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(entidades)]
+            bloque = BloqueSimbiotico(bloque_id, canal, entidades_list, self.nucleus)
             self.bloques[bloque_id] = bloque
             self.logger.info(f"[Registro] Bloque '{bloque_id}' registrado")
             await self.nucleus.publicar_alerta({
