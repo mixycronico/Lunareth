@@ -1,9 +1,7 @@
 import logging
 import random
 import time
-import psycopg2
-from typing import List, Callable, Dict, Any
-from corec.entities import crear_entidad
+from typing import List, Dict, Any
 
 
 class BloqueSimbiotico:
