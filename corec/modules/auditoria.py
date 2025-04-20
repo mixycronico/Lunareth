@@ -35,10 +35,14 @@ class ModuloAuditoria(ComponenteBase):
                             "bloque_id": ids[idx][0],
                             "timestamp": time.time()
                         })
+                else:
+                    self.logger.info("[Auditoria] No se detectaron anomalías")
+            else:
+                self.logger.info("[Auditoria] No hay datos para analizar")
             cur.close()
             conn.close()
         except Exception as e:
-            self.logger.error(f"[Auditoria] error: {e}")
+            self.logger.error(f"[Auditoria] Error: {e}")
 
     async def detener(self):
         """Detiene el módulo de auditoría."""
