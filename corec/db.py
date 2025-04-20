@@ -1,9 +1,10 @@
-# corec/db.py
 import psycopg2
 import time
 import logging
 
+
 logger = logging.getLogger("corec.db")
+
 
 def init_postgresql(db_config: dict):
     """
@@ -28,10 +29,13 @@ def init_postgresql(db_config: dict):
         CREATE TABLE IF NOT EXISTS bloques_2025_04 PARTITION OF bloques
         FOR VALUES FROM (%s) TO (%s)
     """, (
-        time.mktime((2025,4,1,0,0,0,0,0,0)),
-        time.mktime((2025,5,1,0,0,0,0,0,0))
+        time.mktime((2025, 4, 1, 0, 0, 0, 0, 0, 0)),
+        time.mktime((2025, 5, 1, 0, 0, 0, 0, 0, 0))
     ))
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_bloques_canal_timestamp ON bloques (canal, timestamp DESC)")
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_bloques_canal_timestamp "
+        "ON bloques (canal, timestamp DESC)"
+    )
     conn.commit()
     cur.close()
     conn.close()
