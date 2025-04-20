@@ -47,10 +47,14 @@ class ModuloSincronizacion(ModuloBase):
         reg = self.nucleus.modules["registro"].bloques
         source, target = reg.get(source_block), reg.get(target_block)
         if not source or not target:
-            self.logger.error(f"[Sincronizacion] Bloques no encontrados: {source_block}, {target_block}")
+            self.logger.error(
+                f"[Sincronizacion] Bloques no encontrados: {source_block}, {target_block}"
+            )
             return
         if source.canal != canal or target.canal != canal:
-            self.logger.error(f"[Sincronizacion] Canales incompatibles: {source.canal} vs {target.canal}")
+            self.logger.error(
+                f"[Sincronizacion] Canales incompatibles: {source.canal} vs {target.canal}"
+            )
             return
         try:
             cfg = RedirectionConfig(
@@ -60,7 +64,9 @@ class ModuloSincronizacion(ModuloBase):
                 canal=canal
             )
             if len(source.entidades) < cfg.entidades:
-                self.logger.warning(f"[Sincronizacion] No hay suficientes entidades en {source_block}")
+                self.logger.warning(
+                    f"[Sincronizacion] No hay suficientes entidades en {source_block}"
+                )
                 return
             transferidas = source.entidades[:cfg.entidades]
             source.entidades = source.entidades[cfg.entidades:]
