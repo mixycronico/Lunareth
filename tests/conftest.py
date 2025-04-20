@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from corec.nucleus import CoreCNucleus
 
 
@@ -37,3 +37,10 @@ def nucleus():
 @pytest.fixture
 def mock_redis():
     return AsyncMock()
+
+
+@pytest.fixture
+def mock_postgresql():
+    mock = MagicMock()
+    mock.cursor.return_value = MagicMock()
+    return mock
