@@ -1,156 +1,114 @@
-import logging
-import time
-import statistics
-import psycopg2
+import pytest
 import asyncio
-from typing import Dict, Any, List
-from pydantic import BaseModel, ValidationError
-
-from sklearn.ensemble import IsolationForest
-from corec.entities import MicroCeluEntidadCoreC, crear_entidad, procesar_entidad
-from corec.serialization import deserializar_mensaje
+from unittest.mock import AsyncMock, patch
+from corec.blocks import BloqueSimbiotico
+from corec.entities import crear_entidad
 
 
-class MessageData(BaseModel):
-    """Valida datos procesados por entidades."""
-    id: int
-    canal: int
-    valor: float
-    activo: bool
+@pytest.fixture
+def mock_nucleus(mock_redis):
+    """Crea un núcleo simulado para pruebas de bloques."""
+    nucleus = AsyncMock()
+    nucleus.publicar_alerta = AsyncMock()
+    nucleus.instance_id = "test_corec"
+    nucleus.db_config = {"dbname": "test_db"}
+    return nucleus
 
 
-class BloqueSimbiotico:
-    def __init__(
-        self,
-        id: str,
-        canal: int,
-        entidades: List[MicroCeluEntidadCoreC],
-        max_size_mb: int = 1,
-        nucleus=None
-    ):
-        self.id = id
-        self.canal = canal
-        self.entidades = entidades
-        self.fitness = 0.0
-        self.nucleus = nucleus
-        self.logger = logging.getLogger(f"BloqueSimbiotico-{id}")
-        self.detector = IsolationForest(contamination=0.05)
-        self.mensajes = []
-        self.umbral = 0.5
-        self.fallos = 0
+@pytest.mark.asyncio
+async def test_bloque_inicializar(mock_nucleus):
+    """Prueba la inicialización de un bloque simbiótico."""
+    async def test_func(): return {"valor": 0.7}
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, max_size_mb=1, nucleus=mock_nucleus)
+    assert bloque.id == "test_block"
+    assert bloque.canal == 1
+    assert len(bloque.entidades) == 100
+    assert bloque.fitness == 0.0
+    assert bloque.umbral == 0.5
+    assert bloque.nucleus == mock_nucleus
 
-    async def ajustar_umbral(self, carga: float, valores: List[float], errores: int):
-        """Ajusta el umbral dinámicamente según carga, valores y errores."""
-        try:
-            desv = statistics.stdev(valores) if len(valores) > 1 else 0.1
-            nuevo = 0.5 * carga + 0.3 * desv + 0.2 * (errores / max(1, len(self.entidades)))
-            self.umbral = max(0.1, min(nuevo, 0.9))
-            self.logger.info(f"[{self.id}] Umbral ajustado a {self.umbral:.2f}")
-            await self.nucleus.publicar_alerta({
-                "tipo": "umbral_ajustado",
-                "bloque_id": self.id,
-                "umbral": self.umbral,
-                "timestamp": time.time()
-            })
-        except Exception as e:
-            self.logger.error(f"[{self.id}] Error ajustando umbral: {e}")
-            await self.nucleus.publicar_alerta({
-                "tipo": "error_umbral",
-                "bloque_id": self.id,
-                "mensaje": str(e),
-                "timestamp": time.time()
-            })
 
-    async def procesar(self, carga: float) -> Dict[str, Any]:
-        """Procesa entidades en paralelo, valida datos y publica alertas."""
-        n = max(1, int(len(self.entidades) * min(carga, 1.0)))
-        subs = self.entidades[:n]
-        tareas = [procesar_entidad(e, self.umbral) for e in subs]
-        res = await asyncio.gather(*tareas, return_exceptions=True)
-        msgs, err, vals = [], 0, []
-        for r in res:
-            if isinstance(r, Exception):
-                err += 1
-                self.logger.warning(f"[{self.id}] Error en entidad: {r}")
-                continue
-            try:
-                m = await deserializar_mensaje(r)
-                MessageData(**m)  # Validar datos
-                msgs.append(m)
-                if not m["activo"]:
-                    err += 1
-                if m["valor"] > 0:
-                    vals.append(m["valor"])
-            except (ValidationError, ValueError) as e:
-                err += 1
-                self.logger.error(f"[{self.id}] Dato inválido: {e}")
-                continue  # No añadir mensajes inválidos
-        self.fitness = max(0.0, self.fitness - err / max(1, n))
-        self.mensajes.extend(msgs)
-        await self.ajustar_umbral(carga, vals, err)
-        if err > n * 0.05:
-            await self.reparar(err)
-        result = {"bloque_id": self.id, "mensajes": msgs, "fitness": self.fitness}
-        await self.nucleus.publicar_alerta({
-            "tipo": "bloque_procesado",
-            "bloque_id": self.id,
-            "fitness": self.fitness,
-            "errores": err,
-            "entidades": n,
-            "timestamp": time.time()
-        })
-        return result
+@pytest.mark.asyncio
+async def test_bloque_procesar(mock_nucleus):
+    """Prueba el procesamiento de un bloque simbiótico con carga parcial."""
+    async def test_func(): return {"valor": 0.7}
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, max_size_mb=1, nucleus=mock_nucleus)
+    resultado = await bloque.procesar(carga=0.5)
+    assert resultado["bloque_id"] == "test_block"
+    assert len(resultado["mensajes"]) == 50  # carga=0.5 procesa la mitad
+    assert resultado["fitness"] >= 0.0
+    assert mock_nucleus.publicar_alerta.called
+    assert len(bloque.mensajes) == 50
 
-    async def reparar(self, errores: int):
-        """Repara entidades inactivas y publica alerta."""
-        repaired = False
-        for i, msg in enumerate(self.mensajes):
-            if not msg["activo"]:
-                self.fallos += 1
-                if self.fallos >= 2:
-                    self.entidades[i] = crear_entidad(f"m{time.time_ns()}", self.canal, self.entidades[i][2])
-                    self.fallos = 0
-                    repaired = True
-        if repaired:
-            self.logger.info(f"[{self.id}] Reparado ({errores} errores)")
-            await self.nucleus.publicar_alerta({
-                "tipo": "bloque_reparado",
-                "bloque_id": self.id,
-                "errores": errores,
-                "timestamp": time.time()
-            })
-        self.mensajes.clear()
 
-    async def escribir_postgresql(self, db_config: Dict[str, Any]):
-        """Escribe resultados en PostgreSQL y publica alerta."""
-        out = await self.procesar(0.5)
-        try:
-            # Usar db_config directamente, asumiendo que es una conexión mock en pruebas
-            conn = db_config if isinstance(db_config, MagicMock) else psycopg2.connect(**db_config)
-            cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp, instance_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT(id) DO UPDATE "
-                "SET num_entidades=EXCLUDED.num_entidades, fitness=EXCLUDED.fitness, "
-                "timestamp=EXCLUDED.timestamp",
-                (self.id, self.canal, len(self.entidades), self.fitness, time.time(),
-                 self.nucleus.instance_id)
-            )
-            conn.commit()
-            cur.close()
-            conn.close()
-            self.mensajes.clear()
-            await self.nucleus.publicar_alerta({
-                "tipo": "bloque_escrito",
-                "bloque_id": self.id,
-                "mensajes": len(out["mensajes"]),
-                "timestamp": time.time()
-            })
-        except Exception as e:
-            self.logger.error(f"[{self.id}] Error PG: {e}")
-            await self.nucleus.publicar_alerta({
-                "tipo": "error_postgresql",
-                "bloque_id": self.id,
-                "mensaje": str(e),
-                "timestamp": time.time()
-            })
+@pytest.mark.asyncio
+async def test_bloque_procesar_con_errores(mock_nucleus):
+    """Prueba el procesamiento de un bloque con entidades que fallan."""
+    async def test_func_ok(): return {"valor": 0.7}
+    async def test_func_error(): raise ValueError("Test error")
+    entidades = [crear_entidad(f"m{i}", 1, test_func_ok if i % 2 == 0 else test_func_error) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, max_size_mb=1, nucleus=mock_nucleus)
+    resultado = await bloque.procesar(carga=0.5)
+    assert resultado["bloque_id"] == "test_block"
+    assert len(resultado["mensajes"]) <= 25  # Aproximadamente la mitad de 50 (por errores)
+    assert resultado["fitness"] <= 0.0
+    assert mock_nucleus.publicar_alerta.called
+
+
+@pytest.mark.asyncio
+async def test_bloque_procesar_datos_invalidos(mock_nucleus):
+    """Prueba el procesamiento de un bloque con datos inválidos."""
+    async def test_func(): return {"valor": "invalid"}  # Tipo inválido
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, max_size_mb=1, nucleus=mock_nucleus)
+    resultado = await bloque.procesar(carga=0.5)
+    assert resultado["bloque_id"] == "test_block"
+    assert len(resultado["mensajes"]) == 0  # Todos los mensajes son inválidos
+    assert resultado["fitness"] <= 0.0
+    assert mock_nucleus.publicar_alerta.called
+
+
+@pytest.mark.asyncio
+async def test_bloque_reparar(mock_nucleus):
+    """Prueba la autoreparación de un bloque simbiótico."""
+    async def test_func(): return {"valor": 0.7}
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, max_size_mb=1, nucleus=mock_nucleus)
+    bloque.mensajes = [{"id": i, "canal": 1, "valor": 0.0, "activo": False} for i in range(10)]
+    bloque.fallos = 1
+    await bloque.reparar(errores=10)
+    assert bloque.fallos == 0
+    assert len(bloque.mensajes) == 0
+    assert mock_nucleus.publicar_alerta.called
+    assert len(bloque.entidades) == 100  # Las entidades se reemplazan, no se eliminan
+
+
+@pytest.mark.asyncio
+async def test_bloque_escribir_postgresql(mock_nucleus, mock_postgresql):
+    """Prueba la escritura de un bloque en PostgreSQL."""
+    async def test_func(): return {"valor": 0.7}
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, max_size_mb=1, nucleus=mock_nucleus)
+    with patch("psycopg2.connect", return_value=mock_postgresql):
+        await bloque.escribir_postgresql(mock_postgresql)  # Pasar mock directamente
+        assert mock_postgresql.cursor.called
+        assert mock_postgresql.commit.called
+        assert mock_nucleus.publicar_alerta.called
+        assert len(bloque.mensajes) == 0
+
+
+@pytest.mark.asyncio
+async def test_bloque_escribir_postgresql_error(mock_nucleus, mock_postgresql):
+    """Prueba la escritura de un bloque con error en PostgreSQL."""
+    async def test_func(): return {"valor": 0.7}
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, max_size_mb=1, nucleus=mock_nucleus)
+    with patch("psycopg2.connect", return_value=mock_postgresql):
+        mock_postgresql.cursor.side_effect = Exception("Database error")
+        await bloque.escribir_postgresql(mock_postgresql)  # Pasar mock directamente
+        assert mock_postgresql.cursor.called
+        assert not mock_postgresql.commit.called
+        assert mock_nucleus.publicar_alerta.called
+        assert len(bloque.mensajes) == 0
