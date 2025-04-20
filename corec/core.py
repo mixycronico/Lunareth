@@ -1,6 +1,6 @@
-# corec/core.py
 import json
 from typing import Any, Dict
+
 
 class ComponenteBase:
     """
