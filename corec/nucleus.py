@@ -100,9 +100,13 @@ class CoreCNucleus:
                     nucleus=self
                 )
                 self.bloques_plugins[nombre] = bloque
-                self.logger.info(f"[Nucleus] Bloque '{cfg.bloque_id}' asignado al plugin '{nombre}'")
+                self.logger.info(
+                    f"[Nucleus] Bloque '{cfg.bloque_id}' asignado al plugin '{nombre}'"
+                )
             except ValidationError as e:
-                self.logger.error(f"[Nucleus] Configuración de bloque inválida para '{nombre}': {e}")
+                self.logger.error(
+                    f"[Nucleus] Configuración de bloque inválida para '{nombre}': {e}"
+                )
             except Exception as e:
                 self.logger.error(f"[Nucleus] Error asignando bloque para '{nombre}': {e}")
         self.logger.info(f"[Nucleus] plugin '{nombre}' registrado")
@@ -135,7 +139,8 @@ class CoreCNucleus:
                     carga = random.random()  # TODO: Calcular carga real
                     await bloque.procesar(carga)
                     self.logger.debug(
-                        f"[Nucleus] Bloque '{bloque.id}' procesado, fitness: {bloque.fitness:.2f}"
+                        f"[Nucleus] Bloque '{bloque.id}' procesado, "
+                        f"fitness: {bloque.fitness:.2f}"
                     )
             except Exception as e:
                 self.logger.error(f"[Nucleus] Error coordinando bloques: {e}")
