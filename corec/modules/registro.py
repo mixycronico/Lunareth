@@ -1,12 +1,14 @@
 import logging
 import asyncio
 import random
+import time
+import json
 from typing import Dict, Any
 from pydantic import ValidationError
 from corec.core import ModuloBase
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
-from nucleus import PluginBlockConfig  # Importar desde nucleus
+from corec.nucleus import PluginBlockConfig  # Importar desde nucleus
 
 class ModuloRegistro(ModuloBase):
     def __init__(self):
