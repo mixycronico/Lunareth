@@ -1,7 +1,7 @@
 import logging
 import yaml
-from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field, ValidationError
+from typing import Dict, Any
+from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
 
 
@@ -33,7 +33,7 @@ class PluginBlockConfig(BaseModel):
     id: str = Field(..., pattern=r"^[a-zA-Z0-9_-]+$")
     canal: int = Field(..., ge=1)
     entidades: int = Field(..., ge=100)
-    bloque_id: Optional[str] = None
+    bloque_id: str = None
 
     class Config:
         extra = "forbid"
