@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from corec.modules.registro import ModuloRegistro
 from corec.modules.sincronizacion import ModuloSincronizacion
 from corec.modules.ejecucion import ModuloEjecucion
@@ -20,10 +20,11 @@ async def test_modulo_registro_inicializar(nucleus):
          patch("aioredis.from_url", new=AsyncMock()) as mock_redis_url, \
          patch("corec.core.PluginBlockConfig") as mock_plugin_config:
         # Configurar mock de PluginBlockConfig para devolver un objeto válido
-        mock_config_instance = mock_plugin_config.return_value
+        mock_config_instance = MagicMock()
         mock_config_instance.id = "test_block"
         mock_config_instance.canal = 1
         mock_config_instance.entidades = 1000
+        mock_plugin_config.return_value = mock_config_instance
         nucleus.config["bloques"] = [{"id": "test_block", "canal": 1, "entidades": 1000}]
         try:
             await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
