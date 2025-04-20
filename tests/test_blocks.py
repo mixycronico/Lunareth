@@ -6,16 +6,6 @@ from corec.nucleus import CoreCNucleus
 
 
 @pytest.fixture
-def mock_config():
-    return {
-        "db_config": {"host": "localhost"},
-        "redis_config": {"host": "localhost", "port": 6379},
-        "bloques": [],
-        "plugins": {}
-    }
-
-
-@pytest.fixture
 async def nucleus(mock_config):
     nucleus = CoreCNucleus("config.yml")
     with patch("corec.nucleus.cargar_config", return_value=mock_config):
@@ -116,6 +106,7 @@ async def test_bloque_reparar_error(nucleus, monkeypatch):
         monkeypatch.setattr(entidades[0], "estado", property(lambda self: "inactiva", raise_error))
         await bloque.reparar()
         assert mock_logger.called
+        assert entidades[0].estado == "inactiva"  # Verificamos que el estado no cambió debido al error
 
 
 @pytest.mark.asyncio
@@ -128,10 +119,14 @@ async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_postgresql, monk
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
+    mock_cursor = MagicMock()
+    mock_postgresql.cursor.return_value = mock_cursor
     with patch.object(bloque.logger, "info") as mock_logger:
         await bloque.escribir_postgresql(mock_postgresql)
         assert len(bloque.mensajes) == 0
         assert mock_logger.called
+        assert mock_cursor.execute.called
+        assert mock_postgresql.commit.called
 
 
 @pytest.mark.asyncio
