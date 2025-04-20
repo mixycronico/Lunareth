@@ -2,7 +2,8 @@ import logging
 import asyncio
 import time
 from typing import Dict, Any
-from corec.core import ComponenteBase, celery_app
+from corec.core import ComponenteBase
+from corec.celery import celery_app  # Importar desde corec.celery
 from corec.blocks import BloqueSimbiotico
 
 
