@@ -2,11 +2,11 @@ import logging
 import time
 import psycopg2
 import asyncio
-from corec.core import ModuloBase
+from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 
 
-class ModuloAuditoria(ModuloBase):
+class ModuloAuditoria(ComponenteBase):
     def __init__(self):
         self.logger = logging.getLogger("ModuloAuditoria")
         self.nucleus = None
