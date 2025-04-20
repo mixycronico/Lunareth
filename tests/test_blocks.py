@@ -6,8 +6,20 @@ from corec.nucleus import CoreCNucleus
 
 
 @pytest.fixture
-async def nucleus():
-    return CoreCNucleus("config.yml")
+def mock_config():
+    return {
+        "db_config": {"host": "localhost"},
+        "redis_config": {"host": "localhost", "port": 6379},
+        "bloques": [],
+        "plugins": {}
+    }
+
+
+@pytest.fixture
+async def nucleus(mock_config):
+    nucleus = CoreCNucleus("config.yml")
+    with patch("corec.nucleus.cargar_config", return_value=mock_config):
+        return nucleus
 
 
 @pytest.mark.asyncio
@@ -99,7 +111,7 @@ async def test_bloque_reparar_error(nucleus, monkeypatch):
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
     with patch.object(bloque.logger, "error") as mock_logger:
         # Simulamos un error al intentar modificar el estado
-        def raise_error():
+        def raise_error(value):
             raise Exception("Error")
         monkeypatch.setattr(entidades[0], "estado", property(lambda self: "inactiva", raise_error))
         await bloque.reparar()
