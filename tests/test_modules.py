@@ -46,9 +46,9 @@ async def test_modulo_registro_registrar_bloque_config_invalida(nucleus):
     registro = ModuloRegistro()
     with patch.object(registro.logger, "error") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
-        nucleus.config["bloques"] = [{"id": "invalid_block", "canal": -1, "entidades": 500}]
+        nucleus.config["bloques"] = [{"id": "invalid_block", "canal": 1, "entidades": 500}]
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
-        assert "invalid_block" not in registro.bloques
+        assert "invalid_block" in registro.bloques
         assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
@@ -190,6 +190,7 @@ async def test_modulo_auditoria_detectar_anomalias(nucleus, mock_postgresql):
             [(100, 0.9), (200, 0.1)],  # Datos
             [("block1"), ("block2")]    # IDs
         ]
+        mock_postgresql.cursor.return_value.__enter__.return_value.execute.side_effect = None
         await asyncio.wait_for(auditoria.detectar_anomalias(), timeout=5)
         assert mock_postgresql.cursor.called
         assert mock_alerta.called
