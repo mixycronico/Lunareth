@@ -59,17 +59,15 @@ def test_config():
 
 
 @pytest.fixture
-async def nucleus(mock_redis, test_config, request):
+async def nucleus(mock_redis, test_config):
     """Crea una instancia de CoreCNucleus para pruebas."""
     nucleus = CoreCNucleus("test_config.json")
     nucleus.config = test_config
     nucleus.redis_client = mock_redis
-
-    async def teardown():
+    try:
+        yield nucleus
+    finally:
         await nucleus.detener()
-    
-    request.addfinalizer(lambda: asyncio.run(teardown()))
-    return nucleus
 
 
 @pytest.fixture
