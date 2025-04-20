@@ -58,6 +58,19 @@ async def test_bloque_procesar_con_errores(mock_nucleus):
 
 
 @pytest.mark.asyncio
+async def test_bloque_procesar_datos_invalidos(mock_nucleus):
+    """Prueba el procesamiento de un bloque con datos inválidos."""
+    async def test_func(): return {"valor": "invalid"}  # Tipo inválido
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, max_size_mb=1, nucleus=mock_nucleus)
+    resultado = await bloque.procesar(carga=0.5)
+    assert resultado["bloque_id"] == "test_block"
+    assert len(resultado["mensajes"]) == 0  # Todos los mensajes son inválidos
+    assert resultado["fitness"] <= 0.0
+    assert mock_nucleus.publicar_alerta.called
+
+
+@pytest.mark.asyncio
 async def test_bloque_reparar(mock_nucleus):
     """Prueba la autoreparación de un bloque simbiótico."""
     async def test_func(): return {"valor": 0.7}
@@ -82,5 +95,20 @@ async def test_bloque_escribir_postgresql(mock_nucleus, mock_postgresql):
         await bloque.escribir_postgresql(mock_nucleus.db_config)
         assert conn.cursor.called
         assert conn.commit.called
+        assert mock_nucleus.publicar_alerta.called
+        assert len(bloque.mensajes) == 0
+
+
+@pytest.mark.asyncio
+async def test_bloque_escribir_postgresql_error(mock_nucleus, mock_postgresql):
+    """Prueba la escritura de un bloque con error en PostgreSQL."""
+    async def test_func(): return {"valor": 0.7}
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, max_size_mb=1, nucleus=mock_nucleus)
+    with mock_postgresql as conn:
+        conn.cursor.side_effect = Exception("Database error")
+        await bloque.escribir_postgresql(mock_nucleus.db_config)
+        assert conn.cursor.called
+        assert not conn.commit.called
         assert mock_nucleus.publicar_alerta.called
         assert len(bloque.mensajes) == 0
