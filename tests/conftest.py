@@ -10,7 +10,7 @@ def mock_redis():
     redis = AsyncMock()
     redis.xadd = AsyncMock()
     redis.close = AsyncMock()
-    yield redis
+    return redis
 
 
 @pytest.fixture
@@ -59,13 +59,17 @@ def test_config():
 
 
 @pytest.fixture
-async def nucleus(mock_redis, test_config):
+async def nucleus(mock_redis, test_config, request):
     """Crea una instancia de CoreCNucleus para pruebas."""
     nucleus = CoreCNucleus("test_config.json")
     nucleus.config = test_config
     nucleus.redis_client = mock_redis
-    yield nucleus
-    await nucleus.detener()
+
+    async def teardown():
+        await nucleus.detener()
+    
+    request.addfinalizer(lambda: asyncio.run(teardown()))
+    return nucleus
 
 
 @pytest.fixture
