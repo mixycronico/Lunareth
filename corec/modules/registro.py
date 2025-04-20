@@ -22,10 +22,10 @@ class ModuloRegistro(ComponenteBase):
                 try:
                     config = PluginBlockConfig(**bloque_conf)
                     entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
-                    bloque = BloqueSimbiotico(config.id, config.canal, entidades, nucleus)
+                    bloque = BloqueSimbiotico(config.id, config.canal, entidades, self.nucleus)
                     self.bloques[config.id] = bloque
                     self.logger.info(f"[Registro] Bloque '{config.id}' registrado")
-                    await nucleus.publicar_alerta({
+                    await self.nucleus.publicar_alerta({
                         "tipo": "bloque_registrado",
                         "bloque_id": config.id,
                         "entidades": config.entidades,
@@ -34,7 +34,7 @@ class ModuloRegistro(ComponenteBase):
                     })
                 except ValidationError as e:
                     self.logger.error(f"[Registro] Configuración inválida para bloque: {e}")
-                    await nucleus.publicar_alerta({
+                    await self.nucleus.publicar_alerta({
                         "tipo": "error_registro",
                         "bloque_id": bloque_conf.get("id", "desconocido"),
                         "mensaje": str(e),
@@ -42,6 +42,11 @@ class ModuloRegistro(ComponenteBase):
                     })
         except Exception as e:
             self.logger.error(f"[Registro] Error inicializando: {e}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "error_inicializacion",
+                "mensaje": str(e),
+                "timestamp": random.random()
+            })
 
     async def registrar_bloque(self, bloque_id: str, canal: int, entidades: int):
         """Registra un nuevo bloque simbiótico."""
