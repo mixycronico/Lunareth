@@ -1,5 +1,5 @@
 import logging
-from typing import Dict
+import random
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 
