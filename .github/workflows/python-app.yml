@@ -31,4 +31,4 @@ jobs:
       run: flake8 corec/ tests/ --max-line-length=300
 
     - name: Run tests
-      run: pytest -q --disable--warnings
+      run: pytest -q --disable-warnings
