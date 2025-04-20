@@ -41,7 +41,6 @@ class BloqueSimbiotico:
         self.umbral = 0.5
         self.fallos = 0
 
-
     async def ajustar_umbral(self, carga: float, valores: List[float], errores: int):
         """Ajusta el umbral dinámicamente según carga, valores y errores."""
         try:
@@ -126,8 +125,6 @@ class BloqueSimbiotico:
         try:
             conn = psycopg2.connect(**db_config)
             cur = conn.cursor()
-            # Comprimir mensajes para insertarlos
-            compressed_data = zstd.compress(json.dumps(out["mensajes"]).encode(), level=3)
             cur.execute(
                 "INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp, instance_id) "
                 "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT(id) DO UPDATE "
