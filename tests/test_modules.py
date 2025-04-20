@@ -13,7 +13,7 @@ from corec.entities import crear_entidad
 async def test_modulo_registro_inicializar(nucleus):
     """Prueba la inicialización de ModuloRegistro."""
     registro = ModuloRegistro()
-    with patch("corec.blocks.BloqueSimbiotico") as mock_bloque, \
+    with patch("corec.modules.registro.BloqueSimbiotico") as mock_bloque, \
          patch.object(registro.logger, "info") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
          patch("corec.db.init_postgresql") as mock_init_db, \
