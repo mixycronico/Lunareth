@@ -77,11 +77,12 @@ class BloqueSimbiotico:
             try:
                 m = await deserializar_mensaje(r)
                 MessageData(**m)  # Validar datos
-                msgs.append(m)
                 if not m["activo"]:
                     err += 1
-                if m["valor"] > 0:
-                    vals.append(m["valor"])
+                else:
+                    msgs.append(m)  # Solo añadir mensajes válidos y activos
+                    if m["valor"] > 0:
+                        vals.append(m["valor"])
             except (ValidationError, ValueError) as e:
                 err += 1
                 self.logger.error(f"[{self.id}] Dato inválido: {e}")
@@ -126,8 +127,9 @@ class BloqueSimbiotico:
                 "errores": errores,
                 "timestamp": time.time()
             })
-        if not self.mensajes:  # Limpiar mensajes si no hay activos
+        if not any(msg["activo"] for msg in self.mensajes):  # Limpiar mensajes si no hay activos
             self.mensajes.clear()
+            self.fallos = 0  # Reiniciar fallos si se limpian todos los mensajes
 
     async def escribir_postgresql(self, db_config: Dict[str, Any]):
         """Escribe resultados en PostgreSQL y publica alerta."""
