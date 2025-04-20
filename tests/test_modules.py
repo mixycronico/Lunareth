@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from corec.modules.registro import ModuloRegistro
 from corec.modules.sincronizacion import ModuloSincronizacion
 from corec.modules.ejecucion import ModuloEjecucion
@@ -16,6 +16,7 @@ async def test_modulo_registro_inicializar(nucleus):
     with patch("corec.blocks.BloqueSimbiotico") as mock_bloque, \
          patch.object(registro.logger, "info") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
+        nucleus.config["bloques"] = [{"id": "test_block", "canal": 1, "entidades": 1000}]
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         assert mock_bloque.called
         assert "test_block" in registro.bloques
@@ -46,9 +47,9 @@ async def test_modulo_registro_registrar_bloque_config_invalida(nucleus):
     registro = ModuloRegistro()
     with patch.object(registro.logger, "error") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
-        nucleus.config["bloques"] = [{"id": "invalid_block", "canal": 1, "entidades": 500}]
+        nucleus.config["bloques"] = [{"id": "invalid_block", "canal": -1, "entidades": 500}]
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
-        assert "invalid_block" in registro.bloques
+        assert "invalid_block" not in registro.bloques
         assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
