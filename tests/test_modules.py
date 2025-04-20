@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from corec.modules.registro import ModuloRegistro
 from corec.modules.sincronizacion import ModuloSincronizacion
 from corec.modules.ejecucion import ModuloEjecucion
