@@ -23,9 +23,11 @@ class ModuloRegistro(ComponenteBase):
     async def registrar_bloque(self, bloque_id: str, canal: int, num_entidades: int, max_size_mb: float = 10.0):
         """Registra un bloque simbiótico."""
         try:
+            if not bloque_id or canal < 0 or num_entidades <= 0:
+                raise ValueError("Configuración inválida para el bloque")
             async def test_func(): return {"valor": 0.7}
             entidades = [crear_entidad(f"m{i}", canal, test_func) for i in range(num_entidades)]
-            bloque = BloqueSimbiotico(bloque_id, canal, entidades, max_size_mb, self.nucleus)
+            BloqueSimbiotico(bloque_id, canal, entidades, max_size_mb, self.nucleus)
             self.bloques[bloque_id] = {
                 "canal": canal,
                 "num_entidades": num_entidades,
@@ -41,6 +43,7 @@ class ModuloRegistro(ComponenteBase):
             self.logger.info(f"[Registro] Bloque '{bloque_id}' registrado")
         except Exception as e:
             self.logger.error(f"[Registro] Error registrando bloque '{bloque_id}': {e}")
+            raise
 
     async def detener(self):
         """Detiene el módulo de registro."""
