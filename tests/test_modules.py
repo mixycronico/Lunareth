@@ -18,17 +18,19 @@ async def test_modulo_registro_inicializar(nucleus):
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
          patch("corec.db.init_postgresql") as mock_init_db, \
          patch("aioredis.from_url", new=AsyncMock()) as mock_redis_url:
-        # Configuración sin mockear PluginBlockConfig para evitar interferencias
+        # Configurar mock_bloque para devolver un objeto válido
+        mock_bloque_instance = MagicMock()
+        mock_bloque.return_value = mock_bloque_instance
         nucleus.config["bloques"] = [{"id": "test_block", "canal": 1, "entidades": 1000}]
-        mock_bloque.return_value = MagicMock()  # Simular instancia de BloqueSimbiotico
         try:
             await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         except Exception as e:
             pytest.fail(f"Excepción inesperada durante inicialización: {e}")
-        assert mock_bloque.called, f"mock_bloque no fue llamado. Config: {nucleus.config['bloques']}, Bloques registrados: {list(registro.bloques.keys())}, Mock calls: {mock_bloque.mock_calls}"
+        assert mock_bloque.called, f"mock_bloque no fue llamado. Config: {nucleus.config['bloques']}, Bloques registrados: {list(registro.bloques.keys())}, Mock calls: {mock_bloque.mock_calls}, Bloque registrado: {registro.bloques.get('test_block')}"
         assert mock_init_db.called
         assert mock_redis_url.called
         assert "test_block" in registro.bloques
+        assert registro.bloques["test_block"] == mock_bloque_instance
         assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
