@@ -15,15 +15,20 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pytest-asyncio unittest-mock aioredis psycopg2-binary pydantic scikit-learn celery pyyaml flake8
+        pip install -r requirements.txt
+        pip install flake8
+
     - name: Run Flake8
-      run: flake8 corec/ tests/
+      run: flake8 corec/ tests/ --max-line-length=140
+
     - name: Run tests
       run: pytest -q --disable-warnings
