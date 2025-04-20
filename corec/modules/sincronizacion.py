@@ -1,5 +1,6 @@
 import logging
 import random
+from typing import Dict
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 
@@ -14,56 +15,47 @@ class ModuloSincronizacion(ComponenteBase):
         self.nucleus = nucleus
         self.logger.info("[Sincronizacion] Inicializado")
 
-    async def redirigir_entidades(self, source_block: str, target_block: str, entidades: int, canal: int):
-        """Redirige entidades de un bloque inactivo a un bloque activo."""
+    async def redirigir_entidades(self, origen_id: str, destino_id: str, num_entidades: int, canal: int):
+        """Redirige entidades de un bloque a otro."""
         try:
-            reg = self.nucleus.modules["registro"].bloques
-            if source_block not in reg or target_block not in reg:
-                self.logger.error(f"[Sincronizacion] Bloques no encontrados: {source_block}, {target_block}")
+            registro = self.nucleus.modules["registro"]
+            origen = registro.bloques.get(origen_id)
+            destino = registro.bloques.get(destino_id)
+            if not origen or not destino:
+                self.logger.error(f"[Sincronizacion] Bloques {origen_id} o {destino_id} no encontrados")
                 return
-            source = reg[source_block]
-            target = reg[target_block]
-            if len(source.entidades) >= entidades:
-                movidas = source.entidades[:entidades]
-                source.entidades = source.entidades[entidades:]
-                target.entidades.extend(movidas)
-                self.logger.info(f"[Sincronizacion] {entidades} entidades redirigidas de {source_block} a {target_block}")
-                await self.nucleus.publicar_alerta({
-                    "tipo": "entidades_redirigidas",
-                    "source_block": source_block,
-                    "target_block": target_block,
-                    "entidades": entidades,
-                    "timestamp": random.random()
-                })
+            if len(origen.entidades) < num_entidades:
+                self.logger.error(f"[Sincronizacion] No hay suficientes entidades en {origen_id}")
+                return
+            entidades_redirigidas = origen.entidades[:num_entidades]
+            origen.entidades = origen.entidades[num_entidades:]
+            destino.entidades.extend(entidades_redirigidas)
+            self.logger.info(f"[Sincronizacion] Redirigidas {num_entidades} entidades de {origen_id} a {destino_id}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "entidades_redirigidas",
+                "origen_id": origen_id,
+                "destino_id": destino_id,
+                "num_entidades": num_entidades,
+                "timestamp": random.random()
+            })
         except Exception as e:
             self.logger.error(f"[Sincronizacion] Error redirigiendo entidades: {e}")
 
     async def adaptar_bloque(self, bloque_id: str, carga: float):
-        """Adapta un bloque según su carga, fusionándolo si es necesario."""
+        """Adapta un bloque fusionándolo con otro si tiene bajo fitness."""
         try:
-            reg = self.nucleus.modules["registro"].bloques
-            if bloque_id not in reg:
+            registro = self.nucleus.modules["registro"]
+            bloque = registro.bloques.get(bloque_id)
+            if not bloque:
                 self.logger.error(f"[Sincronizacion] Bloque {bloque_id} no encontrado")
                 return
-            bloque = reg[bloque_id]
-            if carga < 0.2 and bloque.fitness < 0.3:  # Umbral para fusión
-                fus_id = f"fus_{random.randint(1000, 9999)}"
-                fus_bloque = BloqueSimbiotico(fus_id, bloque.canal, [], self.nucleus)
-                for bid, b in list(reg.items()):
-                    if b.canal == bloque.canal and b.fitness < 0.5:
-                        fus_bloque.entidades.extend(b.entidades)
-                        del reg[bid]
-                reg[fus_id] = fus_bloque
-                self.logger.info(f"[Sincronizacion] Bloque {bloque_id} fusionado en {fus_id}")
-                await self.nucleus.publicar_alerta({
-                    "tipo": "bloque_fusionado",
-                    "bloque_id": fus_id,
-                    "entidades": len(fus_bloque.entidades),
-                    "timestamp": random.random()
-                })
-        except Exception as e:
-            self.logger.error(f"[Sincronizacion] Error adaptando bloque: {e}")
-
-    async def detener(self):
-        """Detiene el módulo de sincronización."""
-        self.logger.info("[Sincronizacion] Detenido")
+            if bloque.fitness < 0.2 and carga < 0.5:
+                otros_bloques = [b for bid, b in registro.bloques.items() if bid != bloque_id]
+                if not otros_bloques:
+                    self.logger.info(f"[Sincronizacion] No hay otros bloques para fusionar con {bloque_id}")
+                    return
+                bloque_mejor = max(otros_bloques, key=lambda b: b.fitness)
+                nuevo_id = f"fus_{random.randint(1000, 9999)}"
+                nuevas_entidades = bloque.entidades + bloque_mejor.entidades
+                nuevo_bloque = BloqueSimbiotico(nuevo_id, bloque.canal, nuevas_entidades, bloque.max_size_mb, self.nucleus)
+                registro
