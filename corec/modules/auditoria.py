@@ -16,14 +16,14 @@ class ModuloAuditoria(ComponenteBase):
     async def inicializar(self, nucleus):
         """Inicializa el módulo de auditoría."""
         self.nucleus = nucleus
-        # Tomamos el detector de bloques simbióticos
+        # Detector de bloques
         self.detector = BloqueSimbiotico("x", 0, []).detector
         self.logger.info("[Auditoria] listo")
 
     async def detectar_anomalias(self):
-        """Detecta anomalías en los bloques y publica alertas."""
+        """Detecta anomalías en bloques."""
         try:
-            # Usar db_config, asumiendo mock en pruebas
+            # Usar db_config, mock en pruebas
             conn = self.nucleus.db_config if isinstance(self.nucleus.db_config, MagicMock) else psycopg2.connect(**self.nucleus.db_config)
             cur = conn.cursor()
             ts = time.time() - 3600
@@ -43,13 +43,13 @@ class ModuloAuditoria(ComponenteBase):
                         await self.nucleus.publicar_alerta(alerta)
                         self.logger.info(f"[Auditoria] anomalía en {bid}")
             cur.close()
-            if not isinstance(conn, MagicMock):  # Cerrar solo conexiones reales
+            if not isinstance(conn, MagicMock):  # Cerrar conexiones reales
                 conn.close()
         except Exception as e:
             self.logger.error(f"[Auditoria] error: {e}")
 
     async def ejecutar(self):
-        """Ejecuta la detección de anomalías periódicamente."""
+        """Ejecuta detección de anomalías."""
         while True:
             await self.detectar_anomalias()
             await asyncio.sleep(300)
