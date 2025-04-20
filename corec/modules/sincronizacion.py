@@ -48,12 +48,14 @@ class ModuloSincronizacion(ModuloBase):
         source, target = reg.get(source_block), reg.get(target_block)
         if not source or not target:
             self.logger.error(
-                f"[Sincronizacion] No se encontraron bloques: {source_block}, {target_block}"
+                f"[Sincronizacion] No se encontraron bloques: {source_block}, "
+                f"{target_block}"
             )
             return
         if source.canal != canal or target.canal != canal:
             self.logger.error(
-                f"[Sincronizacion] Canales no compatibles: {source.canal} vs {target.canal}"
+                f"[Sincronizacion] Canales no compatibles: {source.canal} vs "
+                f"{target.canal}"
             )
             return
         try:
