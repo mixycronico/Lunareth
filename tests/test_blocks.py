@@ -15,7 +15,7 @@ async def test_bloque_procesar_exitoso(nucleus, monkeypatch):
     """Prueba el procesamiento exitoso de un bloque simbiótico."""
     async def mock_procesar(carga):
         return {"valor": 0.5}
-    
+
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
     monkeypatch.setattr(entidades[0], "procesar", mock_procesar)
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
@@ -34,7 +34,7 @@ async def test_bloque_procesar_valor_invalido(nucleus, monkeypatch):
     """Prueba el procesamiento con un valor inválido."""
     async def mock_procesar(carga):
         return {"valor": "invalid"}
-    
+
     entidades = [Entidad("ent_1", 1, lambda: {"valor": "invalid"})]
     monkeypatch.setattr(entidades[0], "procesar", mock_procesar)
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
@@ -53,7 +53,7 @@ async def test_bloque_procesar_error_entidad(nucleus, monkeypatch):
     """Prueba el procesamiento con un error en una entidad."""
     async def mock_procesar(carga):
         raise Exception("Error")
-    
+
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
     monkeypatch.setattr(entidades[0], "procesar", mock_procesar)
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
@@ -73,9 +73,9 @@ async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
     """Prueba la reparación exitosa de un bloque."""
     async def mock_publicar_alerta(alerta):
         pass
-    
+
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
-    # Agregamos el atributo estado manualmente ya que Entidad no lo tiene
+    # Agregamos el atributo estado manualmente
     entidades[0].estado = "inactiva"
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
@@ -91,7 +91,7 @@ async def test_bloque_reparar_error(nucleus, monkeypatch):
     """Prueba la reparación con un error."""
     async def mock_publicar_alerta(alerta):
         pass
-    
+
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
     # Agregamos el atributo estado manualmente
     entidades[0].estado = "inactiva"
@@ -111,7 +111,7 @@ async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_postgresql, monk
     """Prueba la escritura exitosa en PostgreSQL."""
     async def mock_publicar_alerta(alerta):
         pass
-    
+
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
@@ -127,7 +127,7 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_postgresql, monkey
     """Prueba la escritura en PostgreSQL con un error."""
     async def mock_publicar_alerta(alerta):
         pass
-    
+
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
