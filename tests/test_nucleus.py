@@ -16,7 +16,6 @@ async def test_nucleus_inicializar(nucleus, mock_redis):
         assert "ejecucion" in nucleus.modules
         assert "auditoria" in nucleus.modules
         assert mock_logging.getLogger().info.called
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -27,7 +26,6 @@ async def test_nucleus_inicializar_modulo_no_encontrado(nucleus, mock_redis):
         await nucleus.inicializar()
         assert nucleus.modules == {}
         assert mock_logging.getLogger().info.called
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -44,7 +42,6 @@ async def test_nucleus_registrar_plugin(nucleus):
         assert bloque.canal == 4
         assert len(bloque.entidades) == 500
         assert mock_logging.getLogger().info.called
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -58,7 +55,6 @@ async def test_nucleus_registrar_plugin_config_invalida(nucleus):
         assert "test_plugin" in nucleus.plugins
         assert "test_plugin" not in nucleus.bloques_plugins  # No se crea el bloque
         assert mock_logging.getLogger().error.called
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -73,7 +69,6 @@ async def test_nucleus_ejecutar_plugin(nucleus):
         assert resultado == {"status": "success"}
         assert plugin.manejar_comando.called
         assert mock_logging.getLogger().info.called
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -89,7 +84,6 @@ async def test_nucleus_ejecutar_plugin_comando_invalido(nucleus):
         assert "Comando inválido" in resultado["message"]
         assert not plugin.manejar_comando.called
         assert mock_logging.getLogger().error.called
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -98,7 +92,6 @@ async def test_nucleus_ejecutar_plugin_no_existe(nucleus):
     comando = {"action": "test", "params": {"key": "value"}}
     with pytest.raises(ValueError, match="Plugin 'test_plugin' no encontrado"):
         await nucleus.ejecutar_plugin("test_plugin", comando)
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -109,7 +102,6 @@ async def test_nucleus_publicar_alerta(nucleus, mock_redis):
         await nucleus.publicar_alerta(alerta)
         assert mock_redis.xadd.called
         assert mock_logging.getLogger().warning.called
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -121,7 +113,6 @@ async def test_nucleus_publicar_alerta_error_redis(nucleus, mock_redis):
         await nucleus.publicar_alerta(alerta)
         assert mock_redis.xadd.called
         assert mock_logging.getLogger().error.called
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -134,7 +125,6 @@ async def test_nucleus_coordinar_bloques(nucleus, mock_redis):
         await nucleus.coordinar_bloques()
         assert mock_procesar.called
         assert mock_logging.getLogger().debug.called
-    await nucleus.detener()
 
 
 @pytest.mark.asyncio
@@ -147,4 +137,3 @@ async def test_nucleus_coordinar_bloques_error(nucleus, mock_redis):
         await nucleus.coordinar_bloques()
         assert nucleus.publicar_alerta.called
         assert mock_logging.getLogger().error.called
-    await nucleus.detener()
