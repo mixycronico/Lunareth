@@ -3,7 +3,7 @@ import asyncio
 import time
 import random
 from pydantic import BaseModel, Field, ValidationError
-from corec.core import ModuloBase
+from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
 
@@ -16,7 +16,7 @@ class RedirectionConfig(BaseModel):
     canal: int = Field(..., ge=1, le=10)
 
 
-class ModuloSincronizacion(ModuloBase):
+class ModuloSincronizacion(ComponenteBase):
     def __init__(self):
         self.logger = logging.getLogger("ModuloSincronizacion")
         self.nucleus = None
