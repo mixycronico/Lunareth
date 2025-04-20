@@ -2,7 +2,8 @@ import logging
 import asyncio
 import time
 import random
-from pydantic import BaseModel, ValidationError
+import json
+from pydantic import BaseModel, Field, ValidationError
 from corec.core import ModuloBase
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
