@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import patch
 from corec.entities import Entidad, crear_entidad
 
 
