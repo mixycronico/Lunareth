@@ -14,6 +14,7 @@ from corec.redis_client import init_redis
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
 
+
 class PluginBlockConfig(BaseModel):
     """Configuración de un bloque simbiótico para un plugin."""
     bloque_id: str = Field(..., regex=r"^[a-zA-Z0-9_-]+$")
@@ -22,6 +23,7 @@ class PluginBlockConfig(BaseModel):
     max_size_mb: int = Field(..., ge=1, le=10)
     max_errores: float = Field(..., ge=0.01, le=0.5)
     min_fitness: float = Field(..., ge=0.1, le=0.9)
+
 
 class CoreCNucleus:
     def __init__(self, config_path: str):
@@ -112,10 +114,12 @@ class CoreCNucleus:
             raise ValueError(f"Plugin '{nombre}' no encontrado")
         if not hasattr(plugin, "manejar_comando"):
             raise AttributeError(f"Plugin '{nombre}' no implementa 'manejar_comando'")
+
         # Valida comando básico
         class PluginCommand(BaseModel):
             action: str
             params: Dict[str, Any] = {}
+
         try:
             cmd = PluginCommand(**comando)
             return await plugin.manejar_comando(cmd.dict())
@@ -130,8 +134,13 @@ class CoreCNucleus:
                 for nombre, bloque in self.bloques_plugins.items():
                     carga = random.random()  # TODO: Calcular carga real
                     await bloque.procesar(carga)
-                    self.logger.debug(f"[Nucleus] Bloque '{bloque.id}' procesado, fitness: {bloque.fitness:.2f}")
+                    self.logger.debug(
+                        f"[Nucleus] Bloque '{bloque.id}' procesado, fitness: {bloque.fitness:.2f}"
+                    )
             except Exception as e:
                 self.logger.error(f"[Nucleus] Error coordinando bloques: {e}")
-                await self.publicar_alerta({"tipo": "error_coordinacion", "mensaje": str(e)})
+                await self.nucleus.publicar_alerta({
+                    "tipo": "error_coordinacion",
+                    "mensaje": str(e)
+                })
             await asyncio.sleep(60)  # Coordinar cada 60 segundos
