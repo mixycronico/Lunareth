@@ -1,6 +1,5 @@
 import logging
 import random
-from typing import Optional
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 
