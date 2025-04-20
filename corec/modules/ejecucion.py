@@ -2,9 +2,9 @@ import logging
 import asyncio
 import time
 from typing import Dict, Any
-import psycopg2
 from corec.core import ModuloBase, celery_app
 from corec.blocks import BloqueSimbiotico
+
 
 class ModuloEjecucion(ModuloBase):
     def __init__(self):
