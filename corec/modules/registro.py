@@ -2,13 +2,12 @@ import logging
 import asyncio
 import random
 import time
-import json
-from typing import Dict, Any
 from pydantic import ValidationError
 from corec.core import ModuloBase
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
-from corec.nucleus import PluginBlockConfig  # Importar desde nucleus
+from corec.nucleus import PluginBlockConfig
+
 
 class ModuloRegistro(ModuloBase):
     def __init__(self):
@@ -36,17 +35,17 @@ class ModuloRegistro(ModuloBase):
                 min_fitness=0.2  # Valor por defecto
             )
             size = 1000
-            resto = cantidad
+            resto = cfg.entidades
             idx = 0
             while resto > 0:
                 cnt = min(size, resto)
                 entidades = []
                 for i in range(cnt):
                     async def tmp(): return {"valor": random.random()}
-                    entidades.append(crear_entidad(f"m{idx}", canal, tmp))
+                    entidades.append(crear_entidad(f"m{idx}", cfg.canal, tmp))
                     idx += 1
                 bid = bloque_id if idx == cnt else f"{bloque_id}_{idx // size}"
-                bloque = BloqueSimbiotico(bid, canal, entidades, nucleus=self.nucleus)
+                bloque = BloqueSimbiotico(bid, cfg.canal, entidades, nucleus=self.nucleus)
                 self.bloques[bid] = bloque
                 resto -= cnt
                 self.logger.info(f"[Registro] {bid} ({cnt} entidades)")
@@ -54,7 +53,7 @@ class ModuloRegistro(ModuloBase):
                     "tipo": "bloque_registrado",
                     "bloque_id": bid,
                     "entidades": cnt,
-                    "canal": canal,
+                    "canal": cfg.canal,
                     "timestamp": time.time()
                 })
         except ValidationError as e:
