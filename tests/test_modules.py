@@ -19,8 +19,11 @@ async def test_modulo_registro_inicializar(nucleus):
          patch("corec.db.init_postgresql") as mock_init_db, \
          patch("aioredis.from_url", new=AsyncMock()) as mock_redis_url:
         nucleus.config["bloques"] = [{"id": "test_block", "canal": 1, "entidades": 1000}]
-        await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
-        assert mock_bloque.called
+        try:
+            await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
+        except Exception as e:
+            pytest.fail(f"Excepción inesperada durante inicialización: {e}")
+        assert mock_bloque.called, f"mock_bloque no fue llamado. Config: {nucleus.config['bloques']}"
         assert mock_init_db.called
         assert mock_redis_url.called
         assert "test_block" in registro.bloques
