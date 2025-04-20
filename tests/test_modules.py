@@ -15,7 +15,9 @@ async def test_modulo_registro_inicializar(nucleus):
     registro = ModuloRegistro()
     with patch("corec.blocks.BloqueSimbiotico") as mock_bloque, \
          patch.object(registro.logger, "info") as mock_logger, \
-         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
+         patch("corec.db.init_postgresql") as mock_init_db, \
+         patch("aioredis.from_url", new=AsyncMock()) as mock_redis_url:
         nucleus.config["bloques"] = [{"id": "test_block", "canal": 1, "entidades": 1000}]
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         assert mock_bloque.called
@@ -146,6 +148,12 @@ async def test_modulo_ejecucion_encolar_tareas(nucleus):
     """Prueba el encolado de tareas en ModuloEjecucion."""
     ejecucion = ModuloEjecucion()
     await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
+    registro = ModuloRegistro()
+    nucleus.modules["registro"] = registro  # Simular inicialización
+    async def test_func(): return {"valor": 0.7}
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, nucleus=nucleus)
+    registro.bloques["test_block"] = bloque
     with patch.object(ejecucion, "ejecutar_bloque_task") as mock_task, \
          patch.object(ejecucion.logger, "info") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
