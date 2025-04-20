@@ -12,6 +12,7 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
 )
 
+
 async def load_plugins(nucleus: CoreCNucleus):
     """
     Escanea nucleus.config['plugins'] y para cada plugin enabled:
