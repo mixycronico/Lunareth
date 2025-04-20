@@ -12,9 +12,9 @@ bloques:
     canal: 1
     entidades: 1000
 plugins:
-  test_plugin:
+  example_plugin:
     enabled: true
     bloque:
-      id: test_plugin
+      id: example_plugin
       canal: 4
       entidades: 500
