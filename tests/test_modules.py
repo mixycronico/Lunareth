@@ -71,7 +71,8 @@ async def test_modulo_sincronizacion_redirigir_entidades(nucleus):
     """Prueba la redirección de entidades en ModuloSincronizacion."""
     sincronizacion = ModuloSincronizacion()
     await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
-    registro = nucleus.modules["registro"]
+    registro = ModuloRegistro()
+    nucleus.modules["registro"] = registro  # Simular inicialización
     async def test_func(): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(1000)]
     bloque1 = BloqueSimbiotico("block1", 1, entidades[:500], nucleus=nucleus)
@@ -108,7 +109,8 @@ async def test_modulo_sincronizacion_adaptar_bloque_fusionar(nucleus):
     """Prueba la fusión de bloques en ModuloSincronizacion."""
     sincronizacion = ModuloSincronizacion()
     await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
-    registro = nucleus.modules["registro"]
+    registro = ModuloRegistro()
+    nucleus.modules["registro"] = registro  # Simular inicialización
     async def test_func(): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(1000)]
     bloque1 = BloqueSimbiotico("block1", 1, entidades[:500], nucleus=nucleus)
