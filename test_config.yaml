@@ -1,0 +1,20 @@
+db_config:
+  dbname: test_db
+  user: test_user
+  password: test_pass
+  host: localhost
+  port: 5432
+redis_config:
+  host: localhost
+  port: 6379
+bloques:
+  - id: test_block
+    canal: 1
+    entidades: 1000
+plugins:
+  test_plugin:
+    enabled: true
+    bloque:
+      id: test_plugin
+      canal: 4
+      entidades: 500
