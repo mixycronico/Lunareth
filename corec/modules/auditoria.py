@@ -1,59 +1,44 @@
 import logging
-import time
+from sklearn.ensemble import IsolationForest
 import psycopg2
-import asyncio
 from corec.core import ComponenteBase
-from corec.blocks import BloqueSimbiotico
-from unittest.mock import MagicMock
 
 
 class ModuloAuditoria(ComponenteBase):
     def __init__(self):
         self.logger = logging.getLogger("ModuloAuditoria")
         self.nucleus = None
-        self.detector = None
+        self.detector = IsolationForest(contamination=0.1)
 
     async def inicializar(self, nucleus):
         """Inicializa el módulo de auditoría."""
         self.nucleus = nucleus
-        # Detector para bloques
-        self.detector = BloqueSimbiotico("x", 0, []).detector
-        self.logger.info("[Auditoria] listo")
+        self.logger.info("[Auditoria] Inicializado")
 
     async def detectar_anomalias(self):
-        """Detecta anomalías en bloques."""
+        """Detecta anomalías en los datos de los bloques."""
         try:
-            # Usar db_config, mock en pruebas
-            conn = self.nucleus.db_config if isinstance(self.nucleus.db_config, MagicMock) else psycopg2.connect(**self.nucleus.db_config)
+            conn = psycopg2.connect(**self.nucleus.db_config)
             cur = conn.cursor()
-            ts = time.time() - 3600
-            cur.execute("SELECT num_entidades, fitness FROM bloques WHERE timestamp > %s", (ts,))
+            cur.execute("SELECT num_entidades, fitness FROM bloques")
             datos = cur.fetchall()
             if datos:
-                preds = self.detector.fit_predict(datos)
-                cur.execute("SELECT id FROM bloques WHERE timestamp > %s", (ts,))
-                ids = [r[0] for r in cur.fetchall()]
-                for i, bid in enumerate(ids):
-                    if preds[i] == -1:
-                        alerta = {
-                            "tipo": "anomalia",
-                            "bloque_id": bid,
+                predicciones = self.detector.fit_predict(datos)
+                anomalias = [i for i, pred in enumerate(predicciones) if pred == -1]
+                if anomalias:
+                    cur.execute("SELECT id FROM bloques")
+                    ids = cur.fetchall()
+                    for idx in anomalias:
+                        await self.nucleus.publicar_alerta({
+                            "tipo": "anomalia_detectada",
+                            "bloque_id": ids[idx][0],
                             "timestamp": time.time()
-                        }
-                        await self.nucleus.publicar_alerta(alerta)
-                        self.logger.info(f"[Auditoria] anomalía en {bid}")
+                        })
             cur.close()
-            if not isinstance(conn, MagicMock):  # Cerrar conexiones reales
-                conn.close()
+            conn.close()
         except Exception as e:
             self.logger.error(f"[Auditoria] error: {e}")
 
-    async def ejecutar(self):
-        """Ejecuta detección de anomalías."""
-        while True:
-            await self.detectar_anomalias()
-            await asyncio.sleep(300)
-
     async def detener(self):
         """Detiene el módulo de auditoría."""
-        self.logger.info("[Auditoria] detenido")
+        self.logger.info("[Auditoria] Detenido")
