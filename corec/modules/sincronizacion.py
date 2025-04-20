@@ -2,11 +2,11 @@ import logging
 import asyncio
 import time
 import random
-import json
 from pydantic import BaseModel, Field, ValidationError
 from corec.core import ModuloBase
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
+
 
 class RedirectionConfig(BaseModel):
     """Valida configuración de redirección de entidades."""
@@ -14,6 +14,7 @@ class RedirectionConfig(BaseModel):
     target_block: str
     entidades: int = Field(..., ge=100, le=5000)
     canal: int = Field(..., ge=1, le=10)
+
 
 class ModuloSincronizacion(ModuloBase):
     def __init__(self):
@@ -58,18 +59,21 @@ class ModuloSincronizacion(ModuloBase):
                 entidades=entidades,
                 canal=canal
             )
-            if len(source.entidades) < entidades:
+            if len(source.entidades) < cfg.entidades:
                 self.logger.warning(f"[Sincronizacion] No hay suficientes entidades en {source_block}")
                 return
-            transferidas = source.entidades[:entidades]
-            source.entidades = source.entidades[entidades:]
+            transferidas = source.entidades[:cfg.entidades]
+            source.entidades = source.entidades[cfg.entidades:]
             target.entidades.extend(transferidas)
-            self.logger.info(f"[Sincronizacion] Redirigidas {entidades} entidades de {source_block} a {target_block}")
+            self.logger.info(
+                f"[Sincronizacion] Redirigidas {cfg.entidades} entidades de {source_block} "
+                f"a {target_block}"
+            )
             await self.nucleus.publicar_alerta({
                 "tipo": "entidades_redirigidas",
-                "source_block": source_block,
-                "target_block": target_block,
-                "entidades": entidades,
+                "source_block": cfg.source_block,
+                "target_block": cfg.target_block,
+                "entidades": cfg.entidades,
                 "timestamp": time.time()
             })
         except ValidationError as e:
