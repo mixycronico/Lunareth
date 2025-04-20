@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import random
 from unittest.mock import AsyncMock, patch
 from corec.modules.registro import ModuloRegistro
 from corec.modules.sincronizacion import ModuloSincronizacion
@@ -13,11 +14,13 @@ from corec.entities import crear_entidad
 async def test_modulo_registro_inicializar(nucleus):
     """Prueba la inicialización de ModuloRegistro."""
     registro = ModuloRegistro()
-    with patch("corec.blocks.BloqueSimbiotico") as mock_bloque, patch.object(registro.logger, "info") as mock_logger:
+    with patch("corec.blocks.BloqueSimbiotico") as mock_bloque, \
+         patch.object(registro.logger, "info") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         assert mock_bloque.called
         assert "test_block" in registro.bloques
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
 
@@ -26,13 +29,14 @@ async def test_modulo_registro_inicializar(nucleus):
 async def test_modulo_registro_registrar_bloque(nucleus):
     """Prueba el registro de un bloque en ModuloRegistro."""
     registro = ModuloRegistro()
-    with patch.object(registro.logger, "info") as mock_logger:
+    with patch.object(registro.logger, "info") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         await asyncio.wait_for(registro.registrar_bloque("new_block", 2, 500), timeout=5)
         assert "new_block" in registro.bloques
         assert registro.bloques["new_block"].canal == 2
         assert len(registro.bloques["new_block"].entidades) == 500
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
 
@@ -41,11 +45,12 @@ async def test_modulo_registro_registrar_bloque(nucleus):
 async def test_modulo_registro_registrar_bloque_config_invalida(nucleus):
     """Prueba el registro de un bloque con configuración inválida."""
     registro = ModuloRegistro()
-    with patch.object(registro.logger, "error") as mock_logger:
-        nucleus.config["bloques"] = [{"id": "invalid_block", "canal": -1, "entidades": 500}]  # Canal inválido
+    with patch.object(registro.logger, "error") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
+        nucleus.config["bloques"] = [{"id": "invalid_block", "canal": -1, "entidades": 500}]
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         assert "invalid_block" not in registro.bloques
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
 
@@ -75,11 +80,12 @@ async def test_modulo_sincronizacion_redirigir_entidades(nucleus):
     bloque2.fitness = 0.9  # Alto fitness
     registro.bloques["block1"] = bloque1
     registro.bloques["block2"] = bloque2
-    with patch.object(sincronizacion.logger, "info") as mock_logger:
+    with patch.object(sincronizacion.logger, "info") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         await asyncio.wait_for(sincronizacion.redirigir_entidades("block1", "block2", 200, 1), timeout=5)
         assert len(bloque1.entidades) == 300
         assert len(bloque2.entidades) == 700
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
 
@@ -89,10 +95,11 @@ async def test_modulo_sincronizacion_redirigir_entidades_error(nucleus):
     """Prueba la redirección de entidades con bloques inexistentes."""
     sincronizacion = ModuloSincronizacion()
     await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
-    with patch.object(sincronizacion.logger, "error") as mock_logger:
+    with patch.object(sincronizacion.logger, "error") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         await asyncio.wait_for(sincronizacion.redirigir_entidades("block1", "block2", 200, 1), timeout=5)
         assert mock_logger.called
-        assert not nucleus.publicar_alerta.called
+        assert not mock_alerta.called
     await nucleus.detener()
 
 
@@ -110,12 +117,13 @@ async def test_modulo_sincronizacion_adaptar_bloque_fusionar(nucleus):
     bloque2.fitness = 0.6  # Alto fitness
     registro.bloques["block1"] = bloque1
     registro.bloques["block2"] = bloque2
-    with patch.object(sincronizacion.logger, "info") as mock_logger:
+    with patch.object(sincronizacion.logger, "info") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         await asyncio.wait_for(sincronizacion.adaptar_bloque("block1", carga=0.1), timeout=5)
         assert "block1" not in registro.bloques
         assert "block2" not in registro.bloques
         assert any("fus_" in bid for bid in registro.bloques)
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
 
@@ -136,10 +144,12 @@ async def test_modulo_ejecucion_encolar_tareas(nucleus):
     """Prueba el encolado de tareas en ModuloEjecucion."""
     ejecucion = ModuloEjecucion()
     await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
-    with patch.object(ejecucion, "ejecutar_bloque_task") as mock_task, patch.object(ejecucion.logger, "info") as mock_logger:
+    with patch.object(ejecucion, "ejecutar_bloque_task") as mock_task, \
+         patch.object(ejecucion.logger, "info") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         await asyncio.wait_for(ejecucion.ejecutar(), timeout=5)
         assert mock_task.delay.called
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
 
@@ -149,9 +159,11 @@ async def test_modulo_ejecucion_encolar_tareas_error(nucleus):
     """Prueba el encolado de tareas con error."""
     ejecucion = ModuloEjecucion()
     await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
-    with patch.object(ejecucion, "ejecutar_bloque_task", side_effect=Exception("Task error")), patch.object(ejecucion.logger, "error") as mock_logger:
+    with patch.object(ejecucion, "ejecutar_bloque_task", side_effect=Exception("Task error")), \
+         patch.object(ejecucion.logger, "error") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         await asyncio.wait_for(ejecucion.ejecutar(), timeout=5)
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called
         assert mock_logger.called
     await nucleus.detener()
 
@@ -173,14 +185,15 @@ async def test_modulo_auditoria_detectar_anomalias(nucleus, mock_postgresql):
     """Prueba la detección de anomalías en ModuloAuditoria."""
     auditoria = ModuloAuditoria()
     await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
-    with patch("psycopg2.connect", return_value=mock_postgresql):
+    with patch("psycopg2.connect", return_value=mock_postgresql), \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         mock_postgresql.cursor.return_value.fetchall.side_effect = [
             [(100, 0.9), (200, 0.1)],  # Datos
             [("block1"), ("block2")]    # IDs
         ]
         await asyncio.wait_for(auditoria.detectar_anomalias(), timeout=5)
         assert mock_postgresql.cursor.called
-        assert nucleus.publicar_alerta.called
+        assert mock_alerta.called
     await nucleus.detener()
 
 
@@ -189,9 +202,10 @@ async def test_modulo_auditoria_detectar_anomalias_error(nucleus, mock_postgresq
     """Prueba la detección de anomalías con error en PostgreSQL."""
     auditoria = ModuloAuditoria()
     await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
-    with patch("psycopg2.connect", return_value=mock_postgresql):
+    with patch("psycopg2.connect", return_value=mock_postgresql), \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         mock_postgresql.cursor.side_effect = Exception("Database error")
         await asyncio.wait_for(auditoria.detectar_anomalias(), timeout=5)
         assert mock_postgresql.cursor.called
-        assert not nucleus.publicar_alerta.called
+        assert not mock_alerta.called
     await nucleus.detener()
