@@ -17,14 +17,17 @@ class ModuloRegistro(ComponenteBase):
     async def inicializar(self, nucleus):
         """Inicializa el módulo de registro."""
         self.nucleus = nucleus
+        self.logger.info("[Registro] Iniciando inicialización")
         try:
             bloques_conf = nucleus.config.get("bloques", [])
-            self.logger.info(f"[Registro] Procesando {len(bloques_conf)} bloques de configuración")
+            self.logger.info(f"[Registro] Procesando {len(bloques_conf)} bloques de configuración: {bloques_conf}")
             for bloque_conf in bloques_conf:
+                self.logger.debug(f"[Registro] Procesando bloque: {bloque_conf}")
                 try:
-                    self.logger.debug(f"[Registro] Configuración de bloque: {bloque_conf}")
                     config = PluginBlockConfig(**bloque_conf)
+                    self.logger.debug(f"[Registro] Configuración validada: id={config.id}, canal={config.canal}, entidades={config.entidades}")
                     entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
+                    self.logger.debug(f"[Registro] Creadas {len(entidades)} entidades para bloque {config.id}")
                     bloque = BloqueSimbiotico(config.id, config.canal, entidades, self.nucleus, max_size_mb=1.0)
                     self.bloques[config.id] = bloque
                     self.logger.info(f"[Registro] Bloque '{config.id}' registrado")
@@ -58,6 +61,7 @@ class ModuloRegistro(ComponenteBase):
                 "mensaje": str(e),
                 "timestamp": random.random()
             })
+        self.logger.info(f"[Registro] Inicialización completa. Bloques registrados: {list(self.bloques.keys())}")
 
     async def registrar_bloque(self, bloque_id: str, canal: int, entidades: int):
         """Registra un nuevo bloque simbiótico."""
