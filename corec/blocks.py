@@ -1,58 +1,75 @@
 import logging
-import random
 import time
 from typing import List, Dict, Any
+from corec.entities import Entidad
 
 
 class BloqueSimbiotico:
-    def __init__(self, id: str, canal: int, entidades: List, nucleus, max_size_mb: float = 10.0):
+    def __init__(self, id: str, canal: int, entidades: List[Entidad], max_size_mb: float, nucleus):
+        self.logger = logging.getLogger("BloqueSimbiotico")
         self.id = id
         self.canal = canal
         self.entidades = entidades
-        self.fitness = 0.0  # Corregido de 0.5 a 0.0
-        self.mensajes: List[Dict[str, Any]] = []
         self.max_size_mb = max_size_mb
-        self.logger = logging.getLogger("BloqueSimbiotico")
         self.nucleus = nucleus
+        self.mensajes: List[Dict[str, Any]] = []
+        self.fitness: float = 0.0
+        self.fallos = 0  # Aseguramos que fallos esté inicializado
 
     async def procesar(self, carga: float) -> Dict[str, Any]:
-        """Procesa las entidades del bloque y calcula el fitness."""
+        """Procesa las entidades del bloque con una carga dada."""
+        self.mensajes = []
+        fitness_total = 0.0
+        num_mensajes = 0
         try:
-            resultados = []
             for entidad in self.entidades:
-                if entidad.estado == "activa":
-                    resultado = await entidad.procesar(carga)
-                    valor = resultado.get("valor", 0)
-                    if isinstance(valor, (int, float)):
-                        resultados.append(valor)
-                    self.mensajes.append({
-                        "entidad_id": entidad.id,
-                        "canal": self.canal,
-                        "valor": valor,
-                        "timestamp": time.time()
-                    })
-            if resultados:
-                self.fitness = sum(resultados) / len(resultados)
-            self.logger.debug(f"[Bloque {self.id}] Procesado, fitness: {self.fitness:.2f}")
+                try:
+                    mensaje = await entidad.procesar(carga)  # Aseguramos que procesar sea asíncrono
+                    if isinstance(mensaje.get("valor"), (int, float)):
+                        self.mensajes.append({
+                            "entidad_id": entidad.id,
+                            "canal": self.canal,
+                            "valor": mensaje["valor"],
+                            "timestamp": time.time()
+                        })
+                        fitness_total += mensaje["valor"]
+                        num_mensajes += 1
+                    else:
+                        self.logger.warning(f"[Bloque {self.id}] Valor inválido de entidad {entidad.id}")
+                except Exception as e:
+                    self.fallos += 1
+                    self.logger.error(f"[Bloque {self.id}] Error procesando entidad {entidad.id}: {e}")
+            self.fitness = fitness_total / num_mensajes if num_mensajes > 0 else 0.0
             await self.nucleus.publicar_alerta({
                 "tipo": "bloque_procesado",
                 "bloque_id": self.id,
+                "num_mensajes": num_mensajes,
                 "fitness": self.fitness,
                 "timestamp": time.time()
             })
-            return {
-                "bloque_id": self.id,
-                "mensajes": self.mensajes,
-                "fitness": self.fitness
-            }
         except Exception as e:
             self.logger.error(f"[Bloque {self.id}] Error procesando: {e}")
-            return {
+        return {
+            "bloque_id": self.id,
+            "mensajes": self.mensajes,
+            "fitness": self.fitness
+        }
+
+    async def reparar(self):
+        """Repara el bloque simbiótico reactivando entidades inactivas."""
+        try:
+            for entidad in self.entidades:
+                if entidad.estado == "inactiva":
+                    entidad.estado = "activa"
+                    self.logger.info(f"[Bloque {self.id}] Entidad {entidad.id} reactivada")
+            self.fallos = 0
+            await self.nucleus.publicar_alerta({
+                "tipo": "bloque_reparado",
                 "bloque_id": self.id,
-                "mensajes": self.mensajes,
-                "fitness": self.fitness,
-                "error": str(e)
-            }
+                "timestamp": time.time()
+            })
+        except Exception as e:
+            self.logger.error(f"[Bloque {self.id}] Error reparando: {e}")
 
     async def escribir_postgresql(self, conn):
         """Escribe los mensajes del bloque en PostgreSQL."""
@@ -60,13 +77,11 @@ class BloqueSimbiotico:
             cur = conn.cursor()
             for mensaje in self.mensajes:
                 cur.execute(
-                    "INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp) VALUES (%s, %s, %s, %s, %s)",
-                    (self.id, self.canal, len(self.entidades), self.fitness, mensaje["timestamp"])
+                    "INSERT INTO mensajes (bloque_id, entidad_id, canal, valor, timestamp) VALUES (%s, %s, %s, %s, %s)",
+                    (self.id, mensaje["entidad_id"], mensaje["canal"], mensaje["valor"], mensaje["timestamp"])
                 )
             conn.commit()
-            cur.close()
             self.mensajes = []
-            self.logger.info(f"[Bloque {self.id}] Mensajes escritos en PostgreSQL")
             await self.nucleus.publicar_alerta({
                 "tipo": "mensajes_escritos",
                 "bloque_id": self.id,
@@ -81,19 +96,5 @@ class BloqueSimbiotico:
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
-
-    async def reparar(self):
-        """Repara entidades inactivas o corruptas."""
-        try:
-            for entidad in self.entidades:
-                if entidad.estado != "activa":
-                    entidad.estado = "activa"
-                    entidad.funcion = lambda x: {"valor": random.uniform(0, 1)}
-            self.logger.info(f"[Bloque {self.id}] Entidades reparadas")
-            await self.nucleus.publicar_alerta({
-                "tipo": "bloque_reparado",
-                "bloque_id": self.id,
-                "timestamp": time.time()
-            })
-        except Exception as e:
-            self.logger.error(f"[Bloque {self.id}] Error reparando: {e}")
+        finally:
+            cur.close()
