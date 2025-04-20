@@ -34,10 +34,13 @@ jobs:
       run: pytest tests/ --collect-only
 
     - name: Debug test_blocks.py
-      run: pytest tests/test_blocks.py -v --capture=no || echo "Error in test_blocks.py"
+      run: pytest tests/test_blocks.py -vv --capture=no || echo "Error in test_blocks.py"
 
     - name: Debug test_nucleus.py
-      run: pytest tests/test_nucleus.py -v --capture=no || echo "Error in test_nucleus.py"
+      run: pytest tests/test_nucleus.py -vv --capture=no || echo "Error in test_nucleus.py"
+
+    - name: Debug test_modules.py
+      run: pytest tests/test_modules.py -vv --capture=no || echo "Error in test_modules.py"
 
     - name: Run Flake8
       run: flake8 corec/ tests/ --max-line-length=300
