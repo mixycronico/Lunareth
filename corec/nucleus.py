@@ -10,6 +10,7 @@ from corec.modules.sincronizacion import ModuloSincronizacion
 from corec.modules.ejecucion import ModuloEjecucion
 from corec.modules.auditoria import ModuloAuditoria
 from pydantic import ValidationError
+from corec.entities import crear_entidad
 
 
 class CoreCNucleus:
@@ -50,7 +51,8 @@ class CoreCNucleus:
             for bloque_conf in self.config.get("bloques", []):
                 try:
                     config = PluginBlockConfig(**bloque_conf)
-                    bloque = BloqueSimbiotico(config.id, config.canal, [], self)
+                    entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
+                    bloque = BloqueSimbiotico(config.id, config.canal, entidades, self)
                     await self.modules["registro"].registrar_bloque(
                         config.id, config.canal, config.entidades
                     )
@@ -69,7 +71,8 @@ class CoreCNucleus:
                     try:
                         bloque_conf = conf.get("bloque", {})
                         config = PluginBlockConfig(**bloque_conf)
-                        bloque = BloqueSimbiotico(config.bloque_id, config.canal, [], self)
+                        entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
+                        bloque = BloqueSimbiotico(config.bloque_id, config.canal, entidades, self)
                         self.bloques_plugins[nombre] = bloque
                         await self.modules["registro"].registrar_bloque(
                             config.bloque_id, config.canal, config.entidades
@@ -89,7 +92,8 @@ class CoreCNucleus:
             if bloque_conf:
                 try:
                     config = PluginBlockConfig(**bloque_conf)
-                    bloque = BloqueSimbiotico(config.bloque_id, config.canal, [], self)
+                    entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
+                    bloque = BloqueSimbiotico(config.bloque_id, config.canal, entidades, self)
                     self.bloques_plugins[nombre] = bloque
                     self.logger.info(f"[Nucleus] Plugin '{nombre}' registrado con bloque")
                 except ValidationError as e:
@@ -131,7 +135,7 @@ class CoreCNucleus:
         try:
             for nombre, bloque in self.bloques_plugins.items():
                 carga = random.random()  # TODO: Calcular carga real
-                await bloque.procesar(carga)
+                resultado = await bloque.procesar(carga)
                 self.logger.debug(
                     f"[Nucleus] Bloque '{bloque.id}' procesado, "
                     f"fitness: {bloque.fitness:.2f}"
