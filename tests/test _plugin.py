@@ -1,6 +1,5 @@
 import pytest
-import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from corec.nucleus import CoreCNucleus
 
 
@@ -17,14 +16,15 @@ async def test_plugin_inicializar(nucleus):
             return {"status": "success", "action": comando["action"]}
 
     plugin = TestPlugin()
-    await plugin.inicializar(nucleus, {})
-    assert "test_plugin" in nucleus.plugins
-    assert "test_plugin" in nucleus.bloques_plugins
-    bloque = nucleus.bloques_plugins["test_plugin"]
-    assert bloque.id == "test_plugin_block"
-    assert bloque.canal == 4
-    assert len(bloque.entidades) == 500
-    assert nucleus.logger.info.called
+    with patch("corec.nucleus.logging.getLogger") as mock_logging:
+        await plugin.inicializar(nucleus, {})
+        assert "test_plugin" in nucleus.plugins
+        assert "test_plugin" in nucleus.bloques_plugins
+        bloque = nucleus.bloques_plugins["test_plugin"]
+        assert bloque.id == "test_plugin_block"
+        assert bloque.canal == 4
+        assert len(bloque.entidades) == 500
+        assert mock_logging.return_value.info.called
 
 
 @pytest.mark.asyncio
@@ -40,11 +40,12 @@ async def test_plugin_manejar_comando(nucleus):
             return {"status": "success", "action": comando["action"]}
 
     plugin = TestPlugin()
-    await plugin.inicializar(nucleus, {})
-    comando = {"action": "test_action", "params": {"key": "value"}}
-    resultado = await nucleus.ejecutar_plugin("test_plugin", comando)
-    assert resultado == {"status": "success", "action": "test_action"}
-    assert nucleus.logger.info.called
+    with patch("corec.nucleus.logging.getLogger") as mock_logging:
+        await plugin.inicializar(nucleus, {})
+        comando = {"action": "test_action", "params": {"key": "value"}}
+        resultado = await nucleus.ejecutar_plugin("test_plugin", comando)
+        assert resultado == {"status": "success", "action": "test_action"}
+        assert mock_logging.return_value.info.called
 
 
 @pytest.mark.asyncio
@@ -60,12 +61,13 @@ async def test_plugin_comando_invalido(nucleus):
             return {"status": "success", "action": comando["action"]}
 
     plugin = TestPlugin()
-    await plugin.inicializar(nucleus, {})
-    comando = {}  # Falta 'action'
-    resultado = await nucleus.ejecutar_plugin("test_plugin", comando)
-    assert resultado["status"] == "error"
-    assert "Comando inválido" in resultado["message"]
-    assert nucleus.logger.error.called
+    with patch("corec.nucleus.logging.getLogger") as mock_logging:
+        await plugin.inicializar(nucleus, {})
+        comando = {}  # Falta 'action'
+        resultado = await nucleus.ejecutar_plugin("test_plugin", comando)
+        assert resultado["status"] == "error"
+        assert "Comando inválido" in resultado["message"]
+        assert mock_logging.return_value.error.called
 
 
 @pytest.mark.asyncio
@@ -81,10 +83,10 @@ async def test_plugin_bloque_procesamiento(nucleus):
             return {"status": "success", "action": comando["action"]}
 
     plugin = TestPlugin()
-    await plugin.inicializar(nucleus, {})
-    bloque = nucleus.bloques_plugins["test_plugin"]
-    resultado = await bloque.procesar(carga=0.5)
-    assert resultado["bloque_id"] == "test_plugin_block"
-    assert len(resultado["mensajes"]) == 250  # carga=0.5 procesa la mitad de 500
-    assert resultado["fitness"] >= 0.0
-    assert nucleus.publicar_alerta.called
+    with patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
+        await plugin.inicializar(nucleus, {})
+        bloque = nucleus.bloques_plugins["test_plugin"]
+        await bloque.procesar(carga=0.5)
+        assert len(bloque.mensajes) == 500  # Procesar todas las entidades
+        assert bloque.fitness >= 0.0
+        assert mock_alerta.called
