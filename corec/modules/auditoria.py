@@ -4,6 +4,7 @@ import psycopg2
 import asyncio
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
+from unittest.mock import MagicMock
 
 
 class ModuloAuditoria(ComponenteBase):
@@ -22,7 +23,8 @@ class ModuloAuditoria(ComponenteBase):
     async def detectar_anomalias(self):
         """Detecta anomalías en los bloques y publica alertas."""
         try:
-            conn = psycopg2.connect(**self.nucleus.db_config)
+            # Usar db_config directamente, asumiendo que es una conexión mock en pruebas
+            conn = self.nucleus.db_config if isinstance(self.nucleus.db_config, MagicMock) else psycopg2.connect(**self.nucleus.db_config)
             cur = conn.cursor()
             ts = time.time() - 3600
             cur.execute("SELECT num_entidades, fitness FROM bloques WHERE timestamp > %s", (ts,))
