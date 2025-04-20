@@ -36,7 +36,11 @@ class ModuloAuditoria(ComponenteBase):
                             "timestamp": time.time()
                         })
                 else:
-                    self.logger.info("[Auditoria] No se detectaron anomalías")
+                    await self.nucleus.publicar_alerta({
+                        "tipo": "sin_anomalias",
+                        "mensaje": "No se detectaron anomalías",
+                        "timestamp": time.time()
+                    })
             else:
                 self.logger.info("[Auditoria] No hay datos para analizar")
             cur.close()
