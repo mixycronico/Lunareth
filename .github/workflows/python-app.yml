@@ -27,6 +27,9 @@ jobs:
         pip install -r requirements.txt
         pip install flake8 pytest pytest-asyncio
 
+    - name: List test files
+      run: ls -l tests/
+
     - name: Run Flake8
       run: flake8 corec/ tests/ --max-line-length=300
 
