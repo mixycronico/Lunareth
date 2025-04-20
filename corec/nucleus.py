@@ -1,6 +1,9 @@
 import logging
 import importlib
 import asyncio
+import json
+import time
+import random
 from pathlib import Path
 from typing import Dict, Any
 from pydantic import BaseModel, Field, ValidationError
@@ -125,7 +128,7 @@ class CoreCNucleus:
         while True:
             try:
                 for nombre, bloque in self.bloques_plugins.items():
-                    carga = random.random()  # TODO: Calcular carga real (por ejemplo, volumen de trading)
+                    carga = random.random()  # TODO: Calcular carga real
                     await bloque.procesar(carga)
                     self.logger.debug(f"[Nucleus] Bloque '{bloque.id}' procesado, fitness: {bloque.fitness:.2f}")
             except Exception as e:
