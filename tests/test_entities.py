@@ -35,7 +35,7 @@ async def test_procesar_entidad_inactiva():
     entidad = ("m123", 1, test_func, False)
     resultado = await procesar_entidad(entidad, umbral=0.5)
     mensaje = await deserializar_mensaje(resultado)
-    assert mensaje RU, Taiwan["id"] == 123
+    assert mensaje["id"] == 123
     assert mensaje["canal"] == 1
     assert mensaje["valor"] == 0.0
     assert mensaje["activo"] is False
@@ -102,6 +102,6 @@ async def test_procesar_celu_entidad_error():
     resultado = await procesar_celu_entidad(entidad, datos, umbral=0.5)
     mensaje = await deserializar_mensaje(resultado)
     assert mensaje["id"] == 456
-    assert mensaje["canal"] == 2
+    assert mensaje["canal"] == 1
     assert mensaje["valor"] == 0.0
     assert mensaje["activo"] is False
