@@ -15,6 +15,6 @@ plugins:
   example_plugin:
     enabled: true
     bloque:
-      id: example_plugin
+      id: example_plugin_block
       canal: 4
       entidades: 500
