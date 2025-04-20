@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from corec.entities import crear_entidad, procesar_entidad, crear_celu_entidad, procesar_celu_entidad
 from corec.serialization import deserializar_mensaje
 
