@@ -12,12 +12,14 @@ from sklearn.ensemble import IsolationForest
 from corec.entities import MicroCeluEntidadCoreC, crear_entidad, procesar_entidad
 from corec.serialization import deserializar_mensaje
 
+
 class MessageData(BaseModel):
     """Valida datos procesados por entidades."""
     id: int
     canal: int
     valor: float
     activo: bool
+
 
 class BloqueSimbiotico:
     def __init__(
@@ -38,6 +40,7 @@ class BloqueSimbiotico:
         self.mensajes = []
         self.umbral = 0.5
         self.fallos = 0
+
 
     async def ajustar_umbral(self, carga: float, valores: List[float], errores: int):
         """Ajusta el umbral dinámicamente según carga, valores y errores."""
@@ -123,12 +126,15 @@ class BloqueSimbiotico:
         try:
             conn = psycopg2.connect(**db_config)
             cur = conn.cursor()
-            comp = zstd.compress(json.dumps(out["mensajes"]).encode(), level=3)
+            # Comprimir mensajes para insertarlos
+            compressed_data = zstd.compress(json.dumps(out["mensajes"]).encode(), level=3)
             cur.execute(
                 "INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp, instance_id) "
-                "VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT(id) DO UPDATE "
-                "SET num_entidades=EXCLUDED.num_entidades, fitness=EXCLUDED.fitness, timestamp=EXCLUDED.timestamp",
-                (self.id, self.canal, len(self.entidades), self.fitness, time.time(), self.nucleus.instance_id)
+                "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT(id) DO UPDATE "
+                "SET num_entidades=EXCLUDED.num_entidades, fitness=EXCLUDED.fitness, "
+                "timestamp=EXCLUDED.timestamp",
+                (self.id, self.canal, len(self.entidades), self.fitness, time.time(),
+                 self.nucleus.instance_id)
             )
             conn.commit()
             cur.close()
