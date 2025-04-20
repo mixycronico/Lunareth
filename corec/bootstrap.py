@@ -1,62 +1,69 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-corec/bootstrap.py
-Orquestador plug-and-play para CoreC.
-"""
+import asyncio
+import logging
+import importlib
+import json
+from pathlib import Path
 
-from corec.core import asyncio, logging, json, Path, importlib, cargar_config
+from corec.nucleus import CoreCNucleus
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+)
 
-class Bootstrap:
-    def __init__(self, config_path: str = "configs/corec_config.json", instance_id: str = "corec1"):
-        self.logger = logging.getLogger("Bootstrap")
-        self.instance_id = instance_id
-        self.config_path = config_path
-        self.components = {}
-        self.config = cargar_config(config_path)
+async def load_plugins(nucleus: CoreCNucleus):
+    """
+    Escanea nucleus.config['plugins'] y para cada plugin enabled:
+      1. Carga su config.json.
+      2. Importa plugins.<name>.main.
+      3. Llama a inicializar(nucleus, config_plugin).
+    """
+    plugins_conf = nucleus.config.get("plugins", {})
+    for name, info in plugins_conf.items():
+        if not info.get("enabled", False):
+            continue
 
-    def load_component(self, directorio: str, nombre: str):
-        directorio_path = Path(__file__).parent / directorio
-        if not directorio_path.exists():
-            self.logger.warning(f"Directorio {directorio} no existe")
-            return
         try:
-            modulo = importlib.import_module(f"corec.{directorio}.{nombre}")
-            instancia = modulo.Componente(self.config_path, self.instance_id)
-            self.components[nombre] = instancia
-            self.logger.info(f"Componente {nombre} cargado desde {directorio}")
+            # 1) Leer configuración particular del plugin
+            plugin_conf = {}
+            conf_path = info.get("path")
+            if conf_path and Path(conf_path).is_file():
+                with open(conf_path, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+                    plugin_conf = raw.get(name, {})
+
+            # 2) Importar módulo de arranque del plugin
+            module_path = f"plugins.{name}.main"
+            plugin_mod = importlib.import_module(module_path)
+
+            # 3) Ejecutar su función inicializar
+            init_fn = getattr(plugin_mod, "inicializar", None)
+            if callable(init_fn):
+                await init_fn(nucleus, plugin_conf)
+                nucleus.logger.info(f"[Bootstrap] Plugin '{name}' cargado correctamente")
+            else:
+                nucleus.logger.warning(f"[Bootstrap] Plugin '{name}' no expone inicializar()")
+
         except Exception as e:
-            self.logger.error(f"Error cargando componente {nombre}: {e}")
+            nucleus.logger.error(f"[Bootstrap] Error cargando plugin '{name}': {e}")
 
-    async def inicializar(self):
-        self.load_component("", "nucleus")
-        for archivo in (Path(__file__).parent / "modules").glob("*.py"):
-            if not archivo.name.startswith("__"):
-                self.load_component("modules", archivo.stem)
-        for archivo in (Path(__file__).parent / "plugins").glob("*.py"):
-            if not archivo.name.startswith("__"):
-                self.load_component("plugins", archivo.stem)
-        for componente in self.components.values():
-            await componente.inicializar()
-
-    async def iniciar(self):
-        await self.inicializar()
-        tasks = [componente.ejecutar() for componente in self.components.values()]
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def detener(self):
-        for componente in self.components.values():
-            await componente.detener()
-        self.logger.info("Sistema CoreC detenido")
 
 async def main():
-    bootstrap = Bootstrap(config_path="configs/corec_config.json", instance_id="corec1")
+    # 1) Arrancar núcleo
+    nucleus = CoreCNucleus("config/corec_config.json")
     try:
-        await bootstrap.iniciar()
+        await nucleus.inicializar()
+
+        # 2) Cargar todos los plugins habilitados
+        await load_plugins(nucleus)
+
+        # 3) Entrar en bucle de ejecución (módulos + plugins)
+        await nucleus.ejecutar()
+
     except KeyboardInterrupt:
-        await bootstrap.detener()
+        await nucleus.detener()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

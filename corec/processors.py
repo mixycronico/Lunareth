@@ -1,13 +1,8 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-corec/processors.py
-Procesadores para entidades en CoreC.
-"""
-from corec.core import random, logging
+# corec/processors.py
+import logging, random
 from typing import Dict, Any
 
-logger = logging.getLogger("Procesadores")
+logger = logging.getLogger("corec.processors")
 
 class ProcesadorBase:
     async def procesar(self, datos: Dict[str, Any]) -> Dict[str, Any]:
@@ -15,15 +10,15 @@ class ProcesadorBase:
 
 class ProcesadorSensor(ProcesadorBase):
     async def procesar(self, datos: Dict[str, Any]) -> Dict[str, Any]:
-        valores = datos.get("valores", [])
-        valor = sum(valores) / len(valores) if valores else random.random()
-        logger.debug(f"ProcesadorSensor procesó datos: valor={valor}")
-        return {"valor": valor}
+        vals = datos.get("valores", [])
+        v = sum(vals)/len(vals) if vals else random.random()
+        logger.debug(f"[Sensor] → {v:.4f}")
+        return {"valor": v}
 
 class ProcesadorFiltro(ProcesadorBase):
     async def procesar(self, datos: Dict[str, Any]) -> Dict[str, Any]:
-        valor = datos.get("valor", random.random())
-        umbral = datos.get("umbral", 0.5)
-        resultado = valor if valor > umbral else 0.0
-        logger.debug(f"ProcesadorFiltro procesó datos: valor={valor}, umbral={umbral}, resultado={resultado}")
-        return {"valor": resultado}
+        v   = datos.get("valor", random.random())
+        um  = datos.get("umbral", 0.5)
+        out = v if v>um else 0.0
+        logger.debug(f"[Filtro] {v:.4f} vs {um:.2f} → {out:.4f}")
+        return {"valor": out}

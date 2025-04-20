@@ -2,123 +2,104 @@
 # -*- coding: utf-8 -*-
 """
 plugins/codex/processors/manager.py
-Gestiona optimización, generación de websites y plugins en Codex.
+Despacha acciones codex: generate_plugin, generate_website, revise.
+Incluye métricas Prometheus, validación y sanitización.
 """
-import os
 import asyncio
+import json
 import logging
-from corec.core import ComponenteBase, zstd, serializar_mensaje
-from plugins.codex.processors.reviser import CodexReviser
-from plugins.codex.processors.generator import CodexGenerator
-from plugins.codex.processors.memory import CodexMemory
-from plugins.codex.utils.helpers import CircuitBreaker
-import fnmatch
+from pathlib import Path
+from prometheus_client import Counter, Histogram, start_http_server
+from pydantic import ValidationError
+from corec.core import aioredis
 from typing import Dict, Any
 
-class CodexManager(ComponenteBase):
-    def __init__(self, nucleus, config):
-        super().__init__()
-        self.nucleus = nucleus
-        self.config = config
-        self.logger = logging.getLogger("CodexManager")
-        self.directorio = config.get("directorio_objetivo", "plugins/")
-        self.exclude_patterns = config.get("exclude_patterns", [])
-        self.max_file_size = config.get("max_file_size", 1000000)
-        self.reviser = CodexReviser(config)
-        self.generator = CodexGenerator(config)
-        self.memory = CodexMemory(nucleus.redis_client)
-        self.circuit_breaker = CircuitBreaker(
-            config.get("circuit_breaker", {}).get("max_failures", 3),
-            config.get("circuit_breaker", {}).get("reset_timeout", 900)
+from .schemas import Cmd, CmdGeneratePlugin, CmdGenerateWebsite, CmdRevise
+from .generator import Generator
+from .reviser import CodexReviser
+from .utils.helpers import run_blocking, sanitize_path
+
+# Métricas
+CMD_COUNTER   = Counter("codex_commands_total",   "Comandos recibidos", ["action"])
+ERROR_COUNTER = Counter("codex_errors_total",     "Errores internos",   ["action"])
+LATENCY_HIST  = Histogram("codex_latency_seconds","Latencia por acción", ["action"])
+
+class CodexManager:
+    def __init__(self, nucleus, config: Dict[str,Any]):
+        self.nucleus    = nucleus
+        self.config     = config
+        self.logger     = logging.getLogger("CodexManager")
+        self.redis      = None
+        self.generator  = Generator(config)
+        self.reviser    = CodexReviser(config)
+        # Carpeta base para seguridad
+        self.base_dir   = Path(config["templates_dir"]).parent.resolve()
+        # Streams
+        self.stream_in  = config.get("stream_in",  "corec_commands")
+        self.stream_out = config.get("stream_out", "corec_responses")
+        # Inicia servidor de métricas
+        start_http_server(self.config.get("metrics_port", 8001))
+
+    async def init(self):
+        url = (
+            f"redis://{self.nucleus.redis_config['username']}:"
+            f"{self.nucleus.redis_config['password']}@"
+            f"{self.nucleus.redis_config['host']}:"
+            f"{self.nucleus.redis_config['port']}"
         )
+        self.redis = await aioredis.from_url(url, decode_responses=True)
 
-    async def inicializar(self):
-        os.makedirs("plugins/codex/logs", exist_ok=True)
-        os.makedirs(self.config.get("website_output_dir", "generated_websites/"), exist_ok=True)
-        os.makedirs(self.config.get("plugin_output_dir", "plugins/"), exist_ok=True)
-        self.logger.info("Inicializando CodexManager...")
-
-    async def ejecutar(self):
+    async def run_loop(self):
+        last_id = "0-0"
         while True:
-            if not self.circuit_breaker.check():
-                await asyncio.sleep(60)
+            entries = await self.redis.xread({self.stream_in: last_id}, count=1, block=5000)
+            if not entries:
                 continue
-            try:
-                archivos = await self._buscar_archivos()
-                for ruta in archivos:
-                    if not any(ruta.endswith(ext) for ext in [".py", ".js"]):
-                        continue
-                    if os.path.getsize(ruta) > self.max_file_size:
-                        self.logger.warning(f"Archivo {ruta} excede max_file_size")
-                        continue
-                    codigo = await self._leer_archivo(ruta)
-                    if await self.memory.necesita_revision(ruta, codigo):
-                        nuevo = await self.reviser.revisar_codigo(codigo, ruta)
-                        if nuevo and nuevo != codigo:
-                            await self._escribir_archivo(ruta, nuevo)
-                            await self.memory.guardar_revision(ruta, nuevo)
-                            await self.redis_client.xadd("corec_commands", {
-                                "comando": f"codex revised {ruta}",
-                                "data": zstd.compress(json.dumps({"ruta": ruta}).encode())
-                            })
-            except Exception as e:
-                self.logger.error(f"Error en ejecución: {e}")
-                self.circuit_breaker.register_failure()
-            await asyncio.sleep(self.config.get("intervalo_revision", 300))
+            _, msgs = entries[0]
+            for msg_id, fields in msgs:
+                raw = fields.get("data")
+                try:
+                    # Validación de esquema
+                    cmd_obj = Cmd.parse_raw(raw)
+                except ValidationError as e:
+                    resp = {"status":"error","message":"Payload inválido","details": e.errors()}
+                else:
+                    action = cmd_obj.action
+                    CMD_COUNTER.labels(action=action).inc()
+                    with LATENCY_HIST.labels(action=action).time():
+                        try:
+                            resp = await self.handle(cmd_obj)
+                        except Exception as e:
+                            ERROR_COUNTER.labels(action=action).inc()
+                            self.logger.error(f"Error manejando {action}: {e}")
+                            resp = {"status":"error","message": str(e)}
+                # Publica respuesta
+                await self.redis.xadd(self.stream_out, {"data": json.dumps(resp)})
+                last_id = msg_id
 
-    async def manejar_comando(self, comando: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            action = comando.get("action")
-            params = comando.get("params", {})
-            if action == "revise":
-                ruta = params.get("file")
-                codigo = await self._leer_archivo(ruta)
-                nuevo = await self.reviser.revisar_codigo(codigo, ruta)
-                if nuevo:
-                    await self._escribir_archivo(ruta, nuevo)
-                    await self.memory.guardar_revision(ruta, nuevo)
-                    await self.redis_client.xadd("corec_commands", {
-                        "comando": f"codex revised {ruta}"
-                    })
-                    return {"status": "ok", "file": ruta}
-            elif action == "generate_website":
-                result = await self.generator.generar_website(params)
-                await self.redis_client.xadd("corec_commands", {
-                    "comando": f"codex website_generated {result['output_dir']}"
-                })
-                return result
-            elif action == "generate_plugin":
-                result = await self.generator.generar_plugin(params)
-                await self.redis_client.xadd("corec_commands", {
-                    "comando": f"codex plugin_generated {result['output_dir']}"
-                })
-                return result
-            return {"status": "error", "message": "Acción no soportada"}
-        except Exception as e:
-            self.logger.error(f"Error en comando: {e}")
-            return {"status": "error", "message": str(e)}
+    async def handle(self, cmd: Cmd) -> Dict[str,Any]:
+        if isinstance(cmd, CmdGeneratePlugin):
+            name = cmd.params.plugin_name
+            return await self.generator.generate_plugin({"plugin_name": name})
 
-    async def _buscar_archivos(self):
-        archivos = []
-        for root, _, files in os.walk(self.directorio):
-            for file in files:
-                ruta = os.path.join(root, file)
-                if not any(fnmatch.fnmatch(ruta, pattern) for pattern in self.exclude_patterns):
-                    archivos.append(ruta)
-        return archivos
+        if isinstance(cmd, CmdGenerateWebsite):
+            return await self.generator.generate_website(cmd.params.dict())
 
-    async def _leer_archivo(self, path: str) -> str:
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return f.read()
-        except Exception as e:
-            self.logger.error(f"Error leyendo {path}: {e}")
-            return ""
+        if isinstance(cmd, CmdRevise):
+            # Sanitiza ruta dentro del proyecto
+            p = sanitize_path(self.base_dir, cmd.params.file)
+            # Lee contenido de forma no bloqueante
+            src = await run_blocking(p.read_text, encoding="utf-8")
+            nuevo = await self.reviser.revisar_codigo(src, str(p))
+            if nuevo and nuevo != src:
+                await run_blocking(p.write_text, nuevo, encoding="utf-8")
+                return {"status":"ok","message":"Archivo revisado","path": str(p)}
+            return {"status":"ok","message":"Sin cambios","path": str(p)}
 
-    async def _escribir_archivo(self, path: str, contenido: str):
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(contenido)
-        except Exception as e:
-            self.logger.error(f"Error escribiendo {path}: {e}")
-            self.circuit_breaker.register_failure()
+        # Acción no soportada
+        return {"status":"error","message":f"Acción '{cmd.action}' no soportada"}
+
+    async def teardown(self):
+        # Cierra recursos si fuera necesario
+        if self.redis:
+            await self.redis.close()

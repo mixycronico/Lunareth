@@ -2,60 +2,56 @@
 # -*- coding: utf-8 -*-
 """
 plugins/codex/processors/generator.py
-Genera websites y plugins en el plugin Codex.
+Genera plugins y websites desde plantillas Jinja2.
 """
-import os
-import shutil
-import logging
+import os, shutil, logging
 from jinja2 import Environment, FileSystemLoader
 from typing import Dict, Any
+from utils.helpers import run_blocking
 
-class CodexGenerator:
-    def __init__(self, config):
-        self.logger = logging.getLogger("CodexGenerator")
-        self.config = config
-        self.website_output_dir = config.get("website_output_dir", "generated_websites/")
-        self.plugin_output_dir = config.get("plugin_output_dir", "plugins/")
-        self.website_templates = config.get("website_templates", {})
-        self.plugin_templates = config.get("plugin_templates", {})
-        self.env = Environment(loader=FileSystemLoader("plugins/codex/utils/templates"))
+class Generator:
+    def __init__(self, config: Dict[str,Any]):
+        self.logger     = logging.getLogger("CodexGenerator")
+        tpl_dir          = config["templates_dir"]
+        self.plugin_tpl = os.path.join(tpl_dir, "plugin")
+        self.web_tpls   = {
+            "react": os.path.join(tpl_dir, "react_app"),
+            "fastapi": os.path.join(tpl_dir, "fastapi_app")
+        }
+        self.out_plugins  = config["output_plugins"]
+        self.out_websites = config["output_websites"]
+        self.env          = Environment(loader=FileSystemLoader(tpl_dir))
 
-    async def generar_website(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def generate_plugin(self, params: Dict[str,Any]) -> Dict[str,Any]:
+        name = params.get("plugin_name")
+        dest = os.path.join(self.out_plugins, name)
         try:
-            template_type = params.get("template", "react")
-            project_name = params.get("project_name", "website")
-            output_dir = os.path.join(self.website_output_dir, project_name)
-            template_dir = self.website_templates.get(template_type, "utils/templates/react_app")
-
-            shutil.copytree(template_dir, output_dir, dirs_exist_ok=True)
-            self._render_templates(output_dir, params)
-            self.logger.info(f"Website generado: {output_dir}")
-            return {"status": "ok", "output_dir": output_dir}
-        except Exception as e:
-            self.logger.error(f"Error generando website: {e}")
-            return {"status": "error", "message": str(e)}
-
-    async def generar_plugin(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            plugin_name = params.get("plugin_name", "new_plugin")
-            template_type = params.get("template", "corec_plugin")
-            output_dir = os.path.join(self.plugin_output_dir, plugin_name)
-            template_dir = self.plugin_templates.get(template_type, "utils/templates/plugin")
-
-            shutil.copytree(template_dir, output_dir, dirs_exist_ok=True)
-            self._render_templates(output_dir, params)
-            self.logger.info(f"Plugin generado: {output_dir}")
-            return {"status": "ok", "output_dir": output_dir}
+            await run_blocking(shutil.copytree, self.plugin_tpl, dest, dirs_exist_ok=True)
+            self._render(dest, params)
+            return {"status":"ok","type":"plugin","path":dest}
         except Exception as e:
             self.logger.error(f"Error generando plugin: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status":"error","message":str(e)}
 
-    def _render_templates(self, output_dir: str, params: Dict[str, Any]):
-        for root, _, files in os.walk(output_dir):
-            for file in files:
-                if file.endswith((".py", ".js", ".html", ".css", ".json")):
-                    file_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(file_path, output_dir)
-                    template = self.env.get_template(rel_path)
-                    with open(file_path, "w", encoding="utf-8") as f:
-                        f.write(template.render(**params))
+    async def generate_website(self, params: Dict[str,Any]) -> Dict[str,Any]:
+        kind = params.get("template", "react")
+        src  = self.web_tpls.get(kind)
+        name = params.get("project_name", "webapp")
+        dest = os.path.join(self.out_websites, name)
+        try:
+            await run_blocking(shutil.copytree, src, dest, dirs_exist_ok=True)
+            self._render(dest, params)
+            return {"status":"ok","type":"website","path":dest}
+        except Exception as e:
+            self.logger.error(f"Error generando website: {e}")
+            return {"status":"error","message":str(e)}
+
+    def _render(self, root: str, params: Dict[str,Any]):
+        for base, _, files in os.walk(root):
+            for fn in files:
+                if fn.endswith((".py",".js",".html",".json")):
+                    rel = os.path.relpath(os.path.join(base,fn), root)
+                    tpl = self.env.get_template(rel)
+                    content = tpl.render(**params)
+                    with open(os.path.join(base,fn),"w",encoding="utf-8") as f:
+                        f.write(content)

@@ -2,53 +2,70 @@
 # -*- coding: utf-8 -*-
 """
 plugins/crypto_trading/main.py
-Orquesta el plugin CryptoTrading.
+Inicialización del plugin CryptoTrading con CoreC.
 """
+
 import asyncio
 import logging
-import json
-from corec.core import ComponenteBase
-from .processors.exchange_processor import ExchangeProcessor
-from .processors.capital_processor import CapitalProcessor
-from .processors.settlement_processor import SettlementProcessor
-from .processors.macro_processor import MacroProcessor
-from .processors.monitor_processor import MonitorProcessor
-from .processors.predictor_processor import PredictorProcessor
-from .processors.analyzer_processor import AnalyzerProcessor
-from .processors.execution_processor import ExecutionProcessor
-from .processors.user_processor import UserProcessor
+from corec.plugins.base import PluginBase
+from plugins.crypto_trading.processors.analyzer_processor import AnalyzerProcessor
+from plugins.crypto_trading.processors.execution_processor import ExecutionProcessor
+from plugins.crypto_trading.processors.monitor_processor import MonitorProcessor
+from plugins.crypto_trading.processors.macro_processor import MacroProcessor
+from plugins.crypto_trading.processors.predictor_processor import PredictorProcessor
+from plugins.crypto_trading.processors.settlement_processor import SettlementProcessor
+from plugins.crypto_trading.utils.db import TradingDB
 
-class CryptoTrading(ComponenteBase):
+class CryptoTrading(PluginBase):
     def __init__(self, nucleus, config):
         self.nucleus = nucleus
-        self.config = config
+        self.config = config["crypto_trading"]
         self.logger = logging.getLogger("CryptoTrading")
-        self.redis_client = nucleus.redis_client
-        self.components = []
+        self.db = TradingDB(self.config["db_config"])
 
-    async def inicializar(self):
-        self.components.append(ExchangeProcessor(self.config, self.redis_client))
-        self.components.append(CapitalProcessor(self.config, self.redis_client))
-        self.components.append(SettlementProcessor(self.config, self.redis_client))
-        self.components.append(MacroProcessor(self.config, self.redis_client))
-        self.components.append(MonitorProcessor(self.config, self.redis_client))
-        self.components.append(PredictorProcessor(self.config, self.redis_client))
-        self.components.append(AnalyzerProcessor(self.config, self.redis_client))
-        self.components.append(ExecutionProcessor(self.config, self.redis_client))
-        self.components.append(UserProcessor(self.config, self.redis_client))
-        for component in self.components:
-            await component.inicializar()
-        self.logger.info("CryptoTrading inicializado")
+        self.analyzer = AnalyzerProcessor(self.config, self.db, nucleus.redis_client)
+        self.execution = ExecutionProcessor(self.config, self.db, nucleus.redis_client)
+        self.monitor   = MonitorProcessor(self.config, self.db, nucleus.redis_client)
+        self.macro     = MacroProcessor(self.config, self.db, nucleus.redis_client)
+        self.predictor = PredictorProcessor(self.config, self.db, nucleus.redis_client)
+        self.settlement= SettlementProcessor(self.config, self.db, nucleus.redis_client)
+
+    async def inicializar(self, nucleus, config):
+        self.logger.info("Inicializando CryptoTrading...")
+        await self.db.connect()
+
+        await self.analyzer.inicializar()
+        await self.execution.inicializar()
+        await self.monitor.inicializar()
+        await self.macro.inicializar()
+        await self.predictor.inicializar()
+        await self.settlement.inicializar()
+
+        self.logger.info("CryptoTrading listo")
 
     async def ejecutar(self):
-        tasks = [component.ejecutar() for component in self.components]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        self.logger.info("Ejecutando CryptoTrading...")
+        await asyncio.gather(
+            self.analyzer.ejecutar(),
+            self.execution.ejecutar(),
+            self.monitor.ejecutar(),
+            self.macro.ejecutar(),
+            self.predictor.ejecutar(),
+            self.settlement.ejecutar()
+        )
 
     async def detener(self):
-        for component in self.components:
-            await component.detener()
+        self.logger.info("Deteniendo CryptoTrading...")
+        await self.analyzer.detener()
+        await self.execution.detener()
+        await self.monitor.detener()
+        await self.macro.detener()
+        await self.predictor.detener()
+        await self.settlement.detener()
+        await self.db.disconnect()
         self.logger.info("CryptoTrading detenido")
 
 def inicializar(nucleus, config):
     plugin = CryptoTrading(nucleus, config)
-    asyncio.create_task(plugin.inicializar())
+    asyncio.create_task(plugin.inicializar(nucleus, config))
+    return plugin

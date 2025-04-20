@@ -1,49 +1,45 @@
-from corec.core import ModuloBase, celery_app, logging, asyncio, time, random
-from corec.entities import MicroCeluEntidadCoreC, CeluEntidadCoreC, crear_entidad, crear_celu_entidad, procesar_entidad, procesar_celu_entidad
+# corec/modules/registro.py
+import logging, asyncio, random
+from typing import Dict, Any
+
+from corec.core import ModuloBase
 from corec.blocks import BloqueSimbiotico
+from corec.entities import crear_entidad
 
 class ModuloRegistro(ModuloBase):
     def __init__(self):
         self.logger = logging.getLogger("ModuloRegistro")
         self.bloques = {}
+        self.nucleus = None
 
     async def inicializar(self, nucleus):
         self.nucleus = nucleus
-        self.logger.info("[ModuloRegistro] Inicializado")
-        for bloque_config in self.nucleus.config.get("bloques", []):
-            await self.registrar_bloque(bloque_config["id"], bloque_config["canal"], bloque_config["entidades"])
+        self.logger.info("[Registro] listo")
+        for cfg in self.nucleus.config.get("bloques", []):
+            await self.registrar_bloque(cfg["id"], cfg["canal"], cfg["entidades"])
 
-    async def registrar_bloque(self, bloque_id: str, canal: int, num_entidades: int):
-        entidades_por_bloque = 1000
-        num_bloques = (num_entidades // entidades_por_bloque) + (1 if num_entidades % entidades_por_bloque else 0)
-        for j in range(num_bloques):
-            bloque_id_j = f"{bloque_id}_{j}" if j else bloque_id
+    async def registrar_bloque(self, bloque_id:str, canal:int, cantidad:int):
+        size = 1000
+        resto = cantidad
+        idx = 0
+        while resto>0:
+            cnt = min(size, resto)
             entidades = []
-            for i in range(min(entidades_por_bloque, num_entidades - j * entidades_por_bloque)):
-                async def funcion():
-                    return {"valor": random.random()}
-                entidades.append(crear_entidad(f"m{i+j*entidades_por_bloque}", canal, funcion))
-            bloque = BloqueSimbiotico(bloque_id_j, canal, entidades, nucleus=self.nucleus)
-            self.bloques[bloque_id_j] = bloque
-            self.logger.info(f"Bloque {bloque_id_j} registrado con {len(entidades)} entidades")
-
-    async def registrar_celu_entidad(self, celu: CeluEntidadCoreC):
-        bloque_id = f"celu_{celu.id}"
-        bloque = BloqueSimbiotico(bloque_id, celu.canal, [], nucleus=self.nucleus)
-        self.bloques[bloque_id] = bloque
-        self.logger.info(f"CeluEntidad {celu.id} registrada en bloque {bloque_id}")
-
-    async def registrar_micro_celu_entidad(self, micro: MicroCeluEntidadCoreC):
-        bloque_id = f"micro_{micro.id}"
-        bloque = BloqueSimbiotico(bloque_id, micro.canal, [micro], nucleus=self.nucleus)
-        self.bloques[bloque_id] = bloque
-        self.logger.info(f"MicroCeluEntidad {micro.id} registrada en bloque {bloque_id}")
+            for i in range(cnt):
+                async def tmp(): return {"valor": random.random()}
+                entidades.append(crear_entidad(f"m{idx}", canal, tmp))
+                idx += 1
+            bid = bloque_id if idx==cnt else f"{bloque_id}_{idx//size}"
+            bloque = BloqueSimbiotico(bid, canal, entidades, nucleus=self.nucleus)
+            self.bloques[bid] = bloque
+            resto -= cnt
+            self.logger.info(f"[Registro] {bid} ({cnt} ent.)")
 
     async def ejecutar(self):
         while True:
-            for bloque in self.bloques.values():
-                await bloque.escribir_postgresql(self.nucleus.db_config)
+            for b in self.bloques.values():
+                await b.escribir_postgresql(self.nucleus.db_config)
             await asyncio.sleep(300)
 
     async def detener(self):
-        self.logger.info("[ModuloRegistro] Detenido")
+        self.logger.info("[Registro] detenido")

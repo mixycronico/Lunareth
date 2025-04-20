@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+plugins/{{ plugin_name }}/main.py
+Plugin {{ plugin_name | capitalize }} para CoreC – generado automáticamente.
+"""
+import asyncio
+import logging
+from corec.plugins.base import PluginBase
+
+class {{ plugin_name | capitalize }}Plugin(PluginBase):
+    def __init__(self, nucleus, config):
+        self.nucleus = nucleus
+        self.config  = config.get("{{ plugin_name }}", {})
+        self.logger  = logging.getLogger("{{ plugin_name | capitalize }}Plugin")
+
+    async def inicializar(self, nucleus, config):
+        self.logger.info("Plugin {{ plugin_name | capitalize }} inicializando…")
+        # Aquí tu lógica de inicialización
+        pass
+
+    async def ejecutar(self):
+        # Lógica de ejecución periódica
+        while True:
+            # ejemplo: publicar alerta
+            await asyncio.sleep(self.config.get("intervalo", 60))
+
+    async def detener(self):
+        self.logger.info("Plugin {{ plugin_name | capitalize }} detenido")
+
+def inicializar(nucleus, config):
+    plugin = {{ plugin_name | capitalize }}Plugin(nucleus, config)
+    asyncio.create_task(plugin.inicializar(nucleus, config))
+    return plugin

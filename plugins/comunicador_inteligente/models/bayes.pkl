@@ -1,5 +1,0 @@
-from sklearn.naive_bayes import GaussianNB
-import pickle
-bayes_model = GaussianNB()
-with open("plugins/comunicador_inteligente/models/bayes.pkl", "wb") as f:
-    pickle.dump(bayes_model, f)

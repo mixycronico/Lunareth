@@ -1,50 +1,62 @@
 {
-    "instance_id": "corec1",
-    "db_config": {
-        "dbname": "corec_db",
-        "user": "postgres",
-        "password": "your_password",
-        "host": "localhost",
-        "port": "5432"
+  "instance_id": "corec1",
+  "db_config": {
+    "dbname": "corec_db",
+    "user": "postgres",
+    "password": "your_password",
+    "host": "localhost",
+    "port": 5432
+  },
+  "redis_config": {
+    "host": "localhost",
+    "port": 6379,
+    "username": "corec_user",
+    "password": "secure_password"
+  },
+  "bloques": [
+    {
+      "id": "enjambre_sensor",
+      "canal": 1,
+      "entidades": 980000,
+      "max_size_mb": 1,
+      "entidades_por_bloque": 1000,
+      "autoreparacion": {
+        "max_errores": 0.05,
+        "min_fitness": 0.2
+      }
     },
-    "redis_config": {
-        "host": "localhost",
-        "port": 6379,
-        "username": "corec_user",
-        "password": "secure_password"
+    {
+      "id": "nodo_seguridad",
+      "canal": 2,
+      "entidades": 1000,
+      "max_size_mb": 1,
+      "entidades_por_bloque": 1000,
+      "autoreparacion": {
+        "max_errores": 0.02,
+        "min_fitness": 0.5
+      }
     },
-    "bloques": [
-        {
-            "id": "enjambre_sensor",
-            "canal": 1,
-            "entidades": 980000,
-            "max_size_mb": 1,
-            "entidades_por_bloque": 1000,
-            "autoreparacion": {
-                "max_errores": 0.05,
-                "min_fitness": 0.2
-            }
-        },
-        {
-            "id": "nodo_seguridad",
-            "canal": 2,
-            "entidades": 1000,
-            "max_size_mb": 1,
-            "entidades_por_bloque": 1000,
-            "autoreparacion": {
-                "max_errores": 0.02,
-                "min_fitness": 0.5
-            }
-        },
-        {
-            "id": "ia_analisis",
-            "canal": 3,
-            "entidades": 20000,
-            "max_size_mb": 5,
-            "entidades_por_bloque": 2000,
-            "plugin": "procesador_inteligente"
-        }
-    ],
-    "modules": ["registro", "ejecucion", "sincronización", "auditoria"],
-    "rol": "generica"
+    {
+      "id": "ia_analisis",
+      "canal": 3,
+      "entidades": 20000,
+      "max_size_mb": 5,
+      "entidades_por_bloque": 2000,
+      "plugin": "procesador_inteligente"
+    }
+  ],
+  "plugins": {
+    "codex": {
+      "enabled": true,
+      "path": "plugins/codex/config.json"
+    },
+    "interface_system": {
+      "enabled": true,
+      "path": "plugins/interface_system/config.json"
+    },
+    "crypto_trading": {
+      "enabled": true,
+      "path": "plugins/crypto_trading/config.json"
+    }
+  }
 }

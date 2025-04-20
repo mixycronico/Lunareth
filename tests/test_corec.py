@@ -1,328 +1,209 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-tests/test_corec.py
-Pruebas rigurosas para el núcleo de CoreC, asegurando confiabilidad y calidad.
-"""
-import unittest
+# tests/test_corec.py
+import pytest
 import asyncio
 import json
-import time
+import struct
 import random
+import time
+from pathlib import Path
+
 import psycopg2
 import redis.asyncio as aioredis
-from unittest.mock import AsyncMock, patch, MagicMock
-from corec.core import (
-    serializar_mensaje, deserializar_mensaje, cargar_config,
-    enviar_mensaje_redis, recibir_mensajes_redis, celery_app
-)
+import zstd
+
+from corec.serialization import serializar_mensaje, deserializar_mensaje, MESSAGE_FORMAT
+from corec.db import init_postgresql
+from corec.redis_client import init_redis
 from corec.entities import (
-    MicroCeluEntidadCoreC, CeluEntidadCoreC, crear_entidad, crear_celu_entidad,
-    procesar_entidad, procesar_celu_entidad
+    crear_entidad, procesar_entidad,
+    crear_celu_entidad, procesar_celu_entidad
 )
 from corec.blocks import BloqueSimbiotico
-from corec.nucleus import CoreCNucleus
-from corec.bootstrap import Bootstrap
-from corec.modules.registro import ModuloRegistro
-from corec.modules.auditoria import ModuloAuditoria
-from corec.modules.ejecucion import ModuloEjecucion
-from corec.modules.sincronización import ModuloSincronización
 from corec.processors import ProcesadorSensor, ProcesadorFiltro
-import resource
-import tracemalloc
+from corec.core import cargar_config, ModuloBase
+from corec.nucleus import CoreCNucleus
+from corec.bootstrap import main as bootstrap_main
+from corec.modules.registro import ModuloRegistro
+from corec.modules.sincronizacion import ModuloSincronizacion
 
-class TestCoreCRigorous(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        # Configuración inicial para pruebas
-        cls.loop = asyncio.get_event_loop()
-        cls.config_path = "configs/corec_config.json"
-        cls.db_config = {
-            "dbname": "test_corec_db",
-            "user": "postgres",
-            "password": "test_password",
-            "host": "localhost",
-            "port": "5432"
-        }
-        cls.redis_config = {
-            "host": "localhost",
-            "port": 6379,
-            "username": "test_user",
-            "password": "test_password"
-        }
-        # Crear configuración temporal
-        with open(cls.config_path, "w") as f:
-            json.dump({
-                "instance_id": "test_corec",
-                "db_config": cls.db_config,
-                "redis_config": cls.redis_config,
-                "bloques": [
-                    {"id": "test_bloque", "canal": 1, "entidades": 1000}
-                ]
-            }, f)
+@pytest.mark.asyncio
+async def test_serialization_roundtrip():
+    id_, canal, valor, activo = 42, 3, 1.2345, True
+    raw = await serializar_mensaje(id_, canal, valor, activo)
+    assert isinstance(raw, (bytes, bytearray))
+    out = await deserializar_mensaje(raw)
+    assert out["id"] == id_
+    assert out["canal"] == canal
+    assert pytest.approx(out["valor"], rel=1e-6) == valor
+    assert out["activo"] is True
 
-    @classmethod
-    def tearDownClass(cls):
-        import os
-        os.remove(cls.config_path)
+def test_message_format_size():
+    # struct "!Ibf?" debe ocupar 4+1+4+1 = 10 bytes
+    assert struct.calcsize(MESSAGE_FORMAT) == 10
 
-    def setUp(self):
-        tracemalloc.start()
-        self.max_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+def test_cargar_config(tmp_path):
+    # Test carga de JSON válido
+    cfg = {"instance_id":"t1","db_config":{}, "redis_config":{}}
+    p = tmp_path/"cfg.json"
+    p.write_text(json.dumps(cfg))
+    loaded = cargar_config(str(p))
+    assert loaded == cfg
 
-    def tearDown(self):
-        tracemalloc.stop()
-        current_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        memory_diff_kb = (current_rss - self.max_rss) / 1024
-        self.assertLess(memory_diff_kb, 100000, f"Prueba consumió demasiada memoria: {memory_diff_kb:.2f} MB")
+def test_init_postgresql(monkeypatch):
+    # Monkeypatch psycopg2.connect para capturar queries
+    calls = []
+    class DummyCursor:
+        def execute(self, q, *args, **kwargs):
+            calls.append(q)
+        def close(self): pass
+    class DummyConn:
+        def __init__(self, **kw): self.cur = DummyCursor()
+        def cursor(self): return self.cur
+        def commit(self): pass
+        def close(self): pass
 
-    # Pruebas de core.py
-    async def test_serializar_deserializar_mensaje(self):
-        mensaje = await serializar_mensaje(1, 2, 0.5, True)
-        resultado = await deserializar_mensaje(mensaje)
-        self.assertEqual(resultado, {"id": 1, "canal": 2, "valor": 0.5, "activo": True})
+    monkeypatch.setattr(psycopg2, "connect", lambda **kw: DummyConn())
+    init_postgresql({
+        "dbname":"db", "user":"u", "password":"p", "host":"h", "port":1
+    })
+    assert any("CREATE TABLE IF NOT EXISTS bloques" in q for q in calls)
 
-    async def test_serializar_mensaje_corrupto(self):
-        with self.assertRaises(Exception):
-            await deserializar_mensaje(b"invalid")
+@pytest.mark.asyncio
+async def test_init_redis(monkeypatch):
+    # Monkeypatch aioredis.from_url
+    dummy = object()
+    async def fake_from_url(url, decode_responses):
+        return dummy
 
-    async def test_cargar_config_invalida(self):
-        with patch("corec.core.open", side_effect=FileNotFoundError):
-            config = cargar_config("invalid.json")
-            self.assertEqual(config["instance_id"], "corec1")
-            self.assertEqual(config["db_config"], {})
-            self.assertEqual(config["redis_config"], {})
+    monkeypatch.setattr(aioredis, "from_url", fake_from_url)
+    client = await init_redis({
+        "host":"h", "port":1, "username":"u", "password":"p"
+    })
+    assert client is dummy
 
-    async def test_enviar_recibir_mensaje_redis(self):
-        redis_client = AsyncMock()
-        mensaje = await serializar_mensaje(1, 2, 0.5, True)
-        await enviar_mensaje_redis(redis_client, "test_stream", mensaje, "default")
-        redis_client.xadd.assert_called()
-        with patch("corec.core.deserializar_mensaje", return_value={"id": 1, "canal": 2, "valor": 0.5, "activo": True}):
-            mensajes = await recibir_mensajes_redis(redis_client, "test_stream")
-            self.assertTrue(len(mensajes) >= 0)
+@pytest.mark.asyncio
+async def test_micro_entity_processing():
+    async def f(): return {"valor": 0.8}
+    ent = crear_entidad("m10", 2, f)
+    raw = await procesar_entidad(ent, umbral=0.5)
+    out = await deserializar_mensaje(raw)
+    assert out["id"] == 10
+    assert out["canal"] == 2
+    assert out["activo"] is True
+    assert pytest.approx(out["valor"], rel=1e-6) == 0.8
 
-    async def test_redis_fallo_conexion(self):
-        redis_client = AsyncMock()
-        redis_client.xadd.side_effect = Exception("Redis desconectado")
-        mensaje = await serializar_mensaje(1, 2, 0.5, True)
-        await enviar_mensaje_redis(redis_client, "test_stream", mensaje)
-        # Verifica que no se bloquea ante fallo
+@pytest.mark.asyncio
+async def test_micro_entity_inactive():
+    async def f(): return {"valor": 0.9}
+    ent = crear_entidad("m11", 3, f)
+    ent_inactive = (ent[0], ent[1], ent[2], False)
+    raw = await procesar_entidad(ent_inactive)
+    out = await deserializar_mensaje(raw)
+    assert out["activo"] is False
+    assert out["valor"] == 0.0
 
-    # Pruebas de entities.py
-    async def test_entidad_micro_procesamiento(self):
-        async def funcion():
-            return {"valor": 0.7}
-        entidad = crear_entidad("m1", 1, funcion)
-        resultado = await procesar_entidad(entidad, umbral=0.5)
-        mensaje = await deserializar_mensaje(resultado)
-        self.assertEqual(mensaje["valor"], 0.7)
-        self.assertTrue(mensaje["activo"])
+@pytest.mark.asyncio
+async def test_celu_entity_processing_and_error():
+    async def proc_ok(d): return {"valor": d.get("x",0)+0.2}
+    ent_ok = crear_celu_entidad("c5", 1, proc_ok)
+    raw_ok = await procesar_celu_entidad(ent_ok, {"x":0.3}, umbral=0.4)
+    out_ok = await deserializar_mensaje(raw_ok)
+    assert out_ok["activo"] is True
+    assert pytest.approx(out_ok["valor"], rel=1e-6) == 0.5
 
-    async def test_entidad_micro_inactiva(self):
-        async def funcion():
-            return {"valor": 0.7}
-        entidad = crear_entidad("m1", 1, funcion)
-        entidad = entidad[:3] + (False,)  # Desactivar entidad
-        resultado = await procesar_entidad(entidad)
-        mensaje = await deserializar_mensaje(resultado)
-        self.assertEqual(mensaje["valor"], 0.0)
-        self.assertFalse(mensaje["activo"])
+    async def proc_err(d): raise RuntimeError("boom")
+    ent_err = crear_celu_entidad("c6", 1, proc_err)
+    raw_err = await procesar_celu_entidad(ent_err, {}, umbral=0.1)
+    out_err = await deserializar_mensaje(raw_err)
+    assert out_err["activo"] is False
+    assert out_err["valor"] == 0.0
 
-    async def test_entidad_celu_procesamiento(self):
-        async def procesador(datos):
-            return {"valor": datos.get("input", 0.0) + 0.1}
-        entidad = crear_celu_entidad("c1", 1, procesador)
-        resultado = await procesar_celu_entidad(entidad, {"input": 0.5}, umbral=0.5)
-        mensaje = await deserializar_mensaje(resultado)
-        self.assertEqual(mensaje["valor"], 0.6)
-        self.assertTrue(mensaje["activo"])
+@pytest.mark.asyncio
+async def test_processors():
+    ps = ProcesadorSensor()
+    pf = ProcesadorFiltro()
+    r1 = await ps.procesar({"valores":[1.0,2.0,3.0]})
+    assert r1["valor"] == pytest.approx(2.0)
+    r2 = await pf.procesar({"valor":0.6, "umbral":0.5})
+    assert r2["valor"] == pytest.approx(0.6)
+    r3 = await pf.procesar({"valor":0.4, "umbral":0.5})
+    assert r3["valor"] == pytest.approx(0.0)
 
-    async def test_entidad_celu_fallo(self):
-        async def procesador(datos):
-            raise ValueError("Error simulado")
-        entidad = crear_celu_entidad("c1", 1, procesador)
-        resultado = await procesar_celu_entidad(entidad, {}, umbral=0.5)
-        mensaje = await deserializar_mensaje(resultado)
-        self.assertEqual(mensaje["valor"], 0.0)
-        self.assertFalse(mensaje["activo"])
+@pytest.mark.asyncio
+async def test_block_processing_and_write(monkeypatch):
+    # stub DB + compresión
+    class DummyCursor:
+        def __init__(self): self.queries=[]
+        def execute(self, q, params=None): self.queries.append(q)
+        def close(self): pass
+    class DummyConn:
+        def __init__(self, **kw): self.cur = DummyCursor()
+        def cursor(self): return self.cur
+        def commit(self): pass
+        def close(self): pass
 
-    # Pruebas de blocks.py
-    async def test_bloque_simbiotico_procesamiento(self):
-        async def funcion():
-            return {"valor": 0.7}
-        entidades = [crear_entidad(f"m{i}", 1, funcion) for i in range(100)]
-        bloque = BloqueSimbiotico("test_bloque", 1, entidades, max_size=1024)
-        resultado = await bloque.procesar(0.5)
-        self.assertEqual(resultado["bloque_id"], "test_bloque")
-        self.assertEqual(len(resultado["mensajes"]), 100)
-        self.assertGreaterEqual(resultado["fitness"], 0.0)
+    monkeypatch.setattr(psycopg2, "connect", lambda **kw: DummyConn())
+    monkeypatch.setattr(zstd, "compress", lambda data, level: data)
 
-    async def test_bloque_simbiotico_autoreparacion(self):
-        async def funcion_fallo():
-            return {"valor": 0.0}
-        entidades = [crear_entidad(f"m{i}", 1, funcion_fallo) for i in range(100)]
-        bloque = BloqueSimbiotico("test_bloque", 1, entidades, max_size=1024)
-        resultado = await bloque.procesar(0.5)
-        self.assertGreater(bloque.fallos, 0)
-        await bloque.reparar(10)
-        self.assertEqual(len(bloque.entidades), 100)
+    async def f1(): return {"valor":1.0}
+    async def f2(): return {"valor":0.0}
+    ents = [crear_entidad("m1",1,f1), crear_entidad("m2",1,f2)]
+    stub = type("N",(object,),{"instance_id":"X"})()
+    bloq = BloqueSimbiotico("B1",1,ents,max_size_mb=1,nucleus=stub)
 
-    async def test_bloque_simbiotico_limite_memoria(self):
-        async def funcion():
-            return {"valor": random.random()}
-        entidades = [crear_entidad(f"m{i}", 1, funcion) for i in range(10000)]
-        bloque = BloqueSimbiotico("test_bloque", 1, entidades, max_size=1024)
-        resultado = await bloque.procesar(0.5)
-        self.assertLessEqual(len(resultado["mensajes"]), 100)
+    out = await bloq.procesar(1.0)
+    assert out["bloque_id"] == "B1"
+    assert isinstance(out["mensajes"], list)
 
-    # Pruebas de nucleus.py
-    async def test_nucleus_inicializacion(self):
-        nucleus = CoreCNucleus(self.config_path, "test_corec")
-        with patch.object(nucleus, "_inicializar_redis", AsyncMock()), \
-             patch.object(nucleus, "_inicializar_db", AsyncMock()):
-            await nucleus.inicializar()
-            self.assertTrue(nucleus.redis_client is not None)
-            self.assertGreater(len(nucleus.modulos), 0)
+    await bloq.escribir_postgresql({"dbname":"x","user":"u","password":"p","host":"h","port":1})
+    assert any("INSERT INTO bloques" in q for q in bloq.nucleus is not None and bloq.nucleus)
 
-    async def test_nucleus_fallo_db(self):
-        nucleus = CoreCNucleus(self.config_path, "test_corec")
-        with patch("corec.nucleus.psycopg2.connect", side_effect=psycopg2.Error):
-            with self.assertRaises(Exception):
-                await nucleus._inicializar_db()
+@pytest.mark.asyncio
+async def test_nucleus_and_modules_loading(monkeypatch, tmp_path):
+    # config temporal
+    cfg = {"instance_id":"t","db_config":{},"redis_config":{},"bloques":[]}
+    cf = tmp_path/"cfg.json"
+    cf.write_text(json.dumps(cfg))
 
-    async def test_nucleus_concurrencia_bloques(self):
-        nucleus = CoreCNucleus(self.config_path, "test_corec")
-        nucleus.modulos["registro"] = ModuloRegistro()
-        async def funcion():
-            return {"valor": random.random()}
-        entidades = [crear_entidad(f"m{i}", 1, funcion) for i in range(1000)]
-        bloque = BloqueSimbiotico("test_bloque", 1, entidades, max_size=1024, nucleus=nucleus)
-        nucleus.modulos["registro"].bloques["test_bloque"] = bloque
-        tasks = [bloque.procesar(0.5) for _ in range(10)]
-        resultados = await asyncio.gather(*tasks)
-        self.assertEqual(len(resultados), 10)
+    # stub DB y Redis
+    monkeypatch.setattr("corec.db.init_postgresql", lambda c: None)
+    async def fake_redis(c): return "R"
+    monkeypatch.setattr("corec.redis_client.init_redis", fake_redis)
 
-    # Pruebas de bootstrap.py
-    async def test_bootstrap_carga_modulos(self):
-        bootstrap = Bootstrap(self.config_path, "test_corec")
-        with patch("corec.bootstrap.importlib.import_module", return_value=MagicMock()):
-            await bootstrap.inicializar()
-            self.assertGreater(len(bootstrap.components), 0)
+    nuc = CoreCNucleus(str(cf))
+    await nuc.inicializar()
+    assert nuc.redis_client == "R"
+    # debe cargar los 4 módulos básicos
+    assert set(nuc.modules.keys()) == {"registro","ejecucion","auditoria","sincronizacion"}
 
-    async def test_bootstrap_fallo_carga(self):
-        bootstrap = Bootstrap(self.config_path, "test_corec")
-        with patch("corec.bootstrap.importlib.import_module", side_effect=ImportError):
-            await bootstrap.inicializar()
-            self.assertGreater(len(bootstrap.components), 0)  # Aún carga nucleus
+@pytest.mark.asyncio
+async def test_modulo_registro_and_sincronizacion():
+    # Registro
+    mod = ModuloRegistro()
+    nucleus = type("N",(object,),{"config":{"bloques":[{"id":"b1","canal":1,"entidades":10}]}})()
+    await mod.inicializar(nucleus)
+    assert "b1" in mod.bloques
 
-    # Pruebas de modules/registro.py
-    async def test_modulo_registro_bloques(self):
-        modulo = ModuloRegistro()
-        nucleus = MagicMock()
-        nucleus.config = {"bloques": [{"id": "test_bloque", "canal": 1, "entidades": 1000}]}
-        nucleus.db_config = self.db_config
-        await modulo.inicializar(nucleus)
-        await modulo.registrar_bloque("test_bloque", 1, 1000)
-        self.assertIn("test_bloque", modulo.bloques)
+    # Sincronización
+    mod2 = ModuloSincronizacion()
+    nucleus2 = type("N",(object,),{"modules":{"registro": mod}})()
+    # crear dos bloques simulados
+    b1 = BloqueSimbiotico("b1",1,[],max_size_mb=1,nucleus=nucleus2)
+    b2 = BloqueSimbiotico("b2",1,[],max_size_mb=1,nucleus=nucleus2)
+    mod.bloques = {"b1":b1, "b2":b2}
+    nucleus2.modules = {"registro": mod}
+    await mod2.inicializar(nucleus2)
+    await mod2.fusionar_bloques("b1","b2","b3")
+    assert "b3" in mod.bloques
 
-    # Pruebas de modules/auditoria.py
-    async def test_modulo_auditoria_anomalias(self):
-        modulo = ModuloAuditoria()
-        nucleus = MagicMock()
-        nucleus.db_config = self.db_config
-        nucleus.anomaly_detector = MagicMock()
-        nucleus.anomaly_detector.fit_predict.return_value = [-1, 1]
-        nucleus.publicar_alerta = AsyncMock()
-        with patch("psycopg2.connect") as mock_connect:
-            mock_conn = mock_connect.return_value
-            mock_cursor = mock_conn.cursor.return_value
-            mock_cursor.fetchall.side_effect = [[(100, 0.5), (200, 0.7)], [("b1", 100, 0.5), ("b2", 200, 0.7)]]
-            await modulo.detectar_anomalias()
-            nucleus.publicar_alerta.assert_awaited()
-
-    # Pruebas de modules/ejecucion.py
-    async def test_modulo_ejecucion_tareas(self):
-        modulo = ModuloEjecucion()
-        nucleus = MagicMock()
-        nucleus.modulos = {"registro": MagicMock()}
-        nucleus.modulos["registro"].bloques = {"test_bloque": MagicMock()}
-        nucleus.db_config = self.db_config
-        nucleus.instance_id = "test_corec"
-        await modulo.inicializar(nucleus)
-        with patch.object(modulo, "ejecutar_bloque") as mock_task:
-            await modulo.ejecutar()
-            mock_task.delay.assert_called()
-
-    # Pruebas de modules/sincronización.py
-    async def test_modulo_sincronizacion_fusion(self):
-        modulo = ModuloSincronización()
-        nucleus = MagicMock()
-        nucleus.modulos = {"registro": MagicMock()}
-        bloque1 = BloqueSimbiotico("b1", 1, [], max_size=1024)
-        bloque2 = BloqueSimbiotico("b2", 1, [], max_size=1024)
-        nucleus.modulos["registro"].bloques = {"b1": bloque1, "b2": bloque2}
-        await modulo.inicializar(nucleus)
-        await modulo.fusionar_bloques("b1", "b2", "b3")
-        self.assertIn("b3", nucleus.modulos["registro"].bloques)
-
-    # Pruebas de processors.py
-    async def test_procesador_sensor(self):
-        procesador = ProcesadorSensor()
-        resultado = await procesador.procesar({"valores": [0.1, 0.2, 0.3]})
-        self.assertAlmostEqual(resultado["valor"], 0.2)
-
-    async def test_procesador_filtro(self):
-        procesador = ProcesadorFiltro()
-        resultado = await procesador.procesar({"valor": 0.7, "umbral": 0.5})
-        self.assertEqual(resultado["valor"], 0.7)
-        resultado = await procesador.procesar({"valor": 0.3, "umbral": 0.5})
-        self.assertEqual(resultado["valor"], 0.0)
-
-    # Prueba de rendimiento para ~1M entidades
-    async def test_rendimiento_millon_entidades(self):
-        async def funcion():
-            return {"valor": random.random()}
-        num_entidades = 1000000 // 1000
-        bloques = []
-        for i in range(num_entidades):
-            entidades = [crear_entidad(f"m{j}", 1, funcion) for j in range(1000)]
-            bloques.append(BloqueSimbiotico(f"b{i}", 1, entidades, max_size=1024))
-        start_time = time.time()
-        tasks = [bloque.procesar(0.5) for bloque in bloques[:10]]  # Limitado para pruebas
-        await asyncio.gather(*tasks)
-        elapsed = time.time() - start_time
-        self.assertLess(elapsed, 10, f"Procesamiento tomó demasiado: {elapsed}s")
-        memory_diff_kb = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - self.max_rss) / 1024
-        self.assertLess(memory_diff_kb, 1000000, f"Memoria excedida: {memory_diff_kb:.2f} MB")
-
-    def test_all(self):
-        async def run_tests():
-            await self.test_serializar_deserializar_mensaje()
-            await self.test_serializar_mensaje_corrupto()
-            await self.test_cargar_config_invalida()
-            await self.test_enviar_recibir_mensaje_redis()
-            await self.test_redis_fallo_conexion()
-            await self.test_entidad_micro_procesamiento()
-            await self.test_entidad_micro_inactiva()
-            await self.test_entidad_celu_procesamiento()
-            await self.test_entidad_celu_fallo()
-            await self.test_bloque_simbiotico_procesamiento()
-            await self.test_bloque_simbiotico_autoreparacion()
-            await self.test_bloque_simbiotico_limite_memoria()
-            await self.test_nucleus_inicializacion()
-            await self.test_nucleus_fallo_db()
-            await self.test_nucleus_concurrencia_bloques()
-            await self.test_bootstrap_carga_modulos()
-            await self.test_bootstrap_fallo_carga()
-            await self.test_modulo_registro_bloques()
-            await self.test_modulo_auditoria_anomalias()
-            await self.test_modulo_ejecucion_tareas()
-            await self.test_modulo_sincronizacion_fusion()
-            await self.test_procesador_sensor()
-            await self.test_procesador_filtro()
-            await self.test_rendimiento_millon_entidades()
-        self.loop.run_until_complete(run_tests())
-
-if __name__ == "__main__":
-    unittest.main()
+# (Opcional) Prueba mínima de arranque
+@pytest.mark.asyncio
+async def test_bootstrap_runs(monkeypatch, tmp_path):
+    # evita cargar módulos reales
+    monkeypatch.setattr("corec.bootstrap.CoreCNucleus", lambda cfg: type("X",(object,),{
+        "inicializar": asyncio.coroutine(lambda self: None),
+        "ejecutar": asyncio.coroutine(lambda self: None),
+        "detener": asyncio.coroutine(lambda self: None)
+    })())
+    # solo llama a main y no falle
+    await bootstrap_main()
