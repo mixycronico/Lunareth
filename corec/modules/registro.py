@@ -1,6 +1,5 @@
 import logging
 import random
-from typing import Dict
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
@@ -10,7 +9,7 @@ class ModuloRegistro(ComponenteBase):
     def __init__(self):
         self.logger = logging.getLogger("ModuloRegistro")
         self.nucleus = None
-        self.bloques: Dict[str, Dict] = {}
+        self.bloques = {}
 
     async def inicializar(self, nucleus, config=None):
         """Inicializa el módulo de registro."""
@@ -25,7 +24,10 @@ class ModuloRegistro(ComponenteBase):
         try:
             if not bloque_id or canal < 0 or num_entidades <= 0:
                 raise ValueError("Configuración inválida para el bloque")
-            async def test_func(): return {"valor": 0.7}
+
+            async def test_func():
+                return {"valor": 0.7}
+
             entidades = [crear_entidad(f"m{i}", canal, test_func) for i in range(num_entidades)]
             BloqueSimbiotico(bloque_id, canal, entidades, max_size_mb, self.nucleus)
             self.bloques[bloque_id] = {
