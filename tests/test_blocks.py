@@ -49,7 +49,7 @@ async def test_bloque_procesar_valor_invalido(nucleus, monkeypatch):
         return {"valor": "invalid"}
 
     entidades = [Entidad("ent_1", 1, lambda: {"valor": "invalid"})]
-    monkeypatch.setattr(entidades[0], "procesar", mock_procesar)
+    monkeypatch.setattr(Entidad, "procesar", mock_procesar)
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     with patch.object(bloque.logger, "warning") as mock_logger, \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
@@ -69,7 +69,7 @@ async def test_bloque_procesar_error_entidad(nucleus, monkeypatch):
 
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
     monkeypatch.setattr(entidades[0], "procesar", mock_procesar)
-    bloque = BloqueSimbiotico("test_block", 1, entidades, 10. días, nucleus)
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)  # Corregido: 10. días -> 10.0
     with patch.object(bloque.logger, "error") as mock_logger, \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         result = await bloque.procesar(0.5)
