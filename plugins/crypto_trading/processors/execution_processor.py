@@ -1,5 +1,7 @@
 import logging
-from datetime import datetime
+import random
+import asyncio
+from typing import Dict, Any
 from plugins.crypto_trading.utils.helpers import CircuitBreaker
 
 class ExecutionProcessor:
@@ -11,105 +13,101 @@ class ExecutionProcessor:
             max_failures=config.get("cb_max_failures", 3),
             reset_timeout=config.get("cb_reset_timeout", 900)
         )
-        self.capital = config.get("capital", 100)
-        self.active_capital = 0  # Capital actualmente invertido
+        self.active_capital = config["capital"]
+        self.open_trades = config["open_trades"]
+        self.num_exchanges = config["num_exchanges"]
+        self.slippage_tolerance = 0.01  # Tolerancia al deslizamiento del 1%
+        self.slippage_history = []  # Historial de deslizamiento para análisis
 
-    def get_phase(self) -> int:
-        if self.capital < 1000:
-            return 1
-        elif self.capital < 10000:
-            return 2
-        elif self.capital < 100000:
-            return 3
-        elif self.capital < 1000000:
-            return 4
-        elif self.capital < 10000000:
-            return 5
-        else:
-            return 6
-
-    def get_execution_params(self) -> Dict[str, float]:
-        phase = self.get_phase()
-        phase_params = {
-            1: {"risk_per_trade": 0.02, "take_profit": 0.03, "stop_loss": 0.01},
-            2: {"risk_per_trade": 0.018, "take_profit": 0.03, "stop_loss": 0.01},
-            3: {"risk_per_trade": 0.013, "take_profit": 0.04, "stop_loss": 0.015},
-            4: {"risk_per_trade": 0.007, "take_profit": 0.04, "stop_loss": 0.015},
-            5: {"risk_per_trade": 0.003, "take_profit": 0.05, "stop_loss": 0.02},
-            6: {"risk_per_trade": 0.001, "take_profit": 0.05, "stop_loss": 0.02}
-        }
-        return phase_params[phase]
-
-    def can_trade(self, exchange: str, num_exchanges: int) -> bool:
-        """Verifica si se puede operar según el límite del 70% del capital."""
-        max_capital_per_exchange = (self.capital * 0.7) / num_exchanges
-        exchange_active_capital = sum(
-            trade["cantidad"] for trade_id, trade in self.config.get("open_trades", {}).items()
-            if trade_id.startswith(exchange + ":")
-        )
-        return exchange_active_capital < max_capital_per_exchange
-
-    async def ejecutar_operacion(self, exchange, orden: dict, paper_mode: bool = False, trade_multiplier: int = 1) -> dict:
-        if not self.cb.check():
-            self.logger.warning(f"[{exchange}] Circuito de ejecución activo, operación omitida")
-            return {"status": "skipped", "motivo": "circuito_abierto"}
-
-        try:
-            params = self.get_execution_params()
-            risk_per_trade = params["risk_per_trade"]
-            take_profit = params["take_profit"]
-            stop_loss = params["stop_loss"]
-
-            # Multiplicar operaciones durante subidas
-            for _ in range(trade_multiplier):
-                if not self.can_trade(exchange, self.config.get("num_exchanges", 2)):
-                    self.logger.warning(f"[{exchange}] Límite de capital alcanzado para este exchange")
-                    break
-
-                if paper_mode:
-                    orden_id = f"paper_{exchange}_{datetime.utcnow().timestamp()}"
-                    resultado = {
-                        "orden_id": orden_id,
-                        "status": "ejecutado",
-                        "precio": orden["precio"],
-                        "cantidad": orden["cantidad"] * risk_per_trade,
-                        "activo": orden["activo"],
-                        "tipo": orden["tipo"],
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "modo": "paper",
-                        "take_profit": orden["precio"] * (1 + take_profit),
-                        "stop_loss": orden["precio"] * (1 - stop_loss)
-                    }
-                    self.active_capital += resultado["cantidad"]
-                    self.logger.info(f"Orden simulada (paper mode): {resultado}")
-                else:
-                    orden_id = f"{exchange}_{datetime.utcnow().timestamp()}"
-                    resultado = {
-                        "orden_id": orden_id,
-                        "status": "ejecutado",
-                        "precio": orden["precio"],
-                        "cantidad": orden["cantidad"] * risk_per_trade,
-                        "activo": orden["activo"],
-                        "tipo": orden["tipo"],
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "modo": "real",
-                        "take_profit": orden["precio"] * (1 + take_profit),
-                        "stop_loss": orden["precio"] * (1 - stop_loss)
-                    }
-                    self.active_capital += resultado["cantidad"]
-                    self.logger.info(f"Orden ejecutada: {resultado}")
-                yield resultado
-
-        except Exception as e:
-            self.logger.exception(f"Error al ejecutar en {exchange}")
-            self.cb.register_failure()
-            return {"status": "error", "motivo": str(e)}
-
-    def update_capital(self, new_capital: float):
-        self.capital = new_capital
-        self.logger.info(f"[ExecutionProcessor] Capital actualizado: ${self.capital}, Fase: {self.get_phase()}")
+    def update_capital(self, capital: float):
+        self.active_capital = capital
+        self.logger.info(f"[ExecutionProcessor] Capital activo actualizado: ${self.active_capital}")
 
     def reset_active_capital(self):
-        """Resetea el capital activo después del cierre diario."""
         self.active_capital = 0
-        self.logger.info("[ExecutionProcessor] Capital activo reseteado")
+        self.logger.info("[ExecutionProcessor] Capital activo reiniciado")
+
+    def calculate_slippage(self, volatility: float, volume: float) -> float:
+        """Calcula el deslizamiento basado en la volatilidad y el volumen."""
+        # El deslizamiento es mayor con alta volatilidad y bajo volumen
+        base_slippage = volatility * 0.1  # Por ejemplo, 0.05 de volatilidad -> 0.005 (0.5%)
+        volume_factor = max(0.1, 1000000 / volume)  # Menor volumen -> mayor deslizamiento
+        slippage = base_slippage * volume_factor
+        # Añadir un componente aleatorio para simular variaciones del mercado
+        slippage *= random.uniform(0.8, 1.2)
+        return slippage
+
+    async def ejecutar_operacion(self, exchange: str, params: Dict[str, Any], paper_mode: bool = True, trade_multiplier: int = 1):
+        if not self.cb.check():
+            self.logger.warning("Circuit breaker activo, omitiendo ejecución de operación")
+            yield {"status": "skipped", "motivo": "circuito_abierto"}
+            return
+
+        try:
+            # Obtener datos de mercado para calcular el deslizamiento
+            market_data = await self.redis.get("market_data")
+            if not market_data:
+                self.logger.warning("No hay datos de mercado disponibles para calcular deslizamiento")
+                yield {"status": "error", "motivo": "no_data"}
+                return
+            market_data = json.loads(market_data)
+            crypto_data = market_data["crypto"]
+            symbol = params["activo"]
+            pair_data = crypto_data.get(symbol, {"volume": 1000000, "volatility": 0.01})
+            volatility = pair_data.get("volatility", 0.01)
+            volume = pair_data.get("volume", 1000000)
+
+            # Calcular deslizamiento
+            slippage = self.calculate_slippage(volatility, volume)
+            expected_price = params["precio"]
+            actual_price = expected_price * (1 + slippage if params["tipo"] == "buy" else 1 - slippage)
+            slippage_percent = abs((actual_price - expected_price) / expected_price)
+
+            # Verificar tolerancia al deslizamiento
+            if slippage_percent > self.slippage_tolerance:
+                self.logger.warning(f"Deslizamiento excede tolerancia: {slippage_percent*100:.2f}% (tolerancia: {self.slippage_tolerance*100:.2f}%)")
+                yield {"status": "error", "motivo": f"Deslizamiento excede tolerancia: {slippage_percent*100:.2f}%"}
+                return
+
+            self.slippage_history.append(slippage_percent)
+            self.logger.info(f"Deslizamiento aplicado: {slippage_percent*100:.2f}% (Precio esperado: ${expected_price}, Precio real: ${actual_price})")
+
+            # Dividir la operación en fragmentos si es grande
+            cantidad_total = params["cantidad"] * trade_multiplier
+            fragment_size = max(0.01, cantidad_total / 3)  # Dividir en 3 fragmentos
+            fragments = [fragment_size] * 3
+            if cantidad_total % fragment_size != 0:
+                fragments[-1] += cantidad_total % fragment_size
+
+            for i, fragment in enumerate(fragments):
+                if fragment == 0:
+                    continue
+                self.logger.info(f"Ejecutando fragmento {i+1}/{len(fragments)}: {fragment} unidades")
+
+                orden_id = f"orden_{exchange}_{params['activo']}_{random.randint(1000, 9999)}"
+                resultado = {
+                    "orden_id": orden_id,
+                    "exchange": exchange,
+                    "activo": params["activo"],
+                    "tipo": params["tipo"],
+                    "precio": actual_price,
+                    "cantidad": fragment,
+                    "take_profit": actual_price * 1.03 if params["tipo"] == "buy" else actual_price * 0.97,
+                    "stop_loss": actual_price * 0.97 if params["tipo"] == "buy" else actual_price * 1.03,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "close_timestamp": None,
+                    "status": "open"
+                }
+
+                if not paper_mode:
+                    self.logger.warning("Modo real no implementado, ejecutando en modo paper")
+                self.active_capital += fragment
+                yield {"status": "success", "result": resultado}
+
+                # Simular latencia entre fragmentos
+                await asyncio.sleep(random.uniform(0.5, 1.0))
+
+        except Exception as e:
+            self.logger.error(f"Error al ejecutar operación: {e}")
+            self.cb.register_failure()
+            yield {"status": "error", "motivo": str(e)}
