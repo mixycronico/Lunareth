@@ -1,9 +1,13 @@
 import logging
 import json
+import pickle
+import os
 from datetime import datetime
 from plugins.crypto_trading.utils.helpers import CircuitBreaker
 from plugins.crypto_trading.utils.settlement_utils import calcular_ganancias, registrar_historial
 import numpy as np
+from statsmodels.tsa.arima.model import ARIMA
+import matplotlib.pyplot as plt
 
 class SettlementProcessor:
     def __init__(self, config, redis, trading_db, nucleus, strategy, execution_processor, capital_processor):
@@ -25,7 +29,10 @@ class SettlementProcessor:
         self.trades_history = []
         self.is_paused = False
         self.recovery_capital_percentage = 0.1
-        self.open_trades = {}  # Ahora gestionado directamente por SettlementProcessor
+        self.open_trades = {}
+        self.crash_threshold = -0.2  # Umbral inicial para caídas del mercado
+        self.crash_count = 0  # Contador de caídas para aprendizaje
+        self.backup_file = "trading_backup.pkl"
 
     async def update_capital_after_trade(self, side: str, trade_result: Dict[str, Any]):
         if side == "buy":
@@ -36,6 +43,7 @@ class SettlementProcessor:
         self.execution_processor.update_capital(self.capital)
         self.capital_processor.actualizar_total_capital(self.capital)
         self.logger.info(f"[SettlementProcessor] Capital actualizado: ${self.capital}")
+        await self.backup_state()
 
     async def close_trade(self, exchange: str, pair: str, trade: dict):
         trade_id = f"{exchange}:{pair}"
@@ -69,6 +77,45 @@ class SettlementProcessor:
             "pair": pair,
             "timestamp": trade["close_timestamp"]
         })
+        await self.backup_state()
+
+    async def backup_state(self):
+        """Guarda el estado crítico en un archivo local."""
+        try:
+            state = {
+                "capital": self.capital,
+                "open_trades": self.open_trades,
+                "historical_profits": self.historical_profits,
+                "trades_history": self.trades_history,
+                "crash_threshold": self.crash_threshold,
+                "crash_count": self.crash_count
+            }
+            with open(self.backup_file, "wb") as f:
+                pickle.dump(state, f)
+            self.logger.info("Estado crítico respaldado en archivo local")
+        except Exception as e:
+            self.logger.error(f"Error al respaldar estado: {e}")
+
+    async def restore_state(self):
+        """Restaura el estado crítico desde un archivo local."""
+        try:
+            if os.path.exists(self.backup_file):
+                with open(self.backup_file, "rb") as f:
+                    state = pickle.load(f)
+                self.capital = state["capital"]
+                self.open_trades = state["open_trades"]
+                self.historical_profits = state["historical_profits"]
+                self.trades_history = state["trades_history"]
+                self.crash_threshold = state["crash_threshold"]
+                self.crash_count = state["crash_count"]
+                self.strategy.update_capital(self.capital)
+                self.execution_processor.update_capital(self.capital)
+                self.capital_processor.actualizar_total_capital(self.capital)
+                self.logger.info("Estado crítico restaurado desde archivo local")
+            else:
+                self.logger.warning("No se encontró archivo de respaldo, iniciando con estado predeterminado")
+        except Exception as e:
+            self.logger.error(f"Error al restaurar estado: {e}")
 
     async def micro_cycle_loop(self):
         while True:
@@ -122,6 +169,16 @@ class SettlementProcessor:
                     win_rate = self.calculate_win_rate()
                     trades_per_day = self.calculate_trades_per_day()
 
+                    # Análisis predictivo con ARIMA
+                    predicted_trend = self.predict_trend()
+                    if predicted_trend:
+                        trend_adjustment = {"trend": "alcista" if predicted_trend > 0 else "bajista", "magnitude": abs(predicted_trend)}
+                        await self.redis.set("predicted_trend", json.dumps(trend_adjustment))
+                        self.logger.info(f"Tendencia predicha: {trend_adjustment}")
+
+                    # Generar gráfico de ROI diario
+                    await self.generate_roi_plot(now)
+
                     report = {
                         "sharpe_ratio": sharpe_ratio,
                         "max_drawdown": max_drawdown,
@@ -129,7 +186,8 @@ class SettlementProcessor:
                         "total_profit_loss": self.daily_profit_loss,
                         "capital": self.capital,
                         "win_rate": win_rate,
-                        "trades_per_day": trades_per_day
+                        "trades_per_day": trades_per_day,
+                        "predicted_trend": predicted_trend
                     }
                     await self.redis.set(f"historical_report:{now.strftime('%Y-%m-%d')}", json.dumps(report))
 
@@ -211,6 +269,54 @@ class SettlementProcessor:
         days = (timestamps[-1] - timestamps[0]).days + 1
         return len(self.trades_history) / days
 
+    def predict_trend(self):
+        """Usa ARIMA para predecir la tendencia futura basada en datos históricos."""
+        try:
+            if len(self.historical_profits) < 5:
+                return None
+            model = ARIMA(self.historical_profits, order=(1, 1, 1))
+            model_fit = model.fit()
+            forecast = model_fit.forecast(steps=1)
+            return forecast.iloc[0]
+        except Exception as e:
+            self.logger.error(f"Error al predecir tendencia: {e}")
+            return None
+
+    async def generate_roi_plot(self, now):
+        """Genera un gráfico de ROI diario y lo guarda en un archivo."""
+        try:
+            dates = []
+            daily_roi = []
+            current_date = None
+            daily_profit = 0
+            for trade in self.trades_history:
+                trade_date = datetime.fromisoformat(trade["timestamp"]).date()
+                if current_date is None:
+                    current_date = trade_date
+                if trade_date != current_date:
+                    dates.append(current_date)
+                    daily_roi.append((daily_profit / self.capital) * 100)
+                    daily_profit = 0
+                    current_date = trade_date
+                daily_profit += trade["profit"]
+            if daily_profit != 0:
+                dates.append(current_date)
+                daily_roi.append((daily_profit / self.capital) * 100)
+
+            plt.figure(figsize=(10, 5))
+            plt.plot(dates, daily_roi, marker='o')
+            plt.title("ROI Diario")
+            plt.xlabel("Fecha")
+            plt.ylabel("ROI (%)")
+            plt.grid(True)
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            plt.savefig(f"roi_plot_{now.strftime('%Y-%m-%d')}.png")
+            plt.close()
+            self.logger.info(f"Gráfico de ROI generado: roi_plot_{now.strftime('%Y-%m-%d')}.png")
+        except Exception as e:
+            self.logger.error(f"Error al generar gráfico de ROI: {e}")
+
     async def handle_market_crash(self):
         while True:
             try:
@@ -224,10 +330,17 @@ class SettlementProcessor:
 
                 btc_change = next((data["price_change"] for data in crypto_data.values() if "BTC" in data["symbol"]), 0)
                 sp500_change = macro_data.get("sp500", 0.0)
-                if btc_change < -0.2 or sp500_change < -0.2:
+                if btc_change < self.crash_threshold or sp500_change < self.crash_threshold:
                     self.logger.warning("Caída del mercado detectada: pausando operaciones por 1 hora")
                     self.is_paused = True
                     self.recovery_capital_percentage = 0.1
+                    self.crash_count += 1
+
+                    # Aprender de eventos críticos: ajustar umbral si las caídas son frecuentes
+                    if self.crash_count > 2:
+                        self.crash_threshold = max(self.crash_threshold * 0.75, -0.15)
+                        self.crash_count = 0
+                        self.logger.info(f"Umbral de caídas ajustado a {self.crash_threshold*100:.2f}% debido a caídas frecuentes")
 
                     alert = {
                         "tipo": "evento_critico",
