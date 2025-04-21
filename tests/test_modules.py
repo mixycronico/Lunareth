@@ -88,6 +88,7 @@ async def test_modulo_sincronizacion_redirigir_entidades_error(nucleus):
     await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
     nucleus.modules["registro"] = registro
+    nucleus.redis_client = AsyncMock()  # Mockeamos redis_client para que publicar_alerta funcione
     async def test_func(): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(1000)]
     bloque1 = BloqueSimbiotico("block1", 1, entidades[:500], 10.0, nucleus)
@@ -217,6 +218,7 @@ async def test_modulo_auditoria_detectar_anomalias_error(nucleus):
     await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
     nucleus.modules["registro"] = registro
+    nucleus.redis_client = AsyncMock()  # Mockeamos redis_client para que publicar_alerta funcione
     with patch.object(auditoria.logger, "error") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
          patch("corec.modules.auditoria.random.random", side_effect=Exception("Error")):
