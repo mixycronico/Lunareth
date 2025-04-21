@@ -18,6 +18,7 @@ from plugins.crypto_trading.utils.db import TradingDB
 from plugins.crypto_trading.data.alpha_vantage_fetcher import AlphaVantageFetcher
 from plugins.crypto_trading.data.coinmarketcap_fetcher import CoinMarketCapFetcher
 import datetime
+import random
 
 class CryptoTrading(ComponenteBase):
     def __init__(self):
@@ -41,10 +42,9 @@ class CryptoTrading(ComponenteBase):
         self.alpha_vantage = None
         self.coinmarketcap = None
         self.config = None
-        self.capital = 100  # Capital inicial
+        self.capital = 100
 
     async def inicializar(self, nucleus, config=None):
-        """Inicializa el plugin CryptoTrading."""
         try:
             self.nucleus = nucleus
             self.redis_client = self.nucleus.redis_client
@@ -52,16 +52,14 @@ class CryptoTrading(ComponenteBase):
                 raise ValueError("Redis client no inicializado")
 
             self.config = config
-            self.capital = config.get("capital", 100)  # Obtener capital inicial desde config
+            self.capital = config.get("capital", 100)
 
             self.paper_mode = config.get("paper_mode", True)
             self.logger.info(f"[CryptoTrading] Modo paper: {self.paper_mode}")
 
-            # Inicializar fetchers de datos
             self.alpha_vantage = AlphaVantageFetcher(self.config)
             self.coinmarketcap = CoinMarketCapFetcher(self.config)
 
-            # Inicializar base de datos independiente para CryptoTrading
             db_config = self.config.get("db_config", {
                 "dbname": "crypto_trading_db",
                 "user": "postgres",
@@ -72,7 +70,6 @@ class CryptoTrading(ComponenteBase):
             self.trading_db = TradingDB(db_config)
             await self.trading_db.connect()
 
-            # Inicializar procesadores
             self.analyzer_processor = AnalyzerProcessor(config, self.redis_client)
             self.capital_processor = CapitalProcessor(config)
             self.exchange_processor = ExchangeProcessor(config, self.nucleus)
@@ -84,7 +81,6 @@ class CryptoTrading(ComponenteBase):
             await self.predictor_processor.inicializar()
             self.strategy = MomentumStrategy(self.capital)
 
-            # Obtener pares con mayor volumen por exchange
             activos = await self.exchange_processor.detectar_disponibles()
             for ex in activos:
                 exchange_name = ex["name"]
@@ -93,7 +89,6 @@ class CryptoTrading(ComponenteBase):
                 self.trading_pairs_by_exchange[exchange_name] = top_pairs
                 self.logger.info(f"Pares configurados para {exchange_name}: {top_pairs}")
 
-            # Inicializar bloques simbióticos
             trading_entities = [
                 crear_entidad(f"trade_ent_{i}", 3, lambda carga: {"valor": 0.5})
                 for i in range(1000)
@@ -124,10 +119,8 @@ class CryptoTrading(ComponenteBase):
             )
             self.monitor_blocks.append(monitor_block)
 
-            # Registrar bloques compartidos en CoreCNucleus
             self.nucleus.bloques.extend(self.trading_blocks + self.monitor_blocks)
 
-            # Iniciar bucle de monitoreo
             asyncio.create_task(self._monitor_loop())
 
             self.logger.info("[CryptoTrading] Plugin inicializado correctamente")
@@ -142,7 +135,6 @@ class CryptoTrading(ComponenteBase):
             raise
 
     async def manejar_comando(self, comando: Dict[str, Any]) -> Dict[str, Any]:
-        """Maneja comandos recibidos, como operaciones de trading."""
         try:
             action = comando.get("action")
             params = comando.get("params", {})
@@ -156,7 +148,7 @@ class CryptoTrading(ComponenteBase):
             return {"status": "error", "message": str(e)}
 
     async def _monitor_loop(self):
-        """Bucle de monitoreo que verifica el mercado cada 3 minutos."""
+        """Bucle de monitoreo con intervalos dinámicos ajustados por volatilidad."""
         while True:
             try:
                 now = datetime.datetime.now()
@@ -164,12 +156,10 @@ class CryptoTrading(ComponenteBase):
                 end_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
                 within_trading_hours = start_time <= now <= end_time
 
-                # Monitorear operaciones abiertas siempre
                 await self._monitor_open_trades()
 
-                # Ejecutar nuevas operaciones solo dentro del horario
+                avg_volatility = 0.01  # Valor por defecto
                 if within_trading_hours:
-                    # Obtener datos reales
                     macro_data = await self.alpha_vantage.fetch_macro_data()
                     for block in self.monitor_blocks:
                         result = await block.procesar(0.5)
@@ -177,7 +167,6 @@ class CryptoTrading(ComponenteBase):
                             self.logger.warning(f"Error en monitoreo: {result['motivo']}")
                             continue
 
-                        # Priorizar pares con mayor volatilidad
                         volatilidad = result["result"]["volatilidad"]
                         prioritized_pairs = []
                         for exchange, pairs in self.trading_pairs_by_exchange.items():
@@ -186,18 +175,16 @@ class CryptoTrading(ComponenteBase):
                                     if v["symbol"] == pair and v["alerta"]:
                                         prioritized_pairs.append((exchange, pair, v["volatilidad"]))
                                         break
-                            # Añadir el resto de los pares no volátiles
                             for pair in pairs:
                                 if not any(p[1] == pair for p in prioritized_pairs):
                                     prioritized_pairs.append((exchange, pair, 0.01))
 
-                        # Obtener datos de criptomonedas para cada par, por exchange
+                        avg_volatility = sum(v for _, _, v in prioritized_pairs) / len(prioritized_pairs) if prioritized_pairs else 0.01
+
                         for exchange, pair, vol in prioritized_pairs:
                             crypto_data = await self.coinmarketcap.fetch_crypto_data(pair)
                             combined_crypto_data = crypto_data
-
-                            # Obtener precios históricos (simulados por ahora)
-                            prices = [50000 + i * 100 for i in range(50)]  # En producción, obtener de exchange
+                            prices = [50000 + i * 100 for i in range(50)]
                             sentiment = self.strategy.calculate_momentum(macro_data, combined_crypto_data, prices, vol)
                             side = self.strategy.decide_trade(exchange, pair, sentiment, vol)
 
@@ -208,18 +195,22 @@ class CryptoTrading(ComponenteBase):
                             if trade_result["status"] == "success":
                                 self.open_trades[f"{exchange}:{pair}"] = trade_result["result"]
 
-                await asyncio.sleep(180)  # Esperar 3 minutos
+                # Intervalo dinámico: 2-4 minutos, ajustado por volatilidad
+                base_interval = 180  # 3 minutos en segundos
+                volatility_factor = max(avg_volatility / 0.01, 1.0)  # Normalizar volatilidad
+                variation = random.uniform(-60, 60)  # Variación aleatoria ±60 segundos
+                adjusted_interval = max(120, min(240, base_interval / volatility_factor + variation))
+                self.logger.info(f"[CryptoTrading] Próximo monitoreo en {adjusted_interval} segundos (Volatilidad promedio: {avg_volatility})")
+                await asyncio.sleep(adjusted_interval)
             except Exception as e:
                 self.logger.error(f"[CryptoTrading] Error en bucle de monitoreo: {e}")
-                await asyncio.sleep(180)  # Continuar tras error
+                await asyncio.sleep(180)
 
     async def _monitor_open_trades(self):
-        """Monitorea operaciones abiertas fuera del horario de trading."""
         for trade_id, trade in list(self.open_trades.items()):
             try:
                 exchange, pair = trade_id.split(":")
                 self.logger.info(f"[CryptoTrading] Monitoreando operación abierta para {exchange}:{pair}: {trade}")
-                # Simulación de precio actual (en producción, obtener del exchange)
                 current_price = 50000
                 if (trade["tipo"] == "buy" and current_price >= trade["take_profit"]) or \
                    (trade["tipo"] == "buy" and current_price <= trade["stop_loss"]) or \
@@ -230,7 +221,6 @@ class CryptoTrading(ComponenteBase):
                 self.logger.error(f"[CryptoTrading] Error al monitorear operación abierta para {trade_id}: {e}")
 
     async def _close_trade(self, exchange: str, pair: str, trade: dict):
-        """Cierra una operación abierta y actualiza el capital."""
         trade_id = f"{exchange}:{pair}"
         self.logger.info(f"[CryptoTrading] Cerrando operación para {trade_id}")
         trade["status"] = "closed"
@@ -243,8 +233,7 @@ class CryptoTrading(ComponenteBase):
             "closed",
             datetime.datetime.utcnow().timestamp()
         )
-        # Actualizar capital (simulado por ahora)
-        profit = trade["cantidad"] * (50000 - trade["precio"])  # Simulado
+        profit = trade["cantidad"] * (50000 - trade["precio"])
         self.capital += trade["cantidad"] + profit
         self.strategy.update_capital(self.capital)
         self.execution_processor.update_capital(self.capital)
@@ -258,7 +247,6 @@ class CryptoTrading(ComponenteBase):
         })
 
     async def _execute_trade(self, exchange: str, pair: str, side: str) -> Dict[str, Any]:
-        """Ejecuta una operación de trading usando el TradingBlock y actualiza el capital."""
         for block in self.trading_blocks:
             result = await block.procesar(0.5, exchange, pair, side, paper_mode=self.paper_mode)
             if result["status"] == "success":
@@ -272,7 +260,6 @@ class CryptoTrading(ComponenteBase):
         return {"status": "error", "motivo": "No se pudo ejecutar la operación"}
 
     async def detener(self):
-        """Detiene el plugin CryptoTrading."""
         await self.exchange_processor.close()
         await self.trading_db.disconnect()
         self.logger.info("[CryptoTrading] Plugin detenido")
