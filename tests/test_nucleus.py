@@ -26,7 +26,7 @@ async def test_nucleus_inicializar_exitoso(mock_postgresql, mock_config):
             patch("corec.nucleus.ModuloSincronizacion") as mock_sincro, \
             patch("corec.nucleus.ModuloEjecucion") as mock_ejecucion, \
             patch("corec.nucleus.ModuloAuditoria") as mock_auditoria:
-        mock_redis.return_value = AsyncMock()
+        mock_redis.return_value = MagicMock()  # Usamos MagicMock para evitar await en el mock
         mock_registro.return_value.inicializar = MagicMock()
         mock_sincro.return_value.inicializar = MagicMock()
         mock_ejecucion.return_value.inicializar = MagicMock()
@@ -50,7 +50,7 @@ async def test_nucleus_inicializar_redis_error(mock_postgresql, mock_config):
             patch("corec.nucleus.ModuloSincronizacion") as mock_sincro, \
             patch("corec.nucleus.ModuloEjecucion") as mock_ejecucion, \
             patch("corec.nucleus.ModuloAuditoria") as mock_auditoria:
-        mock_redis.return_value = AsyncMock()
+        mock_redis.return_value = MagicMock()
         mock_registro.return_value.inicializar = MagicMock()
         mock_sincro.return_value.inicializar = MagicMock()
         mock_ejecucion.return_value.inicializar = MagicMock()
@@ -68,7 +68,7 @@ async def test_nucleus_inicializar_bloque_exitoso(mock_postgresql, mock_config):
     mock_config["bloques"] = [{"id": "block_1", "canal": 1, "entidades": 1}]
     nucleus = CoreCNucleus("config.yml")
     with patch("corec.nucleus.init_postgresql"), \
-            patch("corec.nucleus.aioredis.from_url", return_value=AsyncMock()), \
+            patch("corec.nucleus.aioredis.from_url", return_value=MagicMock()), \
             patch("corec.nucleus.cargar_config", return_value=mock_config), \
             patch("corec.nucleus.PluginBlockConfig") as mock_config_class, \
             patch("corec.nucleus.crear_entidad") as mock_entidad, \
@@ -94,8 +94,9 @@ async def test_nucleus_inicializar_bloque_config_invalida(mock_postgresql, mock_
     """Prueba la inicialización con un bloque de configuración inválida."""
     mock_config["bloques"] = [{"id": "block_1", "canal": 1, "entidades": 1}]
     nucleus = CoreCNucleus("config.yml")
+    nucleus.redis_client = AsyncMock()  # Mockeamos redis_client para que publicar_alerta funcione
     with patch("corec.nucleus.init_postgresql"), \
-            patch("corec.nucleus.aioredis.from_url", return_value=AsyncMock()), \
+            patch("corec.nucleus.aioredis.from_url", return_value=MagicMock()), \
             patch("corec.nucleus.cargar_config", return_value=mock_config), \
             patch("corec.nucleus.PluginBlockConfig", side_effect=ValidationError("Invalid config", [])) as mock_config_class, \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
