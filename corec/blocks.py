@@ -83,7 +83,7 @@ class BloqueSimbiotico:
                     "mensaje": str(e),
                     "timestamp": time.time()
                 })
-            raise Exception(f"Repair failed: {error_msg or str(e)}")  # Relanzamos con el mensaje del error
+            raise  # Relanzamos la excepción para que el test pueda capturarla
 
     async def escribir_postgresql(self, conn):
         """Escribe los mensajes del bloque en PostgreSQL."""
