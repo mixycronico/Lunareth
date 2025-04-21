@@ -14,6 +14,7 @@ from plugins.crypto_trading.processors.macro_processor import MacroProcessor
 from plugins.crypto_trading.processors.monitor_processor import MonitorProcessor
 from plugins.crypto_trading.processors.predictor_processor import PredictorProcessor
 from plugins.crypto_trading.strategies.momentum_strategy import MomentumStrategy
+from plugins.crypto_trading.utils.db import TradingDB
 import datetime
 
 class CryptoTrading(ComponenteBase):
@@ -32,6 +33,7 @@ class CryptoTrading(ComponenteBase):
         self.monitor_processor = None
         self.predictor_processor = None
         self.strategy = MomentumStrategy()
+        self.trading_db = None
 
     async def inicializar(self, nucleus, config=None):
         """Inicializa el plugin CryptoTrading."""
@@ -40,6 +42,17 @@ class CryptoTrading(ComponenteBase):
             self.redis_client = self.nucleus.redis_client
             if not self.redis_client:
                 raise ValueError("Redis client no inicializado")
+
+            # Inicializar base de datos independiente para CryptoTrading
+            db_config = {
+                "dbname": "crypto_trading_db",
+                "user": "postgres",
+                "password": "secure_password",
+                "host": "localhost",
+                "port": 5432
+            }
+            self.trading_db = TradingDB(db_config)
+            await self.trading_db.connect()
 
             # Inicializar procesadores
             self.analyzer_processor = AnalyzerProcessor(config, self.redis_client)
@@ -128,7 +141,7 @@ class CryptoTrading(ComponenteBase):
                             self.logger.warning(f"Error en monitoreo: {result['motivo']}")
                             continue
 
-                        # Simulación de datos (en producción, usar datos reales)
+                        # Simulación de datos (en producción, usar fetchers reales)
                         macro_data = {"sp500": 0.02, "nasdaq": 0.01, "dxy": -0.01, "gold": 0.005, "oil": 0.03}
                         crypto_data = {"volume": 1000000, "market_cap": 2000000000}
                         sentiment = self.strategy.calculate_momentum(macro_data, crypto_data)
@@ -155,4 +168,5 @@ class CryptoTrading(ComponenteBase):
     async def detener(self):
         """Detiene el plugin CryptoTrading."""
         await self.exchange_processor.close()
+        await self.trading_db.disconnect()
         self.logger.info("[CryptoTrading] Plugin detenido")
