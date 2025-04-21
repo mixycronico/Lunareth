@@ -17,24 +17,29 @@ class CapitalProcessor:
         self.min_per_trade = 0.01
         self.max_per_trade = 0.20
         self.base_capital = 100
-        self.strategy_performance = {"momentum": 0.0, "scalping": 0.0}  # Rendimiento de estrategias
-        self.current_strategy = "momentum"  # Estrategia activa
+        self.strategy_performance = {"momentum": 0.0, "scalping": 0.0}
+        self.strategy_weights = {"momentum": 0.5, "scalping": 0.5}  # Proporciones iniciales
 
     async def update_strategy_performance(self, daily_profit: float):
-        """Actualiza el rendimiento de la estrategia activa."""
-        self.strategy_performance[self.current_strategy] += daily_profit / self.base_capital
-        self.logger.info(f"Rendimiento actualizado para {self.current_strategy}: {self.strategy_performance[self.current_strategy]}")
+        self.strategy_performance["momentum"] += daily_profit / self.base_capital * self.strategy_weights["momentum"]
+        self.strategy_performance["scalping"] += daily_profit / self.base_capital * self.strategy_weights["scalping"]
+        self.logger.info(f"Rendimiento actualizado - Momentum: {self.strategy_performance['momentum']}, Scalping: {self.strategy_performance['scalping']}")
 
     async def vote_strategy(self):
-        """Vota entre estrategias Momentum y Scalping cada 24 horas según rendimiento."""
+        """Ajusta las proporciones de Momentum y Scalping cada 24 horas según rendimiento."""
         while True:
             try:
                 momentum_score = self.strategy_performance["momentum"]
                 scalping_score = self.strategy_performance["scalping"]
-                self.current_strategy = "momentum" if momentum_score >= scalping_score else "scalping"
-                self.logger.info(f"Estrategia seleccionada por consenso: {self.current_strategy} (Momentum: {momentum_score}, Scalping: {scalping_score})")
-                await self.redis_client.set("trading_strategy", self.current_strategy)
-                await asyncio.sleep(86400)  # Cada 24 horas
+                total_score = momentum_score + scalping_score
+                if total_score == 0:
+                    self.strategy_weights = {"momentum": 0.5, "scalping": 0.5}
+                else:
+                    self.strategy_weights["momentum"] = momentum_score / total_score
+                    self.strategy_weights["scalping"] = scalping_score / total_score
+                self.logger.info(f"Proporciones ajustadas - Momentum: {self.strategy_weights['momentum']*100:.2f}%, Scalping: {self.strategy_weights['scalping']*100:.2f}%")
+                await self.redis_client.set("trading_strategy", json.dumps(self.strategy_weights))
+                await asyncio.sleep(86400)
             except Exception as e:
                 self.logger.error(f"Error al votar estrategia: {e}")
                 await asyncio.sleep(86400)
