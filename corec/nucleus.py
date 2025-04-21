@@ -12,6 +12,7 @@ from corec.entities import crear_entidad
 from corec.blocks import BloqueSimbiotico
 from plugins import PluginBlockConfig, PluginCommand
 import random
+import asyncio
 
 
 def cargar_config(config_path: str) -> Dict[str, Any]:
@@ -32,7 +33,7 @@ class CoreCNucleus:
         self.redis_client = None
         self.modules = {}
         self.plugins = {}
-        self.bloques = []  # Inicializamos una lista para almacenar los bloques
+        self.bloques = []  # Lista para almacenar los bloques
 
     async def inicializar(self):
         try:
@@ -52,7 +53,6 @@ class CoreCNucleus:
                     block_config = PluginBlockConfig(**block_config)
                     entidades = [crear_entidad(f"ent_{i}", block_config.canal, lambda carga: {"valor": 0.5})
                                  for i in range(block_config.entidades)]
-                    # Restauramos la creación de 'bloque' y la usamos
                     bloque = BloqueSimbiotico(
                         block_config.id,
                         block_config.canal,
@@ -60,7 +60,7 @@ class CoreCNucleus:
                         block_config.max_size_mb if hasattr(block_config, "max_size_mb") else 10.0,
                         self
                     )
-                    self.bloques.append(bloque)  # Usamos la variable bloque para evitar F841
+                    self.bloques.append(bloque)
                     await self.modules["registro"].registrar_bloque(
                         block_config.id,
                         block_config.canal,
@@ -105,11 +105,11 @@ class CoreCNucleus:
             self.logger.info(f"[Núcleo] Plugin '{plugin_id}' registrado")
         except ValidationError as e:
             self.logger.error(f"[Núcleo] Configuración inválida para plugin '{plugin_id}': {e}")
-            self.plugins[plugin_id] = plugin  # Registrar el plugin incluso si la configuración falla
+            self.plugins[plugin_id] = plugin
             self.logger.info(f"[Núcleo] Plugin '{plugin_id}' registrado a pesar de configuración inválida")
         except Exception as e:
             self.logger.error(f"[Núcleo] Error registrando plugin '{plugin_id}': {e}")
-            self.plugins[plugin_id] = plugin  # Registrar el plugin incluso si hay un error
+            self.plugins[plugin_id] = plugin
 
     async def ejecutar_plugin(self, plugin_id: str, comando: Dict[str, Any]) -> Dict[str, Any]:
         plugin = self.plugins.get(plugin_id)
@@ -137,6 +137,77 @@ class CoreCNucleus:
             self.logger.warning(f"[Alerta] {alerta}")
         except Exception as e:
             self.logger.error(f"[Alerta] Error publicando alerta: {e}")
+
+    async def ejecutar(self):
+        """
+        Ejecuta el procesamiento continuo de bloques y plugins.
+        - Procesa cada bloque simbiótico periódicamente.
+        - Encola tareas en ModuloEjecucion para procesamiento asíncrono.
+        - Ejecuta auditorías y sincronizaciones.
+        - Mantiene el sistema en ejecución hasta que se detenga.
+        """
+        try:
+            self.logger.info("[Núcleo] Iniciando ejecución continua...")
+            while True:
+                # 1. Procesar cada bloque simbiótico
+                for bloque in self.bloques:
+                    try:
+                        # Encolar tarea de procesamiento en ModuloEjecucion
+                        await self.modules["ejecucion"].encolar_bloque(bloque)
+                        # Escribir resultados en PostgreSQL
+                        await bloque.escribir_postgresql(self.db_pool)
+                    except Exception as e:
+                        self.logger.error(f"[Núcleo] Error procesando bloque {bloque.id}: {e}")
+                        await self.publicar_alerta({
+                            "tipo": "error_procesamiento_bloque",
+                            "bloque_id": bloque.id,
+                            "mensaje": str(e),
+                            "timestamp": random.random()
+                        })
+
+                # 2. Ejecutar auditoría para detectar anomalías
+                try:
+                    await self.modules["auditoria"].detectar_anomalias()
+                except Exception as e:
+                    self.logger.error(f"[Núcleo] Error en auditoría: {e}")
+                    await self.publicar_alerta({
+                        "tipo": "error_auditoria",
+                        "mensaje": str(e),
+                        "timestamp": random.random()
+                    })
+
+                # 3. Sincronización (ejemplo: redirigir entidades si es necesario)
+                if len(self.bloques) >= 2:
+                    try:
+                        # Redirigir un 10% de entidades del primer bloque al segundo
+                        await self.modules["sincronizacion"].redirigir_entidades(
+                            bloque_origen=self.bloques[0],
+                            bloque_destino=self.bloques[1],
+                            proporcion=0.1,
+                            canal=self.bloques[1].canal
+                        )
+                    except Exception as e:
+                        self.logger.error(f"[Núcleo] Error en sincronización: {e}")
+                        await self.publicar_alerta({
+                            "tipo": "error_sincronizacion",
+                            "mensaje": str(e),
+                            "timestamp": random.random()
+                        })
+
+                # 4. Esperar antes del próximo ciclo (por ejemplo, 60 segundos)
+                await asyncio.sleep(60)
+
+        except asyncio.CancelledError:
+            self.logger.info("[Núcleo] Ejecución cancelada.")
+            raise
+        except Exception as e:
+            self.logger.error(f"[Núcleo] Error en ejecución continua: {e}")
+            await self.publicar_alerta({
+                "tipo": "error_ejecucion",
+                "mensaje": str(e),
+                "timestamp": random.random()
+            })
+            raise
 
     async def detener(self):
         for module in self.modules.values():
