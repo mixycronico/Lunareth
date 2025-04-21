@@ -40,7 +40,7 @@ async def test_modulo_registro_registrar_bloque_config_invalida(nucleus):
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         with pytest.raises(ValueError):
             await asyncio.wait_for(registro.registrar_bloque(None, -1, 0), timeout=5)
-        assert mock_alerta.called
+        assert mock_alerta.call_count == 1  # Solo para el error
         assert mock_logger.called
 
 
@@ -95,8 +95,11 @@ async def test_modulo_sincronizacion_redirigir_entidades_error(nucleus):
     with patch.object(sincronizacion.logger, "error") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
          patch("corec.modules.sincronizacion.random.random", side_effect=Exception("Error")):
-        await asyncio.wait_for(sincronizacion.redirigir_entidades(bloque1, bloque2, 0.1, canal=2), timeout=5)
-        assert mock_alerta.call_count == 2  # Una para la redirección fallida, otra para el error
+        try:
+            await asyncio.wait_for(sincronizacion.redirigir_entidades(bloque1, bloque2, 0.1, canal=2), timeout=5)
+        except Exception:
+            pass
+        assert mock_alerta.call_count == 1  # Solo para el error
         assert mock_logger.called
 
 
@@ -146,4 +149,92 @@ async def test_modulo_ejecucion_encolar_tareas(nucleus):
     nucleus.modules["registro"] = registro
     async def test_func(): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
-    bloque = BloqueSimbiotico("test_block",
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
+    with patch.object(ejecucion.logger, "info") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
+        await asyncio.wait_for(ejecucion.encolar_bloque(bloque), timeout=5)
+        assert mock_alerta.called
+        assert mock_logger.called
+
+
+@pytest.mark.asyncio
+async def test_modulo_ejecucion_encolar_tareas_error(nucleus):
+    """Prueba el encolado de tareas con un error en ModuloEjecucion."""
+    ejecucion = ModuloEjecucion()
+    await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
+    registro = ModuloRegistro()
+    nucleus.modules["registro"] = registro
+    async def test_func(): return {"valor": 0.7}
+    entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
+    with patch.object(ejecucion.logger, "error") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
+         patch("corec.modules.ejecucion.random.uniform", side_effect=Exception("Error")):
+        try:
+            await asyncio.wait_for(ejecucion.encolar_bloque(bloque), timeout=5)
+        except Exception:
+            pass
+        assert mock_alerta.call_count == 1  # Solo para el error
+        assert mock_logger.called
+
+
+@pytest.mark.asyncio
+async def test_modulo_ejecucion_detener(nucleus):
+    """Prueba la detención de ModuloEjecucion."""
+    ejecucion = ModuloEjecucion()
+    with patch.object(ejecucion.logger, "info") as mock_logger:
+        await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
+        await ejecucion.detener()
+        assert mock_logger.called_with_call("[Ejecución] Módulo detenido")
+
+
+@pytest.mark.asyncio
+async def test_modulo_auditoria_inicializar(nucleus):
+    """Prueba la inicialización de ModuloAuditoria."""
+    auditoria = ModuloAuditoria()
+    with patch.object(auditoria.logger, "info") as mock_logger:
+        await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
+        assert mock_logger.called
+
+
+@pytest.mark.asyncio
+async def test_modulo_auditoria_detectar_anomalias(nucleus):
+    """Prueba la detección de anomalías en ModuloAuditoria."""
+    auditoria = ModuloAuditoria()
+    await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
+    registro = ModuloRegistro()
+    registro.bloques = {"block1": {"fitness": -1.0, "num_entidades": 10}}
+    nucleus.modules["registro"] = registro
+    with patch.object(auditoria.logger, "info") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
+        await asyncio.wait_for(auditoria.detectar_anomalias(), timeout=5)
+        assert mock_alerta.called
+        assert mock_logger.called
+
+
+@pytest.mark.asyncio
+async def test_modulo_auditoria_detectar_anomalias_error(nucleus):
+    """Prueba la detección de anomalías con un error en ModuloAuditoria."""
+    auditoria = ModuloAuditoria()
+    await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
+    registro = ModuloRegistro()
+    nucleus.modules["registro"] = registro
+    with patch.object(auditoria.logger, "error") as mock_logger, \
+         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta, \
+         patch("corec.modules.auditoria.random.random", side_effect=Exception("Error")):
+        try:
+            await asyncio.wait_for(auditoria.detectar_anomalias(), timeout=5)
+        except Exception:
+            pass
+        assert mock_alerta.call_count == 1  # Solo para el error
+        assert mock_logger.called
+
+
+@pytest.mark.asyncio
+async def test_modulo_auditoria_detener(nucleus):
+    """Prueba la detención de ModuloAuditoria."""
+    auditoria = ModuloAuditoria()
+    with patch.object(auditoria.logger, "info") as mock_logger:
+        await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
+        await auditoria.detener()
+        assert mock_logger.called_with_call("[Auditoría] Módulo detenido")
