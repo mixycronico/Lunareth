@@ -3,8 +3,8 @@ import time
 from typing import List, Dict, Any
 from corec.entities import Entidad
 
-print("Loading corec/blocks.py")  # Línea de depuración
 
+# Añadimos una línea en blanco adicional para cumplir con E302
 class BloqueSimbiotico:
     def __init__(self, id: str, canal: int, entidades: List[Entidad], max_size_mb: float, nucleus):
         self.logger = logging.getLogger("BloqueSimbiotico")
@@ -58,7 +58,6 @@ class BloqueSimbiotico:
 
     async def reparar(self):
         """Repara el bloque simbiótico reactivando entidades inactivas."""
-        error_msg = None
         for entidad in self.entidades:
             if getattr(entidad, "estado", None) == "inactiva":  # Verificamos si el atributo existe
                 try:
@@ -72,7 +71,6 @@ class BloqueSimbiotico:
                     })
                 except Exception as e:
                     self.logger.error(f"[Bloque {self.id}] Error al reactivar entidad {entidad.id}: {str(e)}")
-                    error_msg = str(e)
                     if self.nucleus:
                         await self.nucleus.publicar_alerta({
                             "tipo": "error_reparacion",
