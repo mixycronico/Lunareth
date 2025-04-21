@@ -14,21 +14,16 @@ class MonitorBlock(BloqueSimbiotico):
         """Procesa monitoreo de pares de criptomonedas y calcula tendencias."""
         try:
             result = await super().procesar(carga)
-            # Simulación de datos (en producción, usar fetchers reales)
-            precios = {"BTC": [50000, 51000], "ETH": [3000, 3100]}
-            volumenes = {"BTC": 1000000, "ETH": 500000}
-            
-            # Usar AnalyzerProcessor para analizar tendencias
-            analysis = await self.analyzer_processor.analizar(precios, volumenes)
-            if analysis["status"] != "ok":
-                return {"status": "error", "motivo": analysis["motivo"]}
-            
-            # Usar MonitorProcessor para analizar volatilidad
-            volatility = await self.monitor_processor.analizar_volatilidad()
-            if volatility["status"] != "ok":
-                return {"status": "error", "motivo": volatility["motivo"]}
+            # Obtener datos de Redis (almacenados por AnalyzerProcessor y MonitorProcessor)
+            analysis_data = await self.redis.get("analyzer_data")
+            volatility_data = await self.redis.get("volatility_data")
 
-            # Combinar resultados
+            analysis = json.loads(analysis_data) if analysis_data else {"status": "error", "motivo": "No data"}
+            volatility = json.loads(volatility_data) if volatility_data else {"status": "error", "motivo": "No data"}
+
+            if analysis["status"] != "ok" or volatility["status"] != "ok":
+                return {"status": "error", "motivo": "Error en análisis o volatilidad"}
+
             combined_result = {
                 "tendencias": analysis["data"],
                 "volatilidad": volatility["datos"]
