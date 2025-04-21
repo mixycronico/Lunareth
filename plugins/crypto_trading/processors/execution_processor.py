@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-plugins/crypto_trading/processors/execution_processor.py
-Ejecuta órdenes de compra y venta en exchanges dinámicos.
-"""
-
 import logging
 from datetime import datetime
 from plugins.crypto_trading.utils.helpers import CircuitBreaker
@@ -25,7 +18,6 @@ class ExecutionProcessor:
             return {"status": "skipped", "motivo": "circuito_abierto"}
 
         try:
-            # Simula ejecución con exchange (ej. binance.place_order)
             orden_id = f"{exchange}_{datetime.utcnow().timestamp()}"
             resultado = {
                 "orden_id": orden_id,
