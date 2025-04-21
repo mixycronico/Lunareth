@@ -18,6 +18,7 @@ def mock_config():
 @pytest.fixture
 async def nucleus(mock_config):
     nucleus = CoreCNucleus("config.yml")
+    nucleus.redis_client = MagicMock()  # Mockeamos redis_client para que publicar_alerta funcione
     with patch("corec.nucleus.cargar_config", return_value=mock_config):
         return nucleus
 
