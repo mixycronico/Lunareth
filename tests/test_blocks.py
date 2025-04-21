@@ -101,14 +101,10 @@ async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
 @pytest.mark.asyncio
 async def test_bloque_reparar_error(nucleus, monkeypatch):
     """Prueba la reparación con un error."""
-    async def mock_publicar_alerta(alerta):
-        pass
-
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
     # Agregamos el atributo estado manualmente
     entidades[0].estado = "inactiva"
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
-    monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
     with patch.object(bloque.logger, "error") as mock_logger, \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         # Simulamos un error al intentar modificar el estado
