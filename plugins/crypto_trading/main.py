@@ -13,6 +13,7 @@ from plugins.crypto_trading.processors.execution_processor import ExecutionProce
 from plugins.crypto_trading.processors.macro_processor import MacroProcessor
 from plugins.crypto_trading.processors.monitor_processor import MonitorProcessor
 from plugins.crypto_trading.processors.predictor_processor import PredictorProcessor
+from plugins.crypto_trading.processors.ia_analysis_processor import IAAnalisisProcessor
 from plugins.crypto_trading.strategies.momentum_strategy import MomentumStrategy
 from plugins.crypto_trading.utils.db import TradingDB
 from plugins.crypto_trading.utils.settlement_utils import calcular_ganancias, registrar_historial
