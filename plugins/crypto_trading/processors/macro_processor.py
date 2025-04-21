@@ -18,21 +18,33 @@ class MacroProcessor:
         )
         self.alpha_vantage = AlphaVantageFetcher(config)
         self.coinmarketcap = CoinMarketCapFetcher(config)
+        self.critical_news = False  # Bandera para eventos críticos
 
-    async def fetch_with_retries(self, fetch_func, max_retries=5):
-        """Realiza una solicitud con reintentos exponenciales."""
+    async def fetch_with_retries(self, fetch_func, *args, max_retries=3):
         for attempt in range(max_retries):
             try:
-                return await fetch_func()
+                return await fetch_func(*args)
             except Exception as e:
                 if attempt == max_retries - 1:
-                    self.logger.error(f"Error tras {max_retries} intentos: {e}")
-                    self.cb.register_failure()
-                    return None
-                delay = 2 ** attempt
-                self.logger.warning(f"Intento {attempt + 1} fallido, reintentando en {delay} segundos: {e}")
-                await asyncio.sleep(delay)
+                    self.logger.error(f"Fallo al obtener datos después de {max_retries} intentos: {e}")
+                    raise
+                wait_time = 2 ** attempt
+                self.logger.warning(f"Fallo en intento {attempt+1}, reintentando en {wait_time} segundos: {e}")
+                await asyncio.sleep(wait_time)
         return None
+
+    async def fetch_critical_news(self):
+        """Simula la obtención de noticias críticas (en producción, usar una API real)."""
+        try:
+            # Simulación de noticias críticas (por ejemplo, decisiones de la FED)
+            news_data = {"fed_rate_change": random.choice([0, 0.25, -0.25]), "timestamp": datetime.utcnow().isoformat()}
+            self.critical_news = news_data["fed_rate_change"] != 0
+            await self.redis.set("critical_news", json.dumps(news_data))
+            self.logger.info(f"Noticias críticas obtenidas: {news_data}")
+            return news_data
+        except Exception as e:
+            self.logger.error(f"Error al obtener noticias críticas: {e}")
+            return None
 
     async def fetch_and_publish_data(self):
         if not self.cb.check():
@@ -40,19 +52,23 @@ class MacroProcessor:
             return {"status": "skipped", "motivo": "circuito_abierto"}
 
         try:
-            # Obtener datos macroeconómicos con reintentos
             macro_data = await self.fetch_with_retries(self.alpha_vantage.fetch_macro_data)
-            if macro_data is None:
-                return {"status": "error", "motivo": "failed_to_fetch_macro_data"}
+            if not macro_data:
+                macro_data = {"sp500": 0.0, "nasdaq": 0.0, "dxy": 0.0, "gold": 0.0, "oil": 0.0}
 
-            # Obtener datos de criptomonedas con reintentos
             crypto_data = {}
             for symbol in self.config.get("symbols", ["BTC/USDT", "ETH/USDT"]):
-                data = await self.fetch_with_retries(lambda s=symbol: self.coinmarketcap.fetch_crypto_data(s))
-                if data:
-                    crypto_data[symbol] = data
-                else:
-                    crypto_data[symbol] = {"volume": 0, "market_cap": 0}
+                data = await self.fetch_with_retries(self.coinmarketcap.fetch_crypto_data, symbol)
+                crypto_data[symbol] = data if data else {"volume": 0, "market_cap": 0}
+
+            # Ajustar datos según noticias críticas
+            news_data = await self.redis.get("critical_news")
+            if news_data:
+                news_data = json.loads(news_data)
+                if news_data["fed_rate_change"] > 0:  # Subida de tasas
+                    macro_data["dxy"] += 0.5  # Aumentar DXY para reflejar fortaleza del dólar
+                elif news_data["fed_rate_change"] < 0:  # Bajada de tasas
+                    macro_data["dxy"] -= 0.5  # Reducir DXY
 
             combined_data = {
                 "macro": macro_data,
@@ -68,9 +84,11 @@ class MacroProcessor:
             return {"status": "error", "motivo": str(e)}
 
     async def data_fetch_loop(self):
+        """Bucle para obtener datos macroeconómicos, criptomonedas y noticias cada 60 segundos."""
         while True:
             try:
                 await self.fetch_and_publish_data()
+                await self.fetch_critical_news()
             except Exception as e:
                 self.logger.error(f"Error en el bucle de obtención de datos: {e}")
             await asyncio.sleep(60)
