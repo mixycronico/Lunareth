@@ -3,22 +3,21 @@ import logging
 from typing import Dict
 
 class AlphaVantageFetcher:
-    def __init__(self, api_key: str):
+    def __init__(self, config: Dict):
         self.logger = logging.getLogger("AlphaVantageFetcher")
-        self.api_key = api_key
+        self.api_key = config.get("macro_config", {}).get("api_keys", {}).get("alpha_vantage", "default_key")
         self.base_url = "https://www.alphavantage.co/query"
 
     async def fetch_macro_data(self) -> Dict[str, float]:
         """Obtiene datos macroeconómicos de AlphaVantage."""
         try:
             async with aiohttp.ClientSession() as session:
-                # Lista de símbolos macroeconómicos a obtener
                 symbols = {
-                    "sp500": "INDEX:SPX",    # SP500
-                    "nasdaq": "INDEX:NASX",  # Nasdaq
-                    "dxy": "CURRENCY:USD",   # DXY
-                    "gold": "COMMODITY:GOLD", # Oro
-                    "oil": "COMMODITY:OIL"   # Petróleo
+                    "sp500": "INDEX:SPX",
+                    "nasdaq": "INDEX:NASX",
+                    "dxy": "CURRENCY:USD",
+                    "gold": "COMMODITY:GOLD",
+                    "oil": "COMMODITY:OIL"
                 }
                 macro_data = {}
 
@@ -41,7 +40,6 @@ class AlphaVantageFetcher:
                             macro_data[key] = 0.0
                             continue
 
-                        # Obtener el cambio porcentual del último día
                         time_series = data["Time Series (Daily)"]
                         dates = sorted(time_series.keys())
                         latest = time_series[dates[0]]
