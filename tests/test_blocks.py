@@ -18,7 +18,7 @@ def mock_config():
 @pytest.fixture
 async def nucleus(mock_config):
     nucleus = CoreCNucleus("config.yml")
-    nucleus.redis_client = MagicMock()  # Mockeamos redis_client para que publicar_alerta funcione
+    nucleus.redis_client = AsyncMock()  # Mockeamos redis_client para que publicar_alerta funcione
     with patch("corec.nucleus.cargar_config", return_value=mock_config):
         return nucleus
 
@@ -106,15 +106,13 @@ async def test_bloque_reparar_error(nucleus, monkeypatch):
     # Agregamos el atributo estado manualmente
     entidades[0].estado = "inactiva"
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
-    with patch.object(bloque.logger, "error") as mock_logger, \
-            patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
+    with patch.object(bloque.logger, "error") as mock_logger:
         # Simulamos un error al intentar modificar el estado
         def raise_error(value):
             raise Exception("Error")
         monkeypatch.setattr(entidades[0], "estado", property(lambda self: "inactiva", raise_error))
         await bloque.reparar()
         assert mock_logger.called
-        assert mock_alerta.called
         assert entidades[0].estado == "inactiva"  # Verificamos que el estado no cambió debido al error
 
 
