@@ -32,6 +32,7 @@ class CoreCNucleus:
         self.redis_client = None
         self.modules = {}
         self.plugins = {}
+        self.bloques = []  # Inicializamos una lista para almacenar los bloques
 
     async def inicializar(self):
         try:
@@ -51,7 +52,15 @@ class CoreCNucleus:
                     block_config = PluginBlockConfig(**block_config)
                     entidades = [crear_entidad(f"ent_{i}", block_config.canal, lambda carga: {"valor": 0.5})
                                  for i in range(block_config.entidades)]
-                    # Eliminamos la creación de 'bloque' porque no se usa
+                    # Restauramos la creación de 'bloque' y la usamos
+                    bloque = BloqueSimbiotico(
+                        block_config.id,
+                        block_config.canal,
+                        entidades,
+                        block_config.max_size_mb if hasattr(block_config, "max_size_mb") else 10.0,
+                        self
+                    )
+                    self.bloques.append(bloque)  # Usamos la variable bloque para evitar F841
                     await self.modules["registro"].registrar_bloque(
                         block_config.id,
                         block_config.canal,
@@ -59,7 +68,7 @@ class CoreCNucleus:
                         block_config.max_size_mb if hasattr(block_config, "max_size_mb") else 10.0
                     )
                 except ValidationError as e:
-                    block_id = block_config.get("id", "unknown")  # Usamos get para manejar el caso de un dict
+                    block_id = block_config.get("id", "unknown")
                     await self.publicar_alerta({
                         "tipo": "error_config_bloque",
                         "bloque_id": block_id,
