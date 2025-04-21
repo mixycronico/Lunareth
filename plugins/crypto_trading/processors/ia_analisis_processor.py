@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-plugins/crypto_trading/processors/ia_analisis_processor.py
+plugins/crypto_trading/processors/ia_analysis_processor.py
 
 Analiza volúmenes, precios y datos macroeconómicos usando IA avanzada (CNN-LSTM-Transformer con métodos Bayesianos),
 para generar recomendaciones automáticas para trading dinámico.
@@ -53,7 +53,7 @@ class AdvancedTradingModel(nn.Module):
 class IAAnalisisProcessor(ComponenteBase):
     def __init__(self, config: Dict[str, Any], redis_client):
         super().__init__()
-        self.config = config.get("crypto_trading", {})
+        self.config = config
         self.redis_client = redis_client
         self.logger = logging.getLogger("IAAnalisisProcessor")
         self.circuit_breaker = CircuitBreaker(3, 900)
@@ -69,8 +69,6 @@ class IAAnalisisProcessor(ComponenteBase):
             self.logger.info("Modelo IA cargado")
         except FileNotFoundError:
             self.logger.warning("Modelo IA no encontrado, inicializando nuevo")
-        asyncio.create_task(self.run_analysis_loop())
-        asyncio.create_task(self.retrain_loop())
         self.logger.info("IAAnalisisProcessor inicializado")
 
     def calculate_rsi(self, prices: List[float], period: int = 14) -> float:
