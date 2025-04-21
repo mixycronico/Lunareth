@@ -24,7 +24,7 @@ class CryptoTrading(ComponenteBase):
         self.logger = logging.getLogger("CryptoTrading")
         self.nucleus = None
         self.redis_client = None
-        self.trading_pairs = ["ALT3/USDT", "ALT4/USDT"]
+        self.trading_pairs = ["BTC/USDT", "ETH/USDT"]  # Inicialmente solo BTC y ETH
         self.trading_blocks = []
         self.monitor_blocks = []
         self.analyzer_processor = None
@@ -50,16 +50,19 @@ class CryptoTrading(ComponenteBase):
             if not self.redis_client:
                 raise ValueError("Redis client no inicializado")
 
-            # Guardar config para pasarlo a los fetchers
             self.config = config
 
-            # Configuración del modo paper desde config
             self.paper_mode = config.get("paper_mode", True)
             self.logger.info(f"[CryptoTrading] Modo paper: {self.paper_mode}")
 
             # Inicializar fetchers de datos
             self.alpha_vantage = AlphaVantageFetcher(self.config)
             self.coinmarketcap = CoinMarketCapFetcher(self.config)
+
+            # Obtener las 10 altcoins con mayor volumen
+            top_altcoins = await self.coinmarketcap.fetch_top_altcoins()
+            self.trading_pairs.extend(top_altcoins)
+            self.logger.info(f"Pares de trading configurados: {self.trading_pairs}")
 
             # Inicializar base de datos independiente para CryptoTrading
             db_config = self.config.get("db_config", {
