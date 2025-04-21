@@ -2,7 +2,6 @@
 import asyncio
 import logging
 import importlib
-import json
 from pathlib import Path
 
 from corec.nucleus import CoreCNucleus
@@ -11,7 +10,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
 )
-
 
 async def load_plugins(nucleus: CoreCNucleus):
     """
@@ -30,6 +28,7 @@ async def load_plugins(nucleus: CoreCNucleus):
             plugin_conf = {}
             conf_path = info.get("path")
             if conf_path and Path(conf_path).is_file():
+                # El plugin de trading ya valida su configuración internamente con Pydantic
                 with open(conf_path, "r", encoding="utf-8") as f:
                     raw = json.load(f)
                     plugin_conf = raw.get(name, {})
@@ -49,22 +48,14 @@ async def load_plugins(nucleus: CoreCNucleus):
         except Exception as e:
             nucleus.logger.error(f"[Bootstrap] Error cargando plugin '{name}': {e}")
 
-
 async def main():
-    # 1) Arrancar núcleo
     nucleus = CoreCNucleus("config/corec_config.json")
     try:
         await nucleus.inicializar()
-
-        # 2) Cargar todos los plugins habilitados
         await load_plugins(nucleus)
-
-        # 3) Entrar en bucle de ejecución (módulos + plugins)
         await nucleus.ejecutar()
-
     except KeyboardInterrupt:
         await nucleus.detener()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
