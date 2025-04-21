@@ -21,8 +21,10 @@ class SettlementProcessor:
         )
         self.capital = config.get("total_capital", 1000.0)
         self.daily_profit_loss = 0
-        self.trade_history = []  # Para reportes históricos
-        self.micro_cycle_interval = 6 * 3600  # 6 horas en segundos
+        self.historical_profits = []
+        self.trades_history = []  # Para calcular win rate y operaciones por día
+        self.is_paused = False  # Bandera para pausas por caídas del mercado
+        self.recovery_capital_percentage = 0.1  # Porcentaje inicial para recuperación
 
     async def update_capital_after_trade(self, side: str, trade_result: Dict[str, Any]):
         if side == "buy":
@@ -32,16 +34,6 @@ class SettlementProcessor:
         self.strategy.update_capital(self.capital)
         self.execution_processor.update_capital(self.capital)
         self.capital_processor.actualizar_total_capital(self.capital)
-
-        # Agregar operación al historial
-        self.trade_history.append({
-            "side": side,
-            "price": trade_result["precio"],
-            "quantity": trade_result["cantidad"],
-            "timestamp": trade_result["timestamp"]
-        })
-        if len(self.trade_history) > 1000:
-            self.trade_history.pop(0)
         self.logger.info(f"[SettlementProcessor] Capital actualizado: ${self.capital}")
 
     async def close_trade(self, exchange: str, pair: str, trade: dict, open_trades: Dict[str, Dict]):
@@ -59,6 +51,12 @@ class SettlementProcessor:
         )
         profit = trade["cantidad"] * (50000 - trade["precio"])
         self.capital += trade["cantidad"] + profit
+        self.historical_profits.append(profit)
+        self.trades_history.append({
+            "profit": profit,
+            "timestamp": trade["close_timestamp"],
+            "is_win": profit > 0
+        })
         self.strategy.update_capital(self.capital)
         self.execution_processor.update_capital(self.capital)
         self.capital_processor.actualizar_total_capital(self.capital)
@@ -71,40 +69,17 @@ class SettlementProcessor:
             "timestamp": trade["close_timestamp"]
         })
 
-    async def detect_market_crash(self):
-        """Detecta caídas extremas del mercado (mayor al 20% en un día)."""
-        market_data = await self.redis.get("market_data")
-        if not market_data:
-            return False
-
-        market_data = json.loads(market_data)
-        crypto_data = market_data["crypto"]
-        avg_price_change = sum(
-            (data["price_change"] if "price_change" in data else 0) for data in crypto_data.values()
-        ) / len(crypto_data)
-
-        if avg_price_change < -0.20:  # Caída mayor al 20%
-            self.logger.warning("Caída extrema detectada, pausando operaciones por 1 hora")
-            await asyncio.sleep(3600)  # Pausar por 1 hora
-            return True
-        return False
-
-    async def micro_cycle(self, open_trades: Dict[str, Dict]):
-        """Realiza un cierre parcial cada 6 horas dentro del horario de trading."""
+    async def micro_cycle_loop(self, open_trades: Dict[str, Dict]):
         while True:
             try:
                 now = datetime.datetime.now()
-                start_time = now.replace(hour=6, minute=0, second=0, microsecond=0)
-                end_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
-                within_trading_hours = start_time <= now <= end_time
-
-                if within_trading_hours and now.hour % 6 == 0 and now.minute == 0:
-                    daily_profit = 0
+                if 6 <= now.hour < 22 and now.hour % 6 == 0 and now.minute == 0:
+                    micro_profit = 0
                     for trade_id, trade in list(open_trades.items()):
                         exchange, pair = trade_id.split(":")
                         current_price = 50000
                         profit = trade["cantidad"] * (current_price - trade["precio"])
-                        daily_profit += profit
+                        micro_profit += profit
                         await registrar_historial(self.redis, f"trade_history:{exchange}:{pair}", {
                             "precio_entrada": trade["precio"],
                             "precio_salida": current_price,
@@ -112,16 +87,7 @@ class SettlementProcessor:
                             "timestamp": trade["close_timestamp"]
                         })
                         await self.close_trade(exchange, pair, trade, open_trades)
-                    self.daily_profit_loss += daily_profit
-                    await self.nucleus.publicar_alerta({
-                        "tipo": "micro_ciclo",
-                        "plugin_id": "crypto_trading",
-                        "profit_loss": daily_profit,
-                        "total_profit_loss": self.daily_profit_loss,
-                        "capital": self.capital,
-                        "timestamp": datetime.datetime.now().isoformat()
-                    })
-                    self.logger.info(f"[SettlementProcessor] Micro-ciclo: Ganancia/Pérdida: ${daily_profit}, Total: ${self.daily_profit_loss}, Capital: ${self.capital}")
+                    self.logger.info(f"[SettlementProcessor] Micro-ciclo a las {now.hour}:00: Ganancia/Pérdida: ${micro_profit}")
                 await asyncio.sleep(60)
             except Exception as e:
                 self.logger.error(f"[SettlementProcessor] Error en micro-ciclo: {e}")
@@ -130,9 +96,6 @@ class SettlementProcessor:
     async def daily_close_loop(self, open_trades: Dict[str, Dict]):
         while True:
             try:
-                if await self.detect_market_crash():
-                    continue
-
                 now = datetime.datetime.now()
                 close_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
                 if now.hour == 22 and now.minute == 0:
@@ -151,14 +114,21 @@ class SettlementProcessor:
                         await self.close_trade(exchange, pair, trade, open_trades)
                     self.execution_processor.reset_active_capital()
                     self.daily_profit_loss += daily_profit
+                    await self.capital_processor.update_strategy_performance(daily_profit)
 
-                    # Generar reporte histórico
-                    sharpe_ratio, max_drawdown = self.calculate_historical_metrics()
+                    sharpe_ratio = self.calculate_sharpe_ratio()
+                    max_drawdown = self.calculate_max_drawdown()
+                    win_rate = self.calculate_win_rate()
+                    trades_per_day = self.calculate_trades_per_day()
+
                     report = {
                         "sharpe_ratio": sharpe_ratio,
                         "max_drawdown": max_drawdown,
-                        "total_trades": len(self.trade_history),
-                        "win_rate": sum(1 for trade in self.trade_history if trade["profit"] > 0) / len(self.trade_history) if self.trade_history else 0
+                        "daily_profit": daily_profit,
+                        "total_profit_loss": self.daily_profit_loss,
+                        "capital": self.capital,
+                        "win_rate": win_rate,
+                        "trades_per_day": trades_per_day
                     }
                     await self.redis.set(f"historical_report:{now.strftime('%Y-%m-%d')}", json.dumps(report))
 
@@ -168,7 +138,10 @@ class SettlementProcessor:
                         "profit_loss": daily_profit,
                         "total_profit_loss": self.daily_profit_loss,
                         "capital": self.capital,
-                        "report": report,
+                        "sharpe_ratio": sharpe_ratio,
+                        "max_drawdown": max_drawdown,
+                        "win_rate": win_rate,
+                        "trades_per_day": trades_per_day,
                         "timestamp": datetime.datetime.now().isoformat()
                     })
                     await self.trading_db.save_report(
@@ -176,10 +149,14 @@ class SettlementProcessor:
                         total_profit=daily_profit,
                         roi_percent=(daily_profit / self.capital) * 100 if self.capital != 0 else 0,
                         total_trades=len(open_trades),
-                        report_data={"open_trades": 0, "historical_metrics": report},
+                        report_data={"open_trades": 0, "sharpe_ratio": sharpe_ratio, "max_drawdown": max_drawdown, "win_rate": win_rate, "trades_per_day": trades_per_day},
                         timestamp=now.timestamp()
                     )
                     self.logger.info(f"[SettlementProcessor] Cierre diario: Ganancia/Pérdida: ${daily_profit}, Total: ${self.daily_profit_loss}, Capital: ${self.capital}")
+
+                    # Limpieza de datos antiguos en Redis
+                    await self.cleanup_old_data(now)
+
                     await asyncio.sleep(86400 - 60)
                 else:
                     await asyncio.sleep(60)
@@ -187,22 +164,95 @@ class SettlementProcessor:
                 self.logger.error(f"[SettlementProcessor] Error en cierre diario: {e}")
                 await asyncio.sleep(60)
 
-    def calculate_historical_metrics(self):
-        """Calcula métricas históricas como Sharpe Ratio y Max Drawdown."""
-        if not self.trade_history:
-            return 0.0, 0.0
+    async def cleanup_old_data(self, now):
+        """Elimina datos antiguos de Redis (más de 24 horas)."""
+        try:
+            keys = await self.redis.keys("historical_report:*")
+            for key in keys:
+                date_str = key.split(":")[-1]
+                report_date = datetime.strptime(date_str, "%Y-%m-%d")
+                if (now - report_date).days > 1:  # Más de 24 horas
+                    await self.redis.delete(key)
+                    self.logger.info(f"Datos antiguos eliminados: {key}")
+        except Exception as e:
+            self.logger.error(f"Error al limpiar datos antiguos en Redis: {e}")
 
-        profits = [trade["profit"] for trade in self.trade_history]
-        returns = np.array(profits) / self.capital
-        sharpe_ratio = np.mean(returns) / np.std(returns) * np.sqrt(252) if np.std(returns) != 0 else 0
+    def calculate_sharpe_ratio(self):
+        if len(self.historical_profits) < 2:
+            return 0.0
+        returns = np.array(self.historical_profits) / self.capital
+        mean_return = np.mean(returns)
+        std_return = np.std(returns)
+        if std_return == 0:
+            return 0.0
+        sharpe_ratio = mean_return / std_return * np.sqrt(252)
+        return sharpe_ratio
 
-        cumulative_returns = np.cumsum(profits)
-        max_drawdown = 0
-        peak = cumulative_returns[0]
-        for ret in cumulative_returns:
-            if ret > peak:
-                peak = ret
-            drawdown = (peak - ret) / peak if peak != 0 else 0
-            max_drawdown = max(max_drawdown, drawdown)
+    def calculate_max_drawdown(self):
+        if len(self.historical_profits) < 2:
+            return 0.0
+        cumulative = np.cumsum(self.historical_profits)
+        peak = np.maximum.accumulate(cumulative)
+        drawdown = (peak - cumulative) / peak
+        max_drawdown = np.max(drawdown) if len(drawdown) > 0 else 0.0
+        return max_drawdown
 
-        return sharpe_ratio, max_drawdown
+    def calculate_win_rate(self):
+        if not self.trades_history:
+            return 0.0
+        wins = sum(1 for trade in self.trades_history if trade["is_win"])
+        return (wins / len(self.trades_history)) * 100
+
+    def calculate_trades_per_day(self):
+        if not self.trades_history:
+            return 0.0
+        if len(self.trades_history) < 2:
+            return len(self.trades_history)
+        timestamps = [datetime.fromisoformat(trade["timestamp"]) for trade in self.trades_history]
+        days = (timestamps[-1] - timestamps[0]).days + 1
+        return len(self.trades_history) / days
+
+    async def handle_market_crash(self, open_trades: Dict[str, Dict]):
+        while True:
+            try:
+                market_data = await self.redis.get("market_data")
+                if not market_data:
+                    await asyncio.sleep(60)
+                    continue
+                market_data = json.loads(market_data)
+                macro_data = market_data["macro"]
+                crypto_data = market_data["crypto"]
+
+                btc_change = next((data["price_change"] for data in crypto_data.values() if "BTC" in data["symbol"]), 0)
+                sp500_change = macro_data.get("sp500", 0.0)
+                if btc_change < -0.2 or sp500_change < -0.2:
+                    self.logger.warning("Caída del mercado detectada: pausando operaciones por 1 hora")
+                    self.is_paused = True
+                    self.recovery_capital_percentage = 0.1
+
+                    # Publicar alerta detallada
+                    alert = {
+                        "tipo": "evento_critico",
+                        "plugin_id": "crypto_trading",
+                        "evento": "caida_mercado",
+                        "detalle": f"Caída detectada: BTC {btc_change*100:.2f}%, SP500 {sp500_change*100:.2f}%",
+                        "timestamp": datetime.datetime.now().isoformat()
+                    }
+                    await self.redis.xadd("critical_events", {"data": json.dumps(alert)})
+                    await self.nucleus.publicar_alerta(alert)
+
+                    for trade_id, trade in list(open_trades.items()):
+                        exchange, pair = trade_id.split(":")
+                        await self.close_trade(exchange, pair, trade, open_trades)
+
+                    # Recuperación gradual
+                    for i in range(6):  # 6 intervalos de 10 minutos
+                        await asyncio.sleep(600)  # 10 minutos
+                        self.recovery_capital_percentage = min(1.0, self.recovery_capital_percentage + 0.15)
+                        self.logger.info(f"Recuperación gradual: {self.recovery_capital_percentage*100:.2f}% del capital disponible")
+                    self.is_paused = False
+                else:
+                    await asyncio.sleep(60)
+            except Exception as e:
+                self.logger.error(f"Error al manejar caída del mercado: {e}")
+                await asyncio.sleep(60)
