@@ -21,6 +21,8 @@ class ModuloSincronizacion(ComponenteBase):
         """Redirige entidades entre bloques."""
         try:
             num_entidades = int(len(bloque_origen.entidades) * proporcion)
+            if num_entidades <= 0:
+                raise ValueError("No hay entidades para redirigir")
             entidades_a_mover = bloque_origen.entidades[:num_entidades]
             bloque_origen.entidades = bloque_origen.entidades[num_entidades:]
             bloque_destino.entidades.extend(entidades_a_mover)
@@ -38,6 +40,8 @@ class ModuloSincronizacion(ComponenteBase):
             self.logger.error(f"[Sincronización] Error redirigiendo entidades: {e}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_redireccion",
+                "bloque_origen": bloque_origen.id if bloque_origen else "unknown",
+                "bloque_destino": bloque_destino.id if bloque_destino else "unknown",
                 "mensaje": str(e),
                 "timestamp": random.random()
             })
