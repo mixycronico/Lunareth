@@ -28,51 +28,96 @@ Es ideal para construir sistemas de alta disponibilidad, escalables y modulares,
 
 🛠️ ¿Cómo Empezar?
 ¡Empezar con CoreC es súper fácil! Sigue estos pasos para poner tu sistema en marcha:
-	1	Clona el Repositorio: git clone https://github.com/moises-alvarenga/genesis.git
-	2	cd genesis
-	3	
-	4	Configura tu Entorno:
-	◦	Asegúrate de tener Python 3.10+, Redis, y PostgreSQL instalados y corriendo.
-	◦	Crea una base de datos en PostgreSQL: CREATE DATABASE corec_db;
-	◦	
-	5	Instala las Dependencias: pip install -r requirements.txt
-	6	
-	7	Configura CoreC: Edita el archivo config/corec_config.json con tus credenciales de Redis y PostgreSQL. Aquí tienes un ejemplo básico: {
-	8	  "instance_id": "corec1",
-	9	  "db_config": {
-	10	    "dbname": "corec_db",
-	11	    "user": "postgres",
-	12	    "password": "tu_contraseña",
-	13	    "host": "localhost",
-	14	    "port": 5432
-	15	  },
-	16	  "redis_config": {
-	17	    "host": "localhost",
-	18	    "port": 6379,
-	19	    "username": "corec_user",
-	20	    "password": "tu_contraseña_redis"
-	21	  },
-	22	  "bloques": [
-	23	    {
-	24	      "id": "enjambre_sensor",
-	25	      "canal": 1,
-	26	      "entidades": 10000,
-	27	      "max_size_mb": 1,
-	28	      "entidades_por_bloque": 1000,
-	29	      "autoreparacion": {
-	30	        "max_errores": 0.05,
-	31	        "min_fitness": 0.2
-	32	      }
-	33	    }
-	34	  ],
-	35	  "plugins": {}
-	36	}
-	37	
-	38	Inicia CoreC: Usa el script run.sh para verificar dependencias, inicializar la base de datos y arrancar el sistema: chmod +x run.sh
-	39	./run.sh
-	40	
-	41	(Opcional) Inicia el Worker de Celery: Si quieres procesar tareas en segundo plano, inicia el worker de Celery: celery -A corec.worker worker --loglevel=info
-	42	
+
+        1	Clona el Repositorio: git clone https://github.com/moises-alvarenga/genesis.git
+	
+        2	cd genesis
+	
+        3	
+	
+        4	Configura tu Entorno:
+	
+        ◦	Asegúrate de tener Python 3.10+, Redis, y PostgreSQL instalados y corriendo.
+	
+        ◦	Crea una base de datos en PostgreSQL: CREATE DATABASE corec_db;
+	
+        ◦	
+	
+        5	Instala las Dependencias: pip install -r requirements.txt
+	
+        6	
+	
+        7	Configura CoreC: Edita el archivo config/corec_config.json con tus credenciales de Redis y PostgreSQL. Aquí tienes un ejemplo básico: {
+	
+        8	  "instance_id": "corec1",
+	
+        9	  "db_config": {
+	
+        10	    "dbname": "corec_db",
+	
+        11	    "user": "postgres",
+	
+        12	    "password": "tu_contraseña",
+	
+        13	    "host": "localhost",
+	
+        14	    "port": 5432
+	
+        15	  },
+	
+        16	  "redis_config": {
+	
+        17	    "host": "localhost",
+	
+        18	    "port": 6379,
+	
+        19	    "username": "corec_user",
+	
+        20	    "password": "tu_contraseña_redis"
+	
+        21	  },
+	
+        22	  "bloques": [
+	
+        23	    {
+	
+        24	      "id": "enjambre_sensor",
+	
+        25	      "canal": 1,
+	
+        26	      "entidades": 10000,
+	
+        27	      "max_size_mb": 1,
+	
+        28	      "entidades_por_bloque": 1000,
+	
+        29	      "autoreparacion": {
+	
+        30	        "max_errores": 0.05,
+	
+        31	        "min_fitness": 0.2
+	
+        32	      }
+	
+        33	    }
+	
+        34	  ],
+	
+        35	  "plugins": {}
+	
+        36	}
+	
+        37	
+	
+        38	Inicia CoreC: Usa el script run.sh para verificar dependencias, inicializar la base de datos y arrancar el sistema: chmod +x run.sh
+	
+        39	./run.sh
+	
+        40	
+	
+        41	(Opcional) Inicia el Worker de Celery: Si quieres procesar tareas en segundo plano, inicia el worker de Celery: celery -A corec.worker worker --loglevel=info
+	
+        42	
 ¡Y listo! 🎉 CoreC estará corriendo, procesando datos y publicando alertas en tiempo real.
 
 
