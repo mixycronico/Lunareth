@@ -33,8 +33,8 @@ class AnalyzerProcessor:
         altcoins = [k for k in volumenes if k not in ["BTC", "ETH"]]
         return sorted(altcoins, key=lambda x: volumenes[x], reverse=True)[:10]
 
-    async def analizar_volatilidad(self):
-        """Analiza la volatilidad de los símbolos y publica los resultados."""
+    async def analizar_volatilidad(self, exchange: str, pairs: list) -> Dict[str, Any]:
+        """Analiza la volatilidad de los símbolos y prioriza pares para operar."""
         if not self.cb.check():
             self.logger.warning("Circuit breaker activo, omitiendo análisis de volatilidad")
             return {"status": "skipped", "motivo": "circuito_abierto"}
@@ -50,7 +50,9 @@ class AnalyzerProcessor:
 
             resultados = []
             for symbol, data in crypto_data.items():
-                prices = [50000 + i * 100 for i in range(50)]  # Simulado, en producción obtener precios reales
+                if symbol not in pairs:
+                    continue
+                prices = [50000 + i * 100 for i in range(50)]
                 if len(prices) < 2:
                     continue
                 price_changes = np.diff(prices) / prices[:-1]
@@ -63,9 +65,24 @@ class AnalyzerProcessor:
                     "timestamp": datetime.utcnow().isoformat()
                 })
 
-            await self.redis.set("volatility_data", json.dumps(resultados))
-            self.logger.info(f"Volatilidad analizada en {len(resultados)} símbolos")
-            return {"status": "ok", "datos": resultados}
+            # Priorizar pares
+            prioritized_pairs = []
+            for res in resultados:
+                if res["alerta"]:
+                    prioritized_pairs.append((res["symbol"], res["volatilidad"]))
+            for symbol in pairs:
+                if not any(p[0] == symbol for p in prioritized_pairs):
+                    prioritized_pairs.append((symbol, 0.01))
+
+            result = {
+                "exchange": exchange,
+                "prioritized_pairs": prioritized_pairs,
+                "avg_volatility": sum(v for _, v in prioritized_pairs) / len(prioritized_pairs) if prioritized_pairs else 0.01,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            await self.redis.set(f"volatility_data:{exchange}", json.dumps(result))
+            self.logger.info(f"Volatilidad analizada para {exchange}: {len(prioritized_pairs)} pares priorizados")
+            return {"status": "ok", "datos": result}
         except Exception as e:
             self.logger.error("Error en análisis de volatilidad", exc_info=True)
             self.cb.register_failure()
