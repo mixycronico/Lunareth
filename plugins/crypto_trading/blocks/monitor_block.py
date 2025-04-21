@@ -1,6 +1,7 @@
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad
 import logging
+import json
 
 class MonitorBlock(BloqueSimbiotico):
     def __init__(self, id: str, canal: int, entidades: list[Entidad], max_size_mb: float, nucleus, analyzer_processor, monitor_processor):
