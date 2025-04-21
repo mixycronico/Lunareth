@@ -7,6 +7,7 @@ import json
 import random
 import heapq
 from datetime import datetime
+import psutil
 
 class ExchangeProcessor(ComponenteBase):
     def __init__(self, config, nucleus, strategy, execution_processor, settlement_processor, monitor_blocks):
@@ -21,10 +22,12 @@ class ExchangeProcessor(ComponenteBase):
         self.exchange_clients = {}
         self.api_limits = {}
         self.liquidity_threshold = 100000
-        self.task_queues = {}  # Simulación de colas distribuidas (RabbitMQ)
+        self.task_queues = {}
         self.node_id = 0
         self.total_nodes = 2
-        self.priority_operations = []  # Cola de prioridad para operaciones críticas
+        self.cpu_threshold = 80
+        self.memory_threshold = 80
+        self.min_liquidity_threshold = 500000  # Umbral de liquidez más estricto para mitigar deslizamiento
 
     async def inicializar(self):
         for ex in self.exchanges:
@@ -58,6 +61,15 @@ class ExchangeProcessor(ComponenteBase):
             self.api_limits[exchange_name]["requests"] = 0
             self.api_limits[exchange_name]["last_reset"] = asyncio.get_event_loop().time()
 
+    async def _check_resources(self):
+        cpu_usage = psutil.cpu_percent(interval=1)
+        memory_usage = psutil.virtual_memory().percent
+        if cpu_usage > self.cpu_threshold or memory_usage > self.memory_threshold:
+            self.logger.warning(f"Recursos excedidos: CPU {cpu_usage}%, Memoria {memory_usage}%. Pausando operaciones por 60 segundos")
+            await asyncio.sleep(60)
+            return False
+        return True
+
     async def detectar_disponibles(self) -> List[Dict[str, Any]]:
         disponibles = []
         for ex in self.exchanges:
@@ -77,9 +89,10 @@ class ExchangeProcessor(ComponenteBase):
         try:
             await self._manage_api_limits(client.id)
             tickers = await client.fetch_tickers()
+            # Priorizar pares con alta liquidez para reducir deslizamiento
             filtered_tickers = {
                 symbol: ticker for symbol, ticker in tickers.items()
-                if "/" in symbol and float(ticker.get("quoteVolume", 0)) >= self.liquidity_threshold
+                if "/" in symbol and float(ticker.get("quoteVolume", 0)) >= self.min_liquidity_threshold
             }
             ordenados = sorted(
                 filtered_tickers.items(), key=lambda x: float(x[1].get("quoteVolume", 0)), reverse=True
@@ -102,7 +115,7 @@ class ExchangeProcessor(ComponenteBase):
                     tickers = await client.fetch_tickers()
                     filtered_tickers = {
                         symbol: ticker for symbol, ticker in tickers.items()
-                        if "/" in symbol and float(ticker.get("quoteVolume", 0)) >= self.liquidity_threshold
+                        if "/" in symbol and float(ticker.get("quoteVolume", 0)) >= self.min_liquidity_threshold
                     }
                     ordenados = sorted(
                         filtered_tickers.items(), key=lambda x: float(x[1].get("quoteVolume", 0)), reverse=True
@@ -135,6 +148,10 @@ class ExchangeProcessor(ComponenteBase):
                 await asyncio.sleep(next_execution_time - current_time)
 
             try:
+                if not await self._check_resources():
+                    heapq.heappush(self.task_queues[exchange], (asyncio.get_event_loop().time() + 60, "monitor"))
+                    continue
+
                 now = datetime.datetime.now()
                 start_time = now.replace(hour=6, minute=0, second=0, microsecond=0)
                 end_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
@@ -205,16 +222,16 @@ class ExchangeProcessor(ComponenteBase):
                             if side == "pending":
                                 continue
 
-                            # Simular errores humanos: retraso ocasional
+                            latency = random.uniform(1, 2)
+                            if avg_volatility > 0.05:
+                                latency *= 0.5
+                                self.logger.info(f"Priorizando operación en {exchange}:{pair} debido a alta volatilidad")
+                            await asyncio.sleep(latency)
+
                             if random.random() < 0.03:
                                 delay = random.uniform(60, 300)
                                 self.logger.info(f"Simulando error humano: retrasando operación en {exchange}:{pair} por {delay} segundos")
                                 await asyncio.sleep(delay)
-
-                            # Priorizar operaciones críticas (como cierres por stop_loss)
-                            latency = random.uniform(1, 2)  # Simular latencia de 1-2 segundos
-                            operation_priority = 1 if "stop_loss" in trade_result else 0  # Prioridad alta para stop_loss
-                            heapq.heappush(self.priority_operations, (-operation_priority, trade_result))
 
                             trade_multiplier = self.strategy.get_trade_multiplier() * trade_multiplier_adjustment * session_multiplier * weekend_multiplier
                             async for trade_result in self.execution_processor.ejecutar_operacion(exchange, {
@@ -224,7 +241,6 @@ class ExchangeProcessor(ComponenteBase):
                                 "tipo": side
                             }, paper_mode=self.config.get("paper_mode", True), trade_multiplier=int(trade_multiplier)):
                                 self.settlement_processor.open_trades[f"{exchange}:{pair}"] = trade_result
-                                await asyncio.sleep(latency)  # Simular latencia
                                 await self.settlement_processor.update_capital_after_trade(side, trade_result)
 
                 base_interval = 180
