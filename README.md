@@ -1,23 +1,30 @@
 🌟 CoreC - El Núcleo Universal del Proyecto Genesis
+
+
 Un sistema modular y resiliente para orquestar aplicaciones distribuidas basadas en bloques simbióticos y plugins. Versión Actual: CoreC Ultimate v1.2 Fecha de Estabilidad: 21 de abril de 2025 Licencia: MIT
 
 🚀 ¿Qué es CoreC?
 ¡Bienvenido a CoreC, el corazón del proyecto Genesis! CoreC es un sistema poderoso y flexible diseñado para manejar aplicaciones distribuidas de manera eficiente. Imagina un núcleo que puede coordinar miles de pequeñas unidades (llamadas entidades) dentro de bloques inteligentes (bloques simbióticos), procesar datos en tiempo real, y extender sus capacidades con plugins personalizados. ¡Eso es CoreC!
 Con CoreC, puedes:
+
 	•	🧠 Gestionar decenas de miles de entidades que procesan datos de forma distribuida.
 	•	🛠️ Reparar automáticamente problemas en tus bloques para mantener el sistema funcionando sin interrupciones.
 	•	📡 Publicar alertas en tiempo real usando Redis Streams para monitorear todo lo que pasa.
 	•	💾 Almacenar datos importantes en PostgreSQL para análisis y auditoría.
 	•	🧩 Extender el sistema con plugins como Codex, CommSystem, o CryptoTrading.
+
 Es ideal para construir sistemas de alta disponibilidad, escalables y modulares, como aplicaciones biomiméticas avanzadas, sistemas de análisis en tiempo real, o plataformas de trading automatizado.
+
 
 🌈 Características Principales
 	•	Modularidad Total: Cada parte de CoreC (módulos, bloques, plugins) trabaja de forma independiente, lo que facilita personalizar y escalar tu sistema.
 	•	Resiliencia Integrada: Los bloques simbióticos pueden autorepararse si detectan problemas, asegurando que tu sistema siga funcionando sin interrupciones.
+ 
 	•	Escalabilidad Impresionante: Maneja miles de entidades por bloque, desde sensores hasta nodos de análisis de IA, sin perder rendimiento.
 	•	Alertas en Tiempo Real: Usa Redis Streams para enviar alertas instantáneas sobre eventos importantes, como errores o reparaciones.
 	•	Extensibilidad con Plugins: Añade nuevas funcionalidades con plugins personalizados, desde trading de criptomonedas hasta sistemas de chat.
 	•	Procesamiento Asíncrono: Integra Celery para manejar tareas pesadas en segundo plano, manteniendo tu sistema rápido y eficiente.
+
 
 🛠️ ¿Cómo Empezar?
 ¡Empezar con CoreC es súper fácil! Sigue estos pasos para poner tu sistema en marcha:
@@ -68,6 +75,7 @@ Es ideal para construir sistemas de alta disponibilidad, escalables y modulares,
 	42	
 ¡Y listo! 🎉 CoreC estará corriendo, procesando datos y publicando alertas en tiempo real.
 
+
 🌟 ¿Qué Puede Hacer CoreC?
 CoreC es increíblemente versátil. Aquí tienes algunos ejemplos de lo que puedes construir con él:
 	•	Red de Sensores Inteligentes: Usa el bloque enjambre_sensor para procesar datos de miles de sensores en tiempo real, detectando anomalías y almacenando resultados.
@@ -75,9 +83,10 @@ CoreC es increíblemente versátil. Aquí tienes algunos ejemplos de lo que pued
 	•	Plataforma de Análisis de IA: El bloque ia_analisis puede manejar grandes volúmenes de datos para aplicaciones de inteligencia artificial.
 	•	Nodo de Seguridad: El bloque nodo_seguridad asegura que tu sistema sea robusto y resistente a fallos.
 
+
 🔧 ¿Cómo Contribuir?
 ¡Nos encantaría que formes parte del proyecto! Si quieres contribuir a CoreC, sigue estos pasos:
-	1	Clona y Crea un Fork: git clone https://github.com/moises-alvarenga/genesis.git
+	1	Clona y Crea un Fork: git clone https://github.com/mixycronico/Lunareth.git
 	2	cd genesis
 	3	
 	4	Crea una Rama para tu Contribución: git checkout -b mi-nueva-funcionalidad
@@ -146,8 +155,7 @@ CoreC es más que un simple sistema: es una base sólida para construir aplicaci
 
 📬 Contacto
 ¿Tienes preguntas o ideas para mejorar CoreC? ¡Contáctanos!
-	•	Moises Alvarenga: moises.alvarenga@example.com
-	•	Luna: luna@example.com
+	•	Moises Alvarenga: mixycronico@aol.com
 	•	Repositorio: GitHub
 
 ¡Listo para transformar tus ideas en realidad con CoreC! 🚀
