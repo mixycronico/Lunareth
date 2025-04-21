@@ -1,6 +1,9 @@
 Documentación Técnica de CoreC (Proyecto Genesis)
+
 Autor: Moises Alvarenga y Luna 
+
 Fecha: 21 de abril de 2025 
+
 Licencia: MIT
 
 Índice
