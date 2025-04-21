@@ -15,6 +15,8 @@ from plugins.crypto_trading.processors.monitor_processor import MonitorProcessor
 from plugins.crypto_trading.processors.predictor_processor import PredictorProcessor
 from plugins.crypto_trading.strategies.momentum_strategy import MomentumStrategy
 from plugins.crypto_trading.utils.db import TradingDB
+from plugins.crypto_trading.data.alpha_vantage_fetcher import AlphaVantageFetcher
+from plugins.crypto_trading.data.coinmarketcap_fetcher import CoinMarketCapFetcher
 import datetime
 
 class CryptoTrading(ComponenteBase):
@@ -34,8 +36,10 @@ class CryptoTrading(ComponenteBase):
         self.predictor_processor = None
         self.strategy = MomentumStrategy()
         self.trading_db = None
-        self.paper_mode = True  # Modo paper activado por defecto para pruebas
-        self.open_trades = {}  # Seguimiento de operaciones abiertas
+        self.paper_mode = True
+        self.open_trades = {}
+        self.alpha_vantage = None
+        self.coinmarketcap = None
 
     async def inicializar(self, nucleus, config=None):
         """Inicializa el plugin CryptoTrading."""
@@ -48,6 +52,10 @@ class CryptoTrading(ComponenteBase):
             # Configuración del modo paper desde config
             self.paper_mode = config.get("paper_mode", True)
             self.logger.info(f"[CryptoTrading] Modo paper: {self.paper_mode}")
+
+            # Inicializar fetchers de datos
+            self.alpha_vantage = AlphaVantageFetcher(api_key="tu_api_key_alpha_vantage")
+            self.coinmarketcap = CoinMarketCapFetcher(api_key="tu_api_key_coinmarketcap")
 
             # Inicializar base de datos independiente para CryptoTrading
             db_config = {
@@ -146,16 +154,24 @@ class CryptoTrading(ComponenteBase):
 
                 # Ejecutar nuevas operaciones solo dentro del horario
                 if within_trading_hours:
+                    # Obtener datos reales
+                    macro_data = await self.alpha_vantage.fetch_macro_data()
                     for block in self.monitor_blocks:
                         result = await block.procesar(0.5)
                         if result["status"] != "success":
                             self.logger.warning(f"Error en monitoreo: {result['motivo']}")
                             continue
 
-                        # Simulación de datos (en producción, usar fetchers reales)
-                        macro_data = {"sp500": 0.02, "nasdaq": 0.01, "dxy": -0.01, "gold": 0.005, "oil": 0.03}
-                        crypto_data = {"volume": 1000000, "market_cap": 2000000000}
-                        sentiment = self.strategy.calculate_momentum(macro_data, crypto_data)
+                        # Obtener datos de criptomonedas para cada par
+                        crypto_data = {}
+                        for pair in self.trading_pairs:
+                            crypto_data[pair] = await self.coinmarketcap.fetch_crypto_data(pair)
+                        # Promedio de volumen y capitalización de mercado
+                        avg_volume = sum(data["volume"] for data in crypto_data.values()) / len(crypto_data)
+                        avg_market_cap = sum(data["market_cap"] for data in crypto_data.values()) / len(crypto_data)
+                        combined_crypto_data = {"volume": avg_volume, "market_cap": avg_market_cap}
+
+                        sentiment = self.strategy.calculate_momentum(macro_data, combined_crypto_data)
                         side = self.strategy.decide_trade(sentiment)
 
                         # Ejecutar operación basada en el sentimiento
@@ -173,9 +189,8 @@ class CryptoTrading(ComponenteBase):
         """Monitorea operaciones abiertas fuera del horario de trading."""
         for pair, trade in list(self.open_trades.items()):
             try:
-                # Simulación de monitoreo (en producción, verificar precio actual)
                 self.logger.info(f"[CryptoTrading] Monitoreando operación abierta para {pair}: {trade}")
-                # Ejemplo: Cerrar operación si cumple condiciones
+                # Simulación de cierre (en producción, verificar precio actual)
                 if "condición de cierre simulada":
                     await self._close_trade(pair, trade)
             except Exception as e:
@@ -184,7 +199,6 @@ class CryptoTrading(ComponenteBase):
     async def _close_trade(self, pair: str, trade: dict):
         """Cierra una operación abierta."""
         self.logger.info(f"[CryptoTrading] Cerrando operación para {pair}")
-        # Simulación de cierre (en producción, enviar orden de cierre al exchange)
         trade["status"] = "closed"
         trade["close_timestamp"] = datetime.datetime.utcnow().isoformat()
         await self.trading_db.save_order(
