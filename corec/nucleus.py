@@ -51,13 +51,7 @@ class CoreCNucleus:
                     block_config = PluginBlockConfig(**block_config)
                     entidades = [crear_entidad(f"ent_{i}", block_config.canal, lambda carga: {"valor": 0.5})
                                  for i in range(block_config.entidades)]
-                    bloque = BloqueSimbiotico(
-                        block_config.id,
-                        block_config.canal,
-                        entidades,
-                        block_config.max_size_mb if hasattr(block_config, "max_size_mb") else 10.0,
-                        self
-                    )
+                    # Eliminamos la creación de 'bloque' porque no se usa
                     await self.modules["registro"].registrar_bloque(
                         block_config.id,
                         block_config.canal,
