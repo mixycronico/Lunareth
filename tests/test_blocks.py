@@ -45,7 +45,7 @@ async def test_bloque_procesar_exitoso(nucleus, monkeypatch):
 @pytest.mark.asyncio
 async def test_bloque_procesar_valor_invalido(nucleus, monkeypatch):
     """Prueba el procesamiento con un valor inválido."""
-    async def mock_procesar(self, carga):  # Añadimos self para que coincida con el método de instancia
+    async def mock_procesar(carga):
         return {"valor": "invalid"}
 
     entidades = [Entidad("ent_1", 1, lambda: {"valor": "invalid"})]
