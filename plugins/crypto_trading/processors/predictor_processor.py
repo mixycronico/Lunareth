@@ -3,6 +3,7 @@ import asyncio
 from datetime import datetime
 from plugins.crypto_trading.utils.helpers import CircuitBreaker
 import json
+import random
 
 class PredictorProcessor:
     def __init__(self, config, redis):
@@ -15,6 +16,7 @@ class PredictorProcessor:
         )
         self.window = 10
         self.history = []
+        self.distraction_probability = 0.05  # 5% de probabilidad de "distracción"
 
     async def predecir_tendencias(self) -> Dict[str, Any]:
         if not self.cb.check():
@@ -30,7 +32,6 @@ class PredictorProcessor:
             market_data = json.loads(market_data)
             crypto_data = market_data["crypto"]
 
-            # Simulación de predicción de tendencias (en producción, usar un modelo más avanzado)
             avg_price_change = sum(
                 (data["price_change"] if "price_change" in data else 0) for data in crypto_data.values()
             ) / len(crypto_data)
@@ -56,9 +57,25 @@ class PredictorProcessor:
             return {"status": "error", "motivo": str(e)}
 
     async def adjust_trading_flow(self):
-        """Ajusta dinámicamente el flujo de operaciones cada 5 minutos."""
+        """Ajusta dinámicamente el flujo de operaciones cada 5 minutos, con pausas y distracciones."""
         while True:
             try:
+                # Simular distracción humana (omitir ciclo con 5% de probabilidad si el mercado está estable)
+                market_trends = await self.redis.get("market_trends")
+                if market_trends:
+                    trends = json.loads(market_trends)
+                    trend_strength = trends.get("trend_strength", 0.0)
+                    if trend_strength < 0.01 and random.random() < self.distraction_probability:
+                        self.logger.info("Simulando distracción humana: omitiendo ciclo de ajuste")
+                        await asyncio.sleep(300)
+                        continue
+
+                # Pausa aleatoria durante baja volatilidad
+                if trend_strength < 0.01:
+                    pause = random.uniform(300, 600)  # Pausa de 5-10 minutos
+                    self.logger.info(f"Simulando pausa humana durante baja volatilidad: {pause} segundos")
+                    await asyncio.sleep(pause)
+
                 market_trends = await self.redis.get("market_trends")
                 if not market_trends:
                     await asyncio.sleep(300)
@@ -68,14 +85,13 @@ class PredictorProcessor:
                 trend_strength = trends.get("trend_strength", 0.0)
                 trend = "alcista" if trend_strength > 0 else "bajista"
 
-                # Ajustar parámetros de trading
                 adjustment = {
-                    "interval_factor": 0.8 if trend == "alcista" else 1.2,  # Reducir intervalo en subidas
-                    "trade_multiplier": 4 if trend == "alcista" else 2,  # Más operaciones en subidas
+                    "interval_factor": 0.8 if trend == "alcista" else 1.2,
+                    "trade_multiplier": 4 if trend == "alcista" else 2,
                     "timestamp": datetime.utcnow().isoformat()
                 }
                 await self.redis.set("trading_flow_adjustments", json.dumps(adjustment))
                 self.logger.info(f"Flujo de trading ajustado: {adjustment}")
             except Exception as e:
                 self.logger.error(f"Error al ajustar el flujo de trading: {e}")
-            await asyncio.sleep(300)  # Cada 5 minutos
+            await asyncio.sleep(300)
