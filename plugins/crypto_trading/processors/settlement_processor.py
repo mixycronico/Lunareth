@@ -22,9 +22,10 @@ class SettlementProcessor:
         self.capital = config.get("total_capital", 1000.0)
         self.daily_profit_loss = 0
         self.historical_profits = []
-        self.trades_history = []  # Para calcular win rate y operaciones por día
-        self.is_paused = False  # Bandera para pausas por caídas del mercado
-        self.recovery_capital_percentage = 0.1  # Porcentaje inicial para recuperación
+        self.trades_history = []
+        self.is_paused = False
+        self.recovery_capital_percentage = 0.1
+        self.open_trades = {}  # Ahora gestionado directamente por SettlementProcessor
 
     async def update_capital_after_trade(self, side: str, trade_result: Dict[str, Any]):
         if side == "buy":
@@ -36,7 +37,7 @@ class SettlementProcessor:
         self.capital_processor.actualizar_total_capital(self.capital)
         self.logger.info(f"[SettlementProcessor] Capital actualizado: ${self.capital}")
 
-    async def close_trade(self, exchange: str, pair: str, trade: dict, open_trades: Dict[str, Dict]):
+    async def close_trade(self, exchange: str, pair: str, trade: dict):
         trade_id = f"{exchange}:{pair}"
         self.logger.info(f"[SettlementProcessor] Cerrando operación para {trade_id}")
         trade["status"] = "closed"
@@ -60,7 +61,7 @@ class SettlementProcessor:
         self.strategy.update_capital(self.capital)
         self.execution_processor.update_capital(self.capital)
         self.capital_processor.actualizar_total_capital(self.capital)
-        del open_trades[trade_id]
+        del self.open_trades[trade_id]
         await self.nucleus.publicar_alerta({
             "tipo": "operacion_cerrada",
             "plugin_id": "crypto_trading",
@@ -69,13 +70,13 @@ class SettlementProcessor:
             "timestamp": trade["close_timestamp"]
         })
 
-    async def micro_cycle_loop(self, open_trades: Dict[str, Dict]):
+    async def micro_cycle_loop(self):
         while True:
             try:
                 now = datetime.datetime.now()
                 if 6 <= now.hour < 22 and now.hour % 6 == 0 and now.minute == 0:
                     micro_profit = 0
-                    for trade_id, trade in list(open_trades.items()):
+                    for trade_id, trade in list(self.open_trades.items()):
                         exchange, pair = trade_id.split(":")
                         current_price = 50000
                         profit = trade["cantidad"] * (current_price - trade["precio"])
@@ -86,21 +87,21 @@ class SettlementProcessor:
                             "cantidad": trade["cantidad"],
                             "timestamp": trade["close_timestamp"]
                         })
-                        await self.close_trade(exchange, pair, trade, open_trades)
+                        await self.close_trade(exchange, pair, trade)
                     self.logger.info(f"[SettlementProcessor] Micro-ciclo a las {now.hour}:00: Ganancia/Pérdida: ${micro_profit}")
                 await asyncio.sleep(60)
             except Exception as e:
                 self.logger.error(f"[SettlementProcessor] Error en micro-ciclo: {e}")
                 await asyncio.sleep(60)
 
-    async def daily_close_loop(self, open_trades: Dict[str, Dict]):
+    async def daily_close_loop(self):
         while True:
             try:
                 now = datetime.datetime.now()
                 close_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
                 if now.hour == 22 and now.minute == 0:
                     daily_profit = 0
-                    for trade_id, trade in list(open_trades.items()):
+                    for trade_id, trade in list(self.open_trades.items()):
                         exchange, pair = trade_id.split(":")
                         current_price = 50000
                         profit = trade["cantidad"] * (current_price - trade["precio"])
@@ -111,7 +112,7 @@ class SettlementProcessor:
                             "cantidad": trade["cantidad"],
                             "timestamp": trade["close_timestamp"]
                         })
-                        await self.close_trade(exchange, pair, trade, open_trades)
+                        await self.close_trade(exchange, pair, trade)
                     self.execution_processor.reset_active_capital()
                     self.daily_profit_loss += daily_profit
                     await self.capital_processor.update_strategy_performance(daily_profit)
@@ -148,13 +149,12 @@ class SettlementProcessor:
                         date=now.strftime("%Y-%m-%d"),
                         total_profit=daily_profit,
                         roi_percent=(daily_profit / self.capital) * 100 if self.capital != 0 else 0,
-                        total_trades=len(open_trades),
+                        total_trades=len(self.open_trades),
                         report_data={"open_trades": 0, "sharpe_ratio": sharpe_ratio, "max_drawdown": max_drawdown, "win_rate": win_rate, "trades_per_day": trades_per_day},
                         timestamp=now.timestamp()
                     )
                     self.logger.info(f"[SettlementProcessor] Cierre diario: Ganancia/Pérdida: ${daily_profit}, Total: ${self.daily_profit_loss}, Capital: ${self.capital}")
 
-                    # Limpieza de datos antiguos en Redis
                     await self.cleanup_old_data(now)
 
                     await asyncio.sleep(86400 - 60)
@@ -165,13 +165,12 @@ class SettlementProcessor:
                 await asyncio.sleep(60)
 
     async def cleanup_old_data(self, now):
-        """Elimina datos antiguos de Redis (más de 24 horas)."""
         try:
             keys = await self.redis.keys("historical_report:*")
             for key in keys:
                 date_str = key.split(":")[-1]
                 report_date = datetime.strptime(date_str, "%Y-%m-%d")
-                if (now - report_date).days > 1:  # Más de 24 horas
+                if (now - report_date).days > 1:
                     await self.redis.delete(key)
                     self.logger.info(f"Datos antiguos eliminados: {key}")
         except Exception as e:
@@ -212,7 +211,7 @@ class SettlementProcessor:
         days = (timestamps[-1] - timestamps[0]).days + 1
         return len(self.trades_history) / days
 
-    async def handle_market_crash(self, open_trades: Dict[str, Dict]):
+    async def handle_market_crash(self):
         while True:
             try:
                 market_data = await self.redis.get("market_data")
@@ -230,7 +229,6 @@ class SettlementProcessor:
                     self.is_paused = True
                     self.recovery_capital_percentage = 0.1
 
-                    # Publicar alerta detallada
                     alert = {
                         "tipo": "evento_critico",
                         "plugin_id": "crypto_trading",
@@ -241,13 +239,12 @@ class SettlementProcessor:
                     await self.redis.xadd("critical_events", {"data": json.dumps(alert)})
                     await self.nucleus.publicar_alerta(alert)
 
-                    for trade_id, trade in list(open_trades.items()):
+                    for trade_id, trade in list(self.open_trades.items()):
                         exchange, pair = trade_id.split(":")
-                        await self.close_trade(exchange, pair, trade, open_trades)
+                        await self.close_trade(exchange, pair, trade)
 
-                    # Recuperación gradual
-                    for i in range(6):  # 6 intervalos de 10 minutos
-                        await asyncio.sleep(600)  # 10 minutos
+                    for i in range(6):
+                        await asyncio.sleep(600)
                         self.recovery_capital_percentage = min(1.0, self.recovery_capital_percentage + 0.15)
                         self.logger.info(f"Recuperación gradual: {self.recovery_capital_percentage*100:.2f}% del capital disponible")
                     self.is_paused = False
