@@ -34,6 +34,8 @@ class CryptoTrading(ComponenteBase):
         self.predictor_processor = None
         self.strategy = MomentumStrategy()
         self.trading_db = None
+        self.paper_mode = True  # Modo paper activado por defecto para pruebas
+        self.open_trades = {}  # Seguimiento de operaciones abiertas
 
     async def inicializar(self, nucleus, config=None):
         """Inicializa el plugin CryptoTrading."""
@@ -42,6 +44,10 @@ class CryptoTrading(ComponenteBase):
             self.redis_client = self.nucleus.redis_client
             if not self.redis_client:
                 raise ValueError("Redis client no inicializado")
+
+            # Configuración del modo paper desde config
+            self.paper_mode = config.get("paper_mode", True)
+            self.logger.info(f"[CryptoTrading] Modo paper: {self.paper_mode}")
 
             # Inicializar base de datos independiente para CryptoTrading
             db_config = {
@@ -75,7 +81,8 @@ class CryptoTrading(ComponenteBase):
                 entidades=trading_entities,
                 max_size_mb=5,
                 nucleus=self.nucleus,
-                execution_processor=self.execution_processor
+                execution_processor=self.execution_processor,
+                trading_db=self.trading_db
             )
             self.trading_blocks.append(trading_block)
 
@@ -130,11 +137,15 @@ class CryptoTrading(ComponenteBase):
         while True:
             try:
                 now = datetime.datetime.now()
-                start_time = now.replace(hour=7, minute=0, second=0, microsecond=0)
-                end_time = now.replace(hour=17, minute=0, second=0, microsecond=0)
+                start_time = now.replace(hour=6, minute=0, second=0, microsecond=0)
+                end_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
+                within_trading_hours = start_time <= now <= end_time
 
-                if start_time <= now <= end_time:
-                    # Monitorear el mercado
+                # Monitorear operaciones abiertas siempre
+                await self._monitor_open_trades()
+
+                # Ejecutar nuevas operaciones solo dentro del horario
+                if within_trading_hours:
                     for block in self.monitor_blocks:
                         result = await block.procesar(0.5)
                         if result["status"] != "success":
@@ -149,18 +160,53 @@ class CryptoTrading(ComponenteBase):
 
                         # Ejecutar operación basada en el sentimiento
                         for pair in self.trading_pairs:
-                            for trading_block in self.trading_blocks:
-                                await trading_block.procesar(0.5, pair, side)
+                            trade_result = await self._execute_trade(pair, side)
+                            if trade_result["status"] == "success":
+                                self.open_trades[pair] = trade_result["result"]
 
                 await asyncio.sleep(300)  # Esperar 5 minutos
             except Exception as e:
                 self.logger.error(f"[CryptoTrading] Error en bucle de monitoreo: {e}")
                 await asyncio.sleep(300)  # Continuar tras error
 
+    async def _monitor_open_trades(self):
+        """Monitorea operaciones abiertas fuera del horario de trading."""
+        for pair, trade in list(self.open_trades.items()):
+            try:
+                # Simulación de monitoreo (en producción, verificar precio actual)
+                self.logger.info(f"[CryptoTrading] Monitoreando operación abierta para {pair}: {trade}")
+                # Ejemplo: Cerrar operación si cumple condiciones
+                if "condición de cierre simulada":
+                    await self._close_trade(pair, trade)
+            except Exception as e:
+                self.logger.error(f"[CryptoTrading] Error al monitorear operación abierta para {pair}: {e}")
+
+    async def _close_trade(self, pair: str, trade: dict):
+        """Cierra una operación abierta."""
+        self.logger.info(f"[CryptoTrading] Cerrando operación para {pair}")
+        # Simulación de cierre (en producción, enviar orden de cierre al exchange)
+        trade["status"] = "closed"
+        trade["close_timestamp"] = datetime.datetime.utcnow().isoformat()
+        await self.trading_db.save_order(
+            "binance",
+            trade["orden_id"],
+            pair,
+            "spot",
+            "closed",
+            datetime.datetime.utcnow().timestamp()
+        )
+        del self.open_trades[pair]
+        await self.nucleus.publicar_alerta({
+            "tipo": "operacion_cerrada",
+            "plugin_id": "crypto_trading",
+            "pair": pair,
+            "timestamp": trade["close_timestamp"]
+        })
+
     async def _execute_trade(self, pair: str, side: str) -> Dict[str, Any]:
         """Ejecuta una operación de trading usando el TradingBlock."""
         for block in self.trading_blocks:
-            result = await block.procesar(0.5, pair, side)
+            result = await block.procesar(0.5, pair, side, paper_mode=self.paper_mode)
             if result["status"] == "success":
                 return result
         return {"status": "error", "motivo": "No se pudo ejecutar la operación"}
