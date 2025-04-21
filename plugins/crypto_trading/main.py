@@ -24,7 +24,7 @@ class CryptoTrading(ComponenteBase):
         self.logger = logging.getLogger("CryptoTrading")
         self.nucleus = None
         self.redis_client = None
-        self.trading_pairs = ["BTC/USDT", "ETH/USDT"]  # Inicialmente solo BTC y ETH
+        self.trading_pairs_by_exchange = {}  # {exchange: [pairs]}
         self.trading_blocks = []
         self.monitor_blocks = []
         self.analyzer_processor = None
@@ -59,11 +59,6 @@ class CryptoTrading(ComponenteBase):
             self.alpha_vantage = AlphaVantageFetcher(self.config)
             self.coinmarketcap = CoinMarketCapFetcher(self.config)
 
-            # Obtener las 10 altcoins con mayor volumen
-            top_altcoins = await self.coinmarketcap.fetch_top_altcoins()
-            self.trading_pairs.extend(top_altcoins)
-            self.logger.info(f"Pares de trading configurados: {self.trading_pairs}")
-
             # Inicializar base de datos independiente para CryptoTrading
             db_config = self.config.get("db_config", {
                 "dbname": "crypto_trading_db",
@@ -79,11 +74,21 @@ class CryptoTrading(ComponenteBase):
             self.analyzer_processor = AnalyzerProcessor(config, self.redis_client)
             self.capital_processor = CapitalProcessor(config)
             self.exchange_processor = ExchangeProcessor(config, self.nucleus)
+            await self.exchange_processor.inicializar()
             self.execution_processor = ExecutionProcessor(config, self.redis_client)
             self.macro_processor = MacroProcessor(config, self.redis_client)
             self.monitor_processor = MonitorProcessor(config, self.redis_client)
             self.predictor_processor = PredictorProcessor(config, self.redis_client)
             await self.predictor_processor.inicializar()
+
+            # Obtener pares con mayor volumen por exchange
+            activos = await self.exchange_processor.detectar_disponibles()
+            for ex in activos:
+                exchange_name = ex["name"]
+                client = ex["client"]
+                top_pairs = await self.exchange_processor.obtener_top_activos(client)
+                self.trading_pairs_by_exchange[exchange_name] = top_pairs
+                self.logger.info(f"Pares configurados para {exchange_name}: {top_pairs}")
 
             # Inicializar bloques simbióticos
             trading_entities = [
@@ -140,7 +145,7 @@ class CryptoTrading(ComponenteBase):
             params = comando.get("params", {})
 
             if action == "ejecutar_operacion":
-                return await self._execute_trade(params.get("pair"), params.get("side"))
+                return await self._execute_trade(params.get("exchange"), params.get("pair"), params.get("side"))
             else:
                 return {"status": "error", "message": f"Acción no soportada: {action}"}
         except Exception as e:
@@ -169,22 +174,23 @@ class CryptoTrading(ComponenteBase):
                             self.logger.warning(f"Error en monitoreo: {result['motivo']}")
                             continue
 
-                        # Obtener datos de criptomonedas para cada par
-                        crypto_data = {}
-                        for pair in self.trading_pairs:
-                            crypto_data[pair] = await self.coinmarketcap.fetch_crypto_data(pair)
-                        avg_volume = sum(data["volume"] for data in crypto_data.values()) / len(crypto_data)
-                        avg_market_cap = sum(data["market_cap"] for data in crypto_data.values()) / len(crypto_data)
-                        combined_crypto_data = {"volume": avg_volume, "market_cap": avg_market_cap}
+                        # Obtener datos de criptomonedas para cada par, por exchange
+                        for exchange, pairs in self.trading_pairs_by_exchange.items():
+                            crypto_data = {}
+                            for pair in pairs:
+                                crypto_data[pair] = await self.coinmarketcap.fetch_crypto_data(pair)
+                            avg_volume = sum(data["volume"] for data in crypto_data.values()) / len(crypto_data)
+                            avg_market_cap = sum(data["market_cap"] for data in crypto_data.values()) / len(crypto_data)
+                            combined_crypto_data = {"volume": avg_volume, "market_cap": avg_market_cap}
 
-                        sentiment = self.strategy.calculate_momentum(macro_data, combined_crypto_data)
-                        side = self.strategy.decide_trade(sentiment)
+                            sentiment = self.strategy.calculate_momentum(macro_data, combined_crypto_data)
+                            side = self.strategy.decide_trade(sentiment)
 
-                        # Ejecutar operación basada en el sentimiento
-                        for pair in self.trading_pairs:
-                            trade_result = await self._execute_trade(pair, side)
-                            if trade_result["status"] == "success":
-                                self.open_trades[pair] = trade_result["result"]
+                            # Ejecutar operación basada en el sentimiento
+                            for pair in pairs:
+                                trade_result = await self._execute_trade(exchange, pair, side)
+                                if trade_result["status"] == "success":
+                                    self.open_trades[f"{exchange}:{pair}"] = trade_result["result"]
 
                 await asyncio.sleep(300)  # Esperar 5 minutos
             except Exception as e:
@@ -193,40 +199,43 @@ class CryptoTrading(ComponenteBase):
 
     async def _monitor_open_trades(self):
         """Monitorea operaciones abiertas fuera del horario de trading."""
-        for pair, trade in list(self.open_trades.items()):
+        for trade_id, trade in list(self.open_trades.items()):
             try:
-                self.logger.info(f"[CryptoTrading] Monitoreando operación abierta para {pair}: {trade}")
+                exchange, pair = trade_id.split(":")
+                self.logger.info(f"[CryptoTrading] Monitoreando operación abierta para {exchange}:{pair}: {trade}")
                 # Simulación de cierre (en producción, verificar precio actual)
                 if "condición de cierre simulada":
-                    await self._close_trade(pair, trade)
+                    await self._close_trade(exchange, pair, trade)
             except Exception as e:
-                self.logger.error(f"[CryptoTrading] Error al monitorear operación abierta para {pair}: {e}")
+                self.logger.error(f"[CryptoTrading] Error al monitorear operación abierta para {trade_id}: {e}")
 
-    async def _close_trade(self, pair: str, trade: dict):
+    async def _close_trade(self, exchange: str, pair: str, trade: dict):
         """Cierra una operación abierta."""
-        self.logger.info(f"[CryptoTrading] Cerrando operación para {pair}")
+        trade_id = f"{exchange}:{pair}"
+        self.logger.info(f"[CryptoTrading] Cerrando operación para {trade_id}")
         trade["status"] = "closed"
         trade["close_timestamp"] = datetime.datetime.utcnow().isoformat()
         await self.trading_db.save_order(
-            "binance",
+            exchange,
             trade["orden_id"],
             pair,
             "spot",
             "closed",
             datetime.datetime.utcnow().timestamp()
         )
-        del self.open_trades[pair]
+        del self.open_trades[trade_id]
         await self.nucleus.publicar_alerta({
             "tipo": "operacion_cerrada",
             "plugin_id": "crypto_trading",
+            "exchange": exchange,
             "pair": pair,
             "timestamp": trade["close_timestamp"]
         })
 
-    async def _execute_trade(self, pair: str, side: str) -> Dict[str, Any]:
+    async def _execute_trade(self, exchange: str, pair: str, side: str) -> Dict[str, Any]:
         """Ejecuta una operación de trading usando el TradingBlock."""
         for block in self.trading_blocks:
-            result = await block.procesar(0.5, pair, side, paper_mode=self.paper_mode)
+            result = await block.procesar(0.5, exchange, pair, side, paper_mode=self.paper_mode)
             if result["status"] == "success":
                 return result
         return {"status": "error", "motivo": "No se pudo ejecutar la operación"}
