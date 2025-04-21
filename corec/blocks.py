@@ -59,7 +59,7 @@ class BloqueSimbiotico:
         """Repara el bloque simbiótico reactivando entidades inactivas."""
         try:
             for entidad in self.entidades:
-                if hasattr(entidad, "estado") and entidad.estado == "inactiva":
+                if entidad.estado == "inactiva":
                     entidad.estado = "activa"
                     self.logger.info(f"[Bloque {self.id}] Entidad {entidad.id} reactivada")
             self.fallos = 0
@@ -70,6 +70,13 @@ class BloqueSimbiotico:
             })
         except Exception as e:
             self.logger.error(f"[Bloque {self.id}] Error reparando: {e}")
+            if self.nucleus:
+                await self.nucleus.publicar_alerta({
+                    "tipo": "error_reparacion",
+                    "bloque_id": self.id,
+                    "mensaje": str(e),
+                    "timestamp": time.time()
+                })
 
     async def escribir_postgresql(self, conn):
         """Escribe los mensajes del bloque en PostgreSQL."""
