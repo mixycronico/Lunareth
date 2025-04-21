@@ -6,6 +6,7 @@ import asyncio
 import json
 import random
 import heapq
+from datetime import datetime
 
 class ExchangeProcessor(ComponenteBase):
     def __init__(self, config, nucleus, strategy, execution_processor, settlement_processor, monitor_blocks):
@@ -21,6 +22,8 @@ class ExchangeProcessor(ComponenteBase):
         self.api_limits = {}
         self.liquidity_threshold = 100000
         self.task_queues = {}  # Cola de prioridad por exchange
+        self.node_id = 0  # Identificador de nodo para balanceo de carga
+        self.total_nodes = 2  # Número total de nodos (simulado)
 
     async def inicializar(self):
         """Inicializa los clientes de los exchanges y comienza los bucles de monitoreo."""
@@ -140,8 +143,22 @@ class ExchangeProcessor(ComponenteBase):
 
                 avg_volatility = 0.01
                 adjusted_interval = 180
+                session_multiplier = 1.0
 
                 if within_trading_hours:
+                    # Ajustar actividad según sesiones de trading
+                    if (6 <= now.hour < 9) or (19 <= now.hour < 22):  # Sesiones activas: 6:00 AM - 9:00 AM, 7:00 PM - 10:00 PM
+                        session_multiplier = 1.5  # Más operaciones
+                    elif 12 <= now.hour < 15:  # Sesión menos activa: 12:00 PM - 3:00 PM
+                        session_multiplier = 0.5  # Menos operaciones
+
+                    # Balanceo de carga: asignar tareas según el nodo
+                    current_node = hash(exchange) % self.total_nodes
+                    if current_node != self.node_id:
+                        self.logger.debug(f"Tarea para {exchange} asignada al nodo {current_node}, este nodo es {self.node_id}, reprogramando...")
+                        heapq.heappush(self.task_queues[exchange], (asyncio.get_event_loop().time() + 60, "monitor"))
+                        continue
+
                     market_data = await self.redis.get("market_data")
                     if not market_data:
                         self.logger.warning(f"No hay datos de mercado disponibles para {exchange}")
@@ -164,7 +181,6 @@ class ExchangeProcessor(ComponenteBase):
                         interval_factor = 1.0
                         trade_multiplier_adjustment = 2
 
-                    # Usar AnalyzerProcessor para analizar volatilidad y priorizar pares
                     volatility_result = await self.analyzer_processor.analizar_volatilidad(exchange, pairs)
                     if volatility_result["status"] != "ok":
                         heapq.heappush(self.task_queues[exchange], (asyncio.get_event_loop().time() + 180, "monitor"))
@@ -188,13 +204,13 @@ class ExchangeProcessor(ComponenteBase):
                             if side == "pending":
                                 continue
 
-                            trade_multiplier = self.strategy.get_trade_multiplier() * trade_multiplier_adjustment
+                            trade_multiplier = self.strategy.get_trade_multiplier() * trade_multiplier_adjustment * session_multiplier
                             async for trade_result in self.execution_processor.ejecutar_operacion(exchange, {
                                 "precio": 50000,
                                 "cantidad": 0.1,
                                 "activo": pair,
                                 "tipo": side
-                            }, paper_mode=self.config.get("paper_mode", True), trade_multiplier=trade_multiplier):
+                            }, paper_mode=self.config.get("paper_mode", True), trade_multiplier=int(trade_multiplier)):
                                 self.open_trades[f"{exchange}:{pair}"] = trade_result
                                 await self.settlement_processor.update_capital_after_trade(side, trade_result)
 
