@@ -75,6 +75,8 @@ class BloqueSimbiotico:
                     "bloque_id": self.id,
                     "timestamp": time.time()
                 })
+            if error_occurred:  # Si hubo un error, relanzamos una excepción para que el test la capture
+                raise Exception("Error occurred during repair")
         except Exception as e:
             self.logger.error(f"[Bloque {self.id}] Error reparando: {str(e)}")
             if self.nucleus:
