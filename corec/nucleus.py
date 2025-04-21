@@ -36,7 +36,7 @@ class CoreCNucleus:
         try:
             self.config = cargar_config(self.config_path)
             self.db_pool = await init_postgresql(self.config["db_config"])
-            self.redis_client = await aioredis.from_url(
+            self.redis_client = aioredis.from_url(
                 f"redis://{self.config['redis_config']['host']}:{self.config['redis_config']['port']}"
             )
             self.modules["registro"] = ModuloRegistro()
