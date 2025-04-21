@@ -109,13 +109,15 @@ async def test_bloque_reparar_error(nucleus, monkeypatch):
     entidades[0].estado = "inactiva"
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
-    with patch.object(bloque.logger, "error") as mock_logger:
+    with patch.object(bloque.logger, "error") as mock_logger, \
+            patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         # Simulamos un error al intentar modificar el estado
         def raise_error(value):
             raise Exception("Error")
         monkeypatch.setattr(entidades[0], "estado", property(lambda self: "inactiva", raise_error))
         await bloque.reparar()
         assert mock_logger.called
+        assert mock_alerta.called
         assert entidades[0].estado == "inactiva"  # Verificamos que el estado no cambió debido al error
 
 
