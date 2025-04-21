@@ -68,6 +68,12 @@ class BloqueSimbiotico:
                         self.logger.error(f"[Bloque {self.id}] Error al reactivar entidad {entidad.id}: {str(e)}")
                         error_msg = str(e)
                         raise  # Relanzamos para que el bloque except externo lo capture
+            self.fallos = 0
+            await self.nucleus.publicar_alerta({
+                "tipo": "bloque_reparado",
+                "bloque_id": self.id,
+                "timestamp": time.time()
+            })
         except Exception as e:
             self.logger.error(f"[Bloque {self.id}] Error reparando: {str(e)}")
             if self.nucleus and error_msg:  # Solo publicamos la alerta si el error ocurrió dentro del bucle
@@ -78,12 +84,6 @@ class BloqueSimbiotico:
                     "timestamp": time.time()
                 })
             raise  # Relanzamos la excepción para que el test pueda capturarla
-        self.fallos = 0
-        await self.nucleus.publicar_alerta({
-            "tipo": "bloque_reparado",
-            "bloque_id": self.id,
-            "timestamp": time.time()
-        })
 
     async def escribir_postgresql(self, conn):
         """Escribe los mensajes del bloque en PostgreSQL."""
