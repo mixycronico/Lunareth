@@ -1,15 +1,19 @@
 import logging
 from typing import Dict, List
 import numpy as np
+from plugins.crypto_trading.processors.ia_analysis_processor import IAAnalisisProcessor
+from plugins.crypto_trading.processors.predictor_processor import PredictorProcessor
 
 class MomentumStrategy:
-    def __init__(self, capital: float):
+    def __init__(self, capital: float, ia_processor: IAAnalisisProcessor, predictor_processor: PredictorProcessor):
         self.logger = logging.getLogger("MomentumStrategy")
         self.capital = capital
         self.phase = self.get_phase()
         self.pending_signals = {}
-        self.is_uptrend = False  # Detectar subidas
-        self.trade_multiplier = 1  # Multiplicador para más operaciones durante subidas
+        self.is_uptrend = False
+        self.trade_multiplier = 1
+        self.ia_processor = ia_processor
+        self.predictor_processor = predictor_processor
 
     def get_phase(self) -> int:
         if self.capital < 1000:
@@ -48,7 +52,7 @@ class MomentumStrategy:
         signal = np.convolve(prices[-9:], np.ones(9)/9, mode='valid')[-1] if len(prices) >= 35 else 0.0
         return macd, signal
 
-    def calculate_momentum(self, macro_data: Dict[str, float], crypto_data: Dict[str, float], prices: List[float], volatility: float) -> float:
+    async def calculate_momentum(self, macro_data: Dict[str, float], crypto_data: Dict[str, float], prices: List[float], volatility: float) -> float:
         self.phase = self.get_phase()
 
         phase_params = {
@@ -76,11 +80,19 @@ class MomentumStrategy:
         elif macd < signal:
             sentiment -= 25
 
-        # Detectar subidas (tendencia alcista)
+        # Integrar predicciones de IA y Predictor para detectar subidas
+        ia_inputs = [crypto_data["volume"], (prices[-1] - prices[-2]) / prices[-2] if len(prices) >= 2 else 0, volatility, macro_data["dxy"]]
+        ia_inputs += [0] * 6  # Rellenar para cumplir con los 10 inputs requeridos
+        ia_prediction = await self.ia_processor.procesar_datos(ia_inputs)
+        predictor_result = await self.predictor_processor.predecir_tendencias()
+
         price_change = (prices[-1] - prices[-2]) / prices[-2] if len(prices) >= 2 else 0
         rsi_trend = (self.calculate_rsi(prices[-10:]) - self.calculate_rsi(prices[-20:-10])) if len(prices) >= 20 else 0
-        self.is_uptrend = price_change > 0.02 and rsi_trend > 0 and macd > signal  # Subida: +2%, RSI creciente, MACD alcista
-        self.trade_multiplier = 2 if self.is_uptrend else 1  # Doblar operaciones durante subidas
+        predictor_trend = next((p["tendencia"] for p in predictor_result["predicciones"] if p["symbol"] == prices[0]), "neutral") if predictor_result.get("predicciones") else "neutral"
+        
+        self.is_uptrend = (price_change > 0.02 and rsi_trend > 0 and macd > signal and 
+                          ia_prediction["prediccion"] > 0.5 and predictor_trend == "alcista")
+        self.trade_multiplier = 3 if self.is_uptrend else 1  # Triplicar operaciones durante subidas
 
         self.logger.info(f"[MomentumStrategy] Sentimiento calculado: {sentiment} (Phase: {self.phase}, RSI: {rsi}, MACD: {macd}, Signal: {signal}, Uptrend: {self.is_uptrend})")
         return sentiment
@@ -124,7 +136,6 @@ class MomentumStrategy:
             return "pending"
 
     def get_trade_multiplier(self) -> int:
-        """Devuelve el multiplicador de operaciones para subidas."""
         return self.trade_multiplier
 
     def update_capital(self, new_capital: float):
