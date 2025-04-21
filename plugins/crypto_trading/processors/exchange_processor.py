@@ -21,9 +21,10 @@ class ExchangeProcessor(ComponenteBase):
         self.exchange_clients = {}
         self.api_limits = {}
         self.liquidity_threshold = 100000
-        self.task_queues = {}  # Cola de prioridad por exchange (simulando RabbitMQ)
+        self.task_queues = {}  # Simulación de colas distribuidas (RabbitMQ)
         self.node_id = 0
         self.total_nodes = 2
+        self.priority_operations = []  # Cola de prioridad para operaciones críticas
 
     async def inicializar(self):
         for ex in self.exchanges:
@@ -145,13 +146,11 @@ class ExchangeProcessor(ComponenteBase):
                 weekend_multiplier = 1.0
 
                 if within_trading_hours:
-                    # Ajustar actividad según sesiones de trading
                     if (6 <= now.hour < 9) or (19 <= now.hour < 22):
                         session_multiplier = 1.5
                     elif 12 <= now.hour < 15:
                         session_multiplier = 0.5
 
-                    # Reducir actividad los fines de semana (sábado y domingo)
                     if now.weekday() >= 5:
                         weekend_multiplier = 0.5
 
@@ -207,10 +206,15 @@ class ExchangeProcessor(ComponenteBase):
                                 continue
 
                             # Simular errores humanos: retraso ocasional
-                            if random.random() < 0.03:  # 3% de probabilidad
-                                delay = random.uniform(60, 300)  # Retraso de 1 a 5 minutos
+                            if random.random() < 0.03:
+                                delay = random.uniform(60, 300)
                                 self.logger.info(f"Simulando error humano: retrasando operación en {exchange}:{pair} por {delay} segundos")
                                 await asyncio.sleep(delay)
+
+                            # Priorizar operaciones críticas (como cierres por stop_loss)
+                            latency = random.uniform(1, 2)  # Simular latencia de 1-2 segundos
+                            operation_priority = 1 if "stop_loss" in trade_result else 0  # Prioridad alta para stop_loss
+                            heapq.heappush(self.priority_operations, (-operation_priority, trade_result))
 
                             trade_multiplier = self.strategy.get_trade_multiplier() * trade_multiplier_adjustment * session_multiplier * weekend_multiplier
                             async for trade_result in self.execution_processor.ejecutar_operacion(exchange, {
@@ -220,6 +224,7 @@ class ExchangeProcessor(ComponenteBase):
                                 "tipo": side
                             }, paper_mode=self.config.get("paper_mode", True), trade_multiplier=int(trade_multiplier)):
                                 self.settlement_processor.open_trades[f"{exchange}:{pair}"] = trade_result
+                                await asyncio.sleep(latency)  # Simular latencia
                                 await self.settlement_processor.update_capital_after_trade(side, trade_result)
 
                 base_interval = 180
