@@ -1,289 +1,399 @@
-Documentación Técnica y Profesional de CoreC (Proyecto Genesis)
-1. Introducción
-1.1 Propósito
-CoreC es un sistema distribuido y modular diseñado para gestionar bloques simbióticos (BloqueSimbiotico) y entidades (Entidad) que procesan datos y publican alertas en tiempo real. Forma parte del proyecto Genesis, un framework orientado a la creación de sistemas biomiméticos avanzados. CoreC utiliza tecnologías como Redis para la gestión de streams en tiempo real y PostgreSQL para almacenamiento persistente, y está diseñado para ser extensible mediante plugins dinámicos.
-Fecha de Estabilidad: 21 de abril de 2025, 09:48 AM (según el pipeline exitoso). Versión Actual: CoreC Ultimate v1.2 (basado en memorias del 11/04/2025, 11:35). Audiencia: Esta documentación está dirigida a programadores y desarrolladores que deseen entender, contribuir o extender CoreC.
-1.2 Características Clave
-	•	Procesamiento Distribuido: Gestiona múltiples entidades dentro de bloques simbióticos para procesar datos de forma eficiente.
-	•	Gestión de Alertas en Tiempo Real: Utiliza Redis Streams para publicar alertas de eventos como errores, reparaciones y procesamiento de bloques.
-	•	Almacenamiento Persistente: Almacena mensajes en PostgreSQL para análisis y auditoría.
-	•	Extensibilidad mediante Plugins: Soporta plugins dinámicos como codex, comm_system, y crypto_trading.
-	•	Módulos Especializados: Incluye módulos para registro, sincronización, ejecución y auditoría.
-	•	Tareas Asíncronas: Integra Celery para la ejecución de tareas en segundo plano.
-2. Requisitos del Sistema
-2.1 Dependencias
-	•	Python: 3.10.17 o superior.
-	•	Librerías:
-	◦	aioredis: Para la gestión de Redis Streams.
-	◦	asyncpg: Para la conexión asíncrona a PostgreSQL.
-	◦	psycopg2: Para la inicialización síncrona de PostgreSQL.
-	◦	pydantic: Para la validación de configuraciones.
-	◦	celery: Para tareas asíncronas.
-	◦	redis: Para el backend de Celery.
-	◦	pyyaml: Para cargar archivos de configuración YAML.
-	◦	pytest, pytest-asyncio: Para pruebas unitarias.
-	◦	flake8: Para linting del código.
-	•	Servicios Externos:
-	◦	Redis: Servidor Redis para streams y tareas (por defecto: localhost:6379).
-	◦	PostgreSQL: Base de datos para almacenamiento persistente (por defecto: localhost:5432).
-2.2 Configuración del Entorno
-	1	Instalar Dependencias: Asegúrate de tener un archivo requirements.txt con las dependencias necesarias: aioredis
-	2	asyncpg
-	3	psycopg2-binary
-	4	pydantic
-	5	celery
-	6	redis
-	7	pyyaml
-	8	pytest
-	9	pytest-asyncio
-	10	flake8
-	11	 Instala las dependencias con: pip install -r requirements.txt
-	12	
-	13	Configurar Redis:
-	◦	Asegúrate de que Redis esté corriendo en localhost:6379 (o ajusta la configuración en corec_config.json).
-	◦	Configura el usuario y contraseña según tu entorno.
-	14	Configurar PostgreSQL:
-	◦	Asegúrate de que PostgreSQL esté corriendo en localhost:5432 (o ajusta la configuración).
-	◦	Crea una base de datos corec_db: CREATE DATABASE corec_db;
-	◦	
-	◦	Actualiza las credenciales en corec_config.json.
-3. Arquitectura del Sistema
-CoreC está diseñado como un sistema modular y distribuido, con un núcleo central (CoreCNucleus) que coordina módulos, bloques, entidades, y plugins. A continuación, se describe la arquitectura y sus componentes principales.
-3.1 Diagrama de Arquitectura
+# Documentación Técnica de CoreC
+
+**Autor:** Moises Alvarenga y Luna  
+**Fecha:** 21 de abril de 2025  
+**Licencia:** MIT  
+
+---
+
+## Índice
+
+1. [Introducción](#introducción)  
+2. [Arquitectura General](#arquitectura-general)  
+3. [Configuración](#configuración)  
+4. [Componentes Principales](#componentes-principales)  
+   - [CoreCNucleus](#corecnucleus)  
+   - [Módulos](#módulos)  
+   - [BloqueSimbiotico](#bloquesimbiotico)  
+   - [Entidades](#entidades)  
+   - [Plugins](#plugins)  
+   - [Integración Redis](#integración-redis)  
+   - [Persistencia PostgreSQL](#persistencia-postgresql)  
+   - [Integración Celery](#integración-celery)  
+5. [Flujo de Inicialización y Ejecución](#flujo-de-inicialización-y-ejecución)  
+6. [Diagramas UML](#diagramas-uml)  
+   - [Diagrama de Componentes](#diagrama-de-componentes)  
+   - [Diagrama de Clases](#diagrama-de-clases)  
+7. [CI / GitHub Actions](#ci--github-actions)  
+8. [Ejemplo de Configuración](#ejemplo-de-configuración)  
+9. [Uso y Despliegue](#uso-y-despliegue)  
+10. [Pruebas](#pruebas)  
+11. [Conclusión](#conclusión)  
+
+---
+
+## Introducción
+
+CoreC es un **núcleo universal** para orquestar aplicaciones distribuidas basadas en bloques simbióticos y plugins. Está diseñado para ser:
+
+- **Modular**: Cada módulo y plugin se inicializa y ejecuta de forma independiente.  
+- **Resiliente**: Incluye mecanismos de autoreparación de bloques y auditoría de anomalías.  
+- **Escalable**: Soporta decenas de miles de entidades por bloque.  
+
+Esta documentación cubre la configuración, la arquitectura, los principales componentes y el flujo de ejecución, así como ejemplos de uso y el pipeline de CI.
+
+---
+
+## Arquitectura General
+
+```mermaid
 graph TD
-    A[CoreCNucleus] --> B[ModuloRegistro]
-    A --> C[ModuloSincronizacion]
-    A --> D[ModuloEjecucion]
-    A --> E[ModuloAuditoria]
-    B --> F[BloqueSimbiotico]
-    F --> G[Entidad]
-    A --> H[Redis Streams]
-    A --> I[PostgreSQL]
-    A --> J[Plugins]
-    J --> K[codex]
-    J --> L[comm_system]
-    J --> M[crypto_trading]
-    D --> N[Celery Worker]
-3.2 Componentes Principales
-3.2.1 CoreCNucleus
-	•	Archivo: corec/nucleus.py
-	•	Propósito: Es el núcleo central de CoreC. Gestiona la inicialización, ejecución y detención del sistema, coordina módulos, registra plugins, y publica alertas.
-	•	Funcionalidades Clave:
-	◦	Inicialización: Carga la configuración, inicializa la conexión a PostgreSQL y Redis, y registra bloques y plugins.
-	◦	Ejecución Continua: Procesa bloques, encola tareas, realiza auditorías y sincronizaciones.
-	◦	Gestión de Plugins: Registra y ejecuta plugins dinámicamente.
-	◦	Publicación de Alertas: Envía alertas a Redis Streams para eventos como errores o procesamiento de bloques.
-	•	Métodos Principales:
-	◦	inicializar(): Inicializa el sistema, carga módulos y registra bloques.
-	◦	ejecutar(): Ejecuta el procesamiento continuo de bloques, auditorías y sincronizaciones.
-	◦	registrar_plugin(plugin_id, plugin): Registra un plugin y lo asocia con un bloque.
-	◦	ejecutar_plugin(plugin_id, comando): Ejecuta un comando en un plugin.
-	◦	publicar_alerta(alerta): Publica una alerta en Redis Streams.
-	◦	detener(): Detiene el sistema, cerrando conexiones.
-3.2.2 BloqueSimbiotico
-	•	Archivo: corec/blocks.py
-	•	Propósito: Gestiona un conjunto de entidades, procesa datos, repara entidades inactivas, y escribe mensajes en PostgreSQL.
-	•	Funcionalidades Clave:
-	◦	Procesamiento: Procesa datos de todas las entidades y calcula un fitness promedio.
-	◦	Reparación: Reactiva entidades inactivas y reinicia los fallos.
-	◦	Persistencia: Escribe mensajes procesados en PostgreSQL.
-	•	Métodos Principales:
-	◦	procesar(carga): Procesa las entidades y publica una alerta de procesamiento.
-	◦	reparar(): Reactiva entidades inactivas y publica una alerta de reparación.
-	◦	escribir_postgresql(conn): Escribe los mensajes en PostgreSQL.
-3.2.3 Entidad
-	•	Archivo: corec/entities.py
-	•	Propósito: Representa una unidad básica de procesamiento dentro de un bloque.
-	•	Funcionalidades Clave:
-	◦	Procesamiento: Ejecuta una función de procesamiento personalizada.
-	◦	Estado: Mantiene un estado (activa o inactiva) para controlar su actividad.
-	•	Métodos Principales:
-	◦	procesar(carga): Procesa datos con la carga dada.
-3.2.4 Módulos
-	•	ModuloRegistro (corec/modules/registro.py): Registra bloques simbióticos y publica alertas de registro.
-	•	ModuloSincronizacion (corec/modules/sincronizacion.py): Redirige entidades entre bloques y fusiona bloques.
-	•	ModuloEjecucion (corec/modules/ejecucion.py): Encola y ejecuta tareas de procesamiento de bloques, integrándose con Celery.
-	•	ModuloAuditoria (corec/modules/auditoria.py): Detecta anomalías en los bloques y publica alertas.
-3.2.5 Plugins
-	•	Archivos: plugins/codex/config.json, plugins/comm_system/config.json, plugins/crypto_trading/config.json
-	•	Propósito: Extienden la funcionalidad de CoreC. Cada plugin se asocia con un bloque simbiótico y puede manejar comandos personalizados.
-	•	Plugins Definidos:
-	◦	codex: (Configurado, pero no implementado).
-	◦	comm_system: (Configurado, no implementado).
-	◦	crypto_trading: (Configurado, pero no implementado).
-3.2.6 Otros Componentes
-	•	Procesadores (corec/processors.py): Define ProcesadorSensor y ProcesadorFiltro para manejar datos de entidades.
-	•	Redis (corec/redis.py): Inicializa el cliente Redis asíncrono.
-	•	Serialización (corec/serialization.py): Proporciona funciones para serializar/deserializar mensajes binarios.
-	•	Celery Worker (corec/worker.py): Configura Celery para tareas asíncronas.
-	•	Base de Datos (corec/db.py): Inicializa la conexión a PostgreSQL y crea la tabla bloques.
-3.3 Flujo de Datos
-flowchart TD
-    A[CoreCNucleus] -->|inicializar| B[ModuloRegistro]
-    B -->|registrar_bloque| C[BloqueSimbiotico]
-    C -->|procesar| D[Entidad]
-    D -->|procesar| E[ProcesadorSensor/Filtro]
-    E -->|resultado| C
-    C -->|mensajes| F[PostgreSQL]
-    C -->|alertas| G[Redis Streams]
-    A -->|ejecutar| H[ModuloEjecucion]
-    H -->|encolar_bloque| C
-    A -->|ejecutar| I[ModuloAuditoria]
-    I -->|detectar_anomalias| J[Alertas]
-    J --> G
-    A -->|ejecutar| K[ModuloSincronizacion]
-    K -->|redirigir_entidades| C
-    A -->|ejecutar_plugin| L[Plugins]
-    L -->|manejar_comando| M[CommSystem]
-    M -->|alertas| G
-Explicación del Flujo:
-	1	CoreCNucleus inicializa el sistema y delega el registro de bloques a ModuloRegistro.
-	2	ModuloRegistro crea bloques simbióticos (BloqueSimbiotico).
-	3	CoreCNucleus.ejecutar() coordina el procesamiento continuo:
-	◦	ModuloEjecucion encola tareas para procesar bloques.
-	◦	BloqueSimbiotico procesa datos mediante sus entidades, usando procesadores como ProcesadorSensor o ProcesadorFiltro.
-	◦	ModuloAuditoria detecta anomalías y publica alertas.
-	◦	ModuloSincronizacion redirige entidades entre bloques.
-	4	Los resultados se almacenan en PostgreSQL y las alertas se publican en Redis Streams.
-	5	Los plugins (como CommSystem) pueden manejar comandos y publicar alertas adicionales.
-4. Configuración y Ejecución
-4.1 Configuración
-	1	Archivo de Configuración: config/corec_config.json (ver sección de configuración en la documentación anterior).
-	2	Base de Datos:
-	◦	Asegúrate de que PostgreSQL esté configurado y la tabla bloques esté creada (ver corec/db.py).
-	3	Redis:
-	◦	Asegúrate de que Redis esté corriendo y accesible.
-4.2 Ejecución
-El script principal para ejecutar CoreC es run.sh:
-run.sh:
-#!/bin/bash
+  subgraph CoreC Nucleus
+    CN(CoreCNucleus)
+    DB[(PostgreSQL Pool)]
+    REDIS[(Redis Client)]
+    MODS[Módulos]
+    BLOQ[Bloques]
+    PLUG[Plugins]
+  end
 
-# run.sh - Script para ejecutar CoreC dentro del proyecto Genesis
+  CN --> DB
+  CN --> REDIS
+  CN --> MODS
+  CN --> BLOQ
+  CN --> PLUG
 
-# Colores para mensajes en la terminal
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # Sin color
+  subgraph Módulos
+    MR(ModuloRegistro)
+    ME(ModuloEjecucion)
+    MS(ModuloSincronizacion)
+    MA(ModuloAuditoria)
+  end
 
-# Función para mostrar mensajes
-log() {
-    echo -e "${GREEN}[CoreC] $1${NC}"
+  MODS --> MR
+  MODS --> ME
+  MODS --> MS
+  MODS --> MA
+
+  subgraph Bloques
+    BS(BloqueSimbiotico)
+  end
+
+  BLOQ --> BS
+
+  subgraph Plugins
+    P(Codex, CommSystem, CryptoTrading…)
+  end
+
+  PLUG --> P
+
+
+
+⸻
+
+Configuración
+
+El fichero JSON principal config/corec_config.json define:
+	•	instance_id: Identificador de la instancia.
+	•	db_config: Configuración de PostgreSQL.
+	•	redis_config: Configuración de Redis.
+	•	bloques: Lista de bloques simbióticos.
+	•	plugins: Plugins habilitados y su bloque asociado.
+
+{
+  "instance_id": "corec1",
+  "db_config": { "dbname": "...", "user": "...", ... },
+  "redis_config": { "host": "...", "port": ..., ... },
+  "bloques": [ { "id": "enjambre_sensor", "canal": 1, ... } ],
+  "plugins": {
+    "codex": { "enabled": true, "path": "...", "bloque": { "bloque_id": "codex_block", ... } },
+    ...
+  }
 }
 
-error() {
-    echo -e "${RED}[Error] $1${NC}" >&2
+
+
+⸻
+
+Componentes Principales
+
+CoreCNucleus
+	•	Clase principal que carga configuración, inicializa conexiones y orquesta módulos, bloques y plugins.
+	•	Métodos clave:
+	•	inicializar(): carga config, crea pool de DB, cliente Redis, inicializa módulos y bloques.
+	•	ejecutar(): bucle principal de procesamiento (procesa bloques, auditoría, sincronización).
+	•	publicar_alerta(alerta): envía eventos a Redis Streams.
+	•	detener(): cierra conexiones y detiene módulos.
+
+Módulos
+
+Cada módulo hereda de ComponenteBase y expone:
+
+async def inicializar(self, nucleus, config=None): ...
+async def detener(self): ...
+
+	•	ModuloRegistro
+	•	Registra metadatos de bloques (bloques dict).
+	•	Publica alerta bloque_registrado.
+	•	ModuloEjecucion
+	•	Encola bloques para procesar en background.
+	•	Publica alerta tarea_encolada.
+	•	ModuloSincronizacion
+	•	Redirige o adapta entidades entre bloques.
+	•	Publica entidades_redirigidas / bloque_adaptado.
+	•	ModuloAuditoria
+	•	Revisa fitness y anomalías en bloques registrados.
+	•	Publica anomalia_detectada.
+
+BloqueSimbiotico
+	•	Representa un conjunto de entidades con:
+	•	procesar(carga): corre todas las entidades, acumula mensajes y calcula fitness.
+	•	reparar(): reactiva entidades inactivas y limpia errores.
+	•	escribir_postgresql(conn): persiste mensajes en tabla mensajes.
+
+Entidades
+	•	Entidad: objeto ligero con .procesar(carga) que delega a una función de usuario.
+	•	Factory: crear_entidad(id, canal, procesar_fn).
+	•	Atributo estado → "activa" / "inactiva" usado en autoreparación.
+
+Plugins
+	•	Se definen en config["plugins"].
+	•	En bootstrap:
+	1.	Carga su config.json.
+	2.	Importa plugins.<name>.main.
+	3.	Llama a inicializar(nucleus, config_plugin).
+	•	Registro dinámico via nucleus.registrar_plugin() y ejecución con ejecutar_plugin().
+
+Integración Redis
+	•	aioredis.from_url(...) en init_redis().
+	•	Alerts via Streams: XADD alertas:<tipo> ....
+
+Persistencia PostgreSQL
+	•	Conexión AsyncPG: asyncpg.connect(**db_config).
+	•	Tabla bloques creada en init_postgresql().
+	•	Inserción de mensajes en escribir_postgresql() de cada bloque.
+
+Integración Celery
+	•	App Celery configurada con Redis Broker/Backend.
+	•	Incluye tareas en corec.modules.ejecucion.
+
+celery_app = Celery('corec', broker='redis://localhost:6379/0', backend='redis://localhost:6379/0')
+
+
+
+⸻
+
+Flujo de Inicialización y Ejecución
+
+CoreCNucleus->Config Loader: cargar_config()
+CoreCNucleus->PostgreSQL: init_postgresql()
+CoreCNucleus->Redis: init_redis()
+CoreCNucleus->ModuloRegistro: inicializar()
+...
+CoreCNucleus->BloqueSimbiotico: crear y registrar bloques
+CoreCNucleus->Plugins: load_plugins()
+CoreCNucleus->Ejecutar: bucle while True
+loop ProcessBloques
+    ModuloEjecucion->BloqueSimbiotico: procesar()
+    BloqueSimbiotico->PostgreSQL: escribir_postgresql()
+end
+loop Auditoría
+    ModuloAuditoria->Registro: detectar_anomalias()
+end
+loop Sincronización
+    ModuloSincronizacion->BloqueA,B: redirigir_entidades()
+end
+
+
+
+⸻
+
+Diagramas UML
+
+Diagrama de Componentes
+
+graph LR
+  CoreCNucleus --> ModuloRegistro
+  CoreCNucleus --> ModuloEjecucion
+  CoreCNucleus --> ModuloSincronizacion
+  CoreCNucleus --> ModuloAuditoria
+  CoreCNucleus --> BloqueSimbiotico
+  CoreCNucleus --> Plugin(...)
+  BloqueSimbiotico --> Entidad
+  ModuloEjecucion --> BloqueSimbiotico
+  BloqueSimbiotico --> PostgreSQL
+  CoreCNucleus --> Redis
+
+Diagrama de Clases
+
+classDiagram
+  class CoreCNucleus {
+    - logger: Logger
+    - config: dict
+    - db_pool
+    - redis_client
+    - modules: dict
+    - plugins: dict
+    - bloques: list
+    + inicializar()
+    + ejecutar()
+    + detener()
+    + publicar_alerta(alerta)
+    + registrar_plugin(id, plugin)
+    + ejecutar_plugin(id, comando)
+  }
+
+  class BloqueSimbiotico {
+    - id: str
+    - canal: int
+    - entidades: List<Entidad>
+    - max_size_mb: float
+    - nucleus: CoreCNucleus
+    - mensajes: List<dict>
+    - fitness: float
+    - fallos: int
+    + procesar(carga)
+    + reparar()
+    + escribir_postgresql(conn)
+  }
+
+  class Entidad {
+    - id: str
+    - canal: int
+    - estado: str
+    - _procesar: Callable
+    + procesar(carga) 
+  }
+
+  class ModuloBase {
+    <<interface>>
+    + inicializar(nucleus, config)
+    + ejecutar()
+    + detener()
+  }
+
+  CoreCNucleus --> ModuloBase
+  BloqueSimbiotico --> Entidad
+  ModuloEjecucion ..> BloqueSimbiotico : encolar_bloque()
+  ModuloRegistro ..> BloqueSimbiotico : registrar_bloque()
+
+
+
+⸻
+
+CI / GitHub Actions
+
+El flujo /.github/workflows/ci.yml realiza:
+	1.	Chequeo de código en main y pull_request.
+	2.	Setup de Python 3.10.
+	3.	Instalación de dependencias (pip install -r requirements.txt).
+	4.	Ejecución de Flake8 (longitud de línea <140).
+	5.	Ejecución de pytest.
+
+name: CoreC CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with: { python-version: '3.10' }
+      - name: Install deps
+        run: pip install --upgrade pip && pip install -r requirements.txt
+      - name: Lint
+        run: flake8 --max-line-length 140 corec/ tests/
+      - name: Test
+        run: pytest -q --disable-warnings
+
+
+
+⸻
+
+Ejemplo de Configuración
+
+{
+  "instance_id": "corec1",
+  "db_config": {
+    "dbname": "corec_db",
+    "user": "postgres",
+    "password": "secure_password",
+    "host": "localhost",
+    "port": 5432
+  },
+  "redis_config": {
+    "host": "localhost",
+    "port": 6379,
+    "username": "corec_user",
+    "password": "secure_password"
+  },
+  "bloques": [
+    {
+      "id": "enjambre_sensor",
+      "canal": 1,
+      "entidades": 10000,
+      "max_size_mb": 1,
+      "entidades_por_bloque": 1000,
+      "autoreparacion": { "max_errores": 0.05, "min_fitness": 0.2 }
+    }
+  ],
+  "plugins": {
+    "crypto_trading": {
+      "enabled": true,
+      "path": "plugins/crypto_trading/config.json",
+      "bloque": {
+        "bloque_id": "trading_block",
+        "canal": 3,
+        "entidades": 2000,
+        "max_size_mb": 5,
+        "max_errores": 0.1,
+        "min_fitness": 0.3
+      }
+    }
+  }
 }
 
-warn() {
-    echo -e "${YELLOW}[Advertencia] $1${NC}"
-}
 
-# 1. Verificar que Python 3.10+ esté instalado
-PYTHON_VERSION=$(python3 --version 2>&1 | grep -oP '\d+\.\d+\.\d+')
-if [[ -z "$PYTHON_VERSION" ]]; then
-    error "Python 3 no está instalado. Por favor, instala Python 3.10 o superior."
-    exit 1
-fi
 
-if [[ "$(echo $PYTHON_VERSION | grep -oP '^\d+\.\d+')" < "3.10" ]]; then
-    error "Se requiere Python 3.10 o superior. Versión actual: $PYTHON_VERSION"
-    exit 1
-fi
+⸻
 
-log "Python $PYTHON_VERSION detectado."
+Uso y Despliegue
+	1.	Clonar repositorio:
 
-# 2. Verificar que las dependencias estén instaladas
-if [[ ! -f "requirements.txt" ]]; then
-    error "El archivo requirements.txt no existe."
-    exit 1
-fi
+git clone https://github.com/mi_org/corec.git
+cd corec
 
-log "Instalando dependencias desde requirements.txt..."
-pip3 install -r requirements.txt --quiet
-if [[ $? -ne 0 ]]; then
-    error "Fallo al instalar las dependencias. Revisa requirements.txt."
-    exit 1
-fi
 
-# 3. Verificar que Redis esté corriendo
-log "Verificando conexión a Redis..."
-redis-cli -h localhost -p 6379 ping >/dev/null 2>&1
-if [[ $? -ne 0 ]]; then
-    error "Redis no está corriendo en localhost:6379. Por favor, inicia Redis."
-    exit 1
-fi
-log "Redis está corriendo."
+	2.	Configurar config/corec_config.json según ejemplo.
+	3.	Instalar dependencias:
 
-# 4. Verificar que PostgreSQL esté corriendo
-log "Verificando conexión a PostgreSQL..."
-PG_PASSWORD=$(grep '"password"' config/corec_config.json | grep -oP '"password":\s*"\K[^"]+')
-if ! psql -h localhost -p 5432 -U postgres -d corec_db -c "\q" >/dev/null 2>&1; then
-    error "PostgreSQL no está corriendo en localhost:5432 o la base de datos corec_db no existe."
-    exit 1
-fi
-log "PostgreSQL está corriendo."
+pip install -r requirements.txt
 
-# 5. Crear tabla 'bloques' si no existe
-log "Inicializando la tabla 'bloques' en PostgreSQL..."
-python3 -c "
-import psycopg2
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('CoreCDB')
-try:
-    conn = psycopg2.connect(dbname='corec_db', user='postgres', password='$PG_PASSWORD', host='localhost', port=5432)
-    cur = conn.cursor()
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS bloques (
-            id VARCHAR(50) PRIMARY KEY,
-            canal INTEGER,
-            num_entidades INTEGER,
-            fitness FLOAT,
-            timestamp FLOAT
-        )
-    ''')
-    conn.commit()
-    cur.close()
-    conn.close()
-    logger.info('[DB] Tabla \"bloques\" inicializada')
-except Exception as e:
-    logger.error(f'[DB] Error inicializando PostgreSQL: {e}')
-"
 
-# 6. Ejecutar CoreC
-log "Iniciando CoreC..."
-python3 run_corec.py
+	4.	Inicializar BD (solo la primera vez):
 
-# 7. Mensaje final
-log "CoreC detenido."
-Pasos para Ejecutar:
-	1	Asegúrate de que run.sh tenga permisos de ejecución: chmod +x run.sh
-	2	
-	3	Ejecuta el script: ./run.sh
-	4	
-5. Tests y Cobertura
-Total de Tests: 43 Resultado: Todos pasaron en 0.25 segundos (según la captura de pantalla del 21/04/2025, 09:48 AM).
-Distribución de Tests:
-	•	tests/test_blocks.py (7 tests): Pruebas para BloqueSimbiotico.
-	•	tests/test_entities.py (4 tests): Pruebas para Entidad.
-	•	tests/test_modules.py (17 tests): Pruebas para los módulos.
-	•	tests/test_nucleus.py (11 tests): Pruebas para CoreCNucleus.
-	•	tests/test_plugin.py (4 tests): Pruebas para plugins.
-Ejecutar Tests:
-pytest tests/ -v --capture=no
-Ejecutar Linting:
-flake8 corec/ tests/ --max-line-length=300
-6. Lecciones Aprendidas
-	•	Manejo de Excepciones Asíncronas: Usar subclases específicas (como EntidadConError) en lugar de mocks dinámicos mejora la robustez.
-	•	Estructura de Módulos: Asegurarse de que todos los directorios tengan __init__.py evita problemas de importación.
-	•	Linters y CI/CD: Configurar flake8 en el pipeline requiere instalarlo explícitamente y corregir errores de estilo.
-	•	Tests y Mocks: Alinear las expectativas de los tests con el comportamiento real del código es clave para evitar fallos.
-	•	Ciclo de Vida del Sistema: Implementar métodos como ejecutar() es esencial para garantizar que el sistema sea completamente funcional y no solo se inicialice.
-7. Estado Actual
-	•	Tests: Los 43 tests pasaron en 0.25 segundos.
-	•	Pipeline de CI/CD: Pasó sin errores, incluyendo los pasos de tests y linting.
-	•	Estabilidad: CoreC es estable y completamente funcional en el proyecto Genesis, con un ciclo de vida completo que incluye inicialización, ejecución y detención.
+python -c "from corec.database import init_postgresql; init_postgresql(...)" 
 
-Confirmación Final
-Esta documentación técnica ahora incluye la implementación del método CoreCNucleus.ejecutar(), asegurando que CoreC sea un sistema completamente funcional con un ciclo de vida continuo. También hemos confirmado la ubicación de run_corec.py en el directorio raíz y ajustado run.sh para ejecutarlo correctamente.
+
+	5.	Arrancar núcleo:
+
+python run_corec.py
+
+
+
+⸻
+
+Pruebas
+	•	pytest: cubre procesamiento de bloques, reparación, módulos y plugins.
+	•	flake8: verifica estilo PEP8 (<140 caracteres).
+	•	CI: automatiza lint y tests en cada push/PR.
+
+⸻
+
+Conclusión
+
+CoreC ofrece un framework robusto y flexible para orquestar procesos distribuidos basados en bloques simbióticos y plugins. Gracias a su arquitectura modular y sus mecanismos de autoreparación y auditoría, es ideal para sistemas de alta disponibilidad y escalabilidad.
+
+¡Listo para producción! 🚀
+
