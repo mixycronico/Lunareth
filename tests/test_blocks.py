@@ -25,13 +25,22 @@ async def nucleus(mock_config):
 
 # Nueva clase EntidadConError para simular un error al cambiar el estado
 class EntidadConError(Entidad):
+    def __init__(self, id: str, canal: int, procesar_func):
+        # Evitamos que el constructor de Entidad intente establecer estado
+        self._estado = "inactiva"  # Establecemos el estado directamente
+        self.id = id
+        self.canal = canal
+        self.procesar_func = procesar_func
+
     @property
     def estado(self):
-        return "inactiva"
+        return self._estado
 
     @estado.setter
     def estado(self, value):
-        raise Exception("Error al asignar estado")
+        if value == "activa":
+            raise Exception("Error al asignar estado")
+        self._estado = value
 
 
 @pytest.mark.asyncio
@@ -115,7 +124,7 @@ async def test_bloque_reparar_error(nucleus):
     """Prueba la reparación con un error."""
     # Usamos EntidadConError en lugar de Entidad
     entidades = [EntidadConError("ent_1", 1, lambda: {"valor": 0.5})]
-    entidades[0].estado = "inactiva"  # Esto no debería cambiar el estado, pero lo seteamos para claridad
+    # No necesitamos setear el estado manualmente, ya que el constructor de EntidadConError lo establece como "inactiva"
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     with patch.object(bloque.logger, "error") as mock_logger, \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
