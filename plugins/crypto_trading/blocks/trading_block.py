@@ -9,7 +9,7 @@ class TradingBlock(BloqueSimbiotico):
         self.execution_processor = execution_processor
         self.trading_db = trading_db
 
-    async def procesar(self, carga: float, pair: str, side: str) -> dict:
+    async def procesar(self, carga: float, pair: str, side: str, paper_mode: bool = False) -> dict:
         """Procesa una operación de trading específica."""
         try:
             result = await super().procesar(carga)
@@ -20,7 +20,7 @@ class TradingBlock(BloqueSimbiotico):
                 "activo": pair,
                 "tipo": side
             }
-            execution_result = await self.execution_processor.ejecutar_operacion("binance", order)
+            execution_result = await self.execution_processor.ejecutar_operacion("binance", order, paper_mode=paper_mode)
             if execution_result["status"] == "ejecutado":
                 # Almacenar operación usando la base de datos independiente
                 await self.trading_db.save_order(
@@ -38,9 +38,10 @@ class TradingBlock(BloqueSimbiotico):
                     "side": side,
                     "amount": execution_result["cantidad"],
                     "price": execution_result["precio"],
-                    "timestamp": execution_result["timestamp"]
+                    "timestamp": execution_result["timestamp"],
+                    "modo": execution_result["modo"]
                 })
-                self.logger.info(f"[TradingBlock {self.id}] Operación {side} ejecutada para {pair}")
+                self.logger.info(f"[TradingBlock {self.id}] Operación {side} ejecutada para {pair} ({execution_result['modo']})")
                 return {"status": "success", "result": execution_result}
             else:
                 self.logger.warning(f"[TradingBlock {self.id}] Operación {side} fallida para {pair}")
