@@ -53,8 +53,7 @@ async def main():
         await nucleus.inicializar()
         await load_plugins(nucleus)
         # Entrar en bucle de ejecución (módulos + plugins)
-        # Nota: El método `ejecutar()` no está implementado en el código proporcionado
-        # await nucleus.ejecutar()
+        await nucleus.ejecutar()  # Descomentar esta línea ahora que ejecutar() está implementado
     except KeyboardInterrupt:
         await nucleus.detener()
 
