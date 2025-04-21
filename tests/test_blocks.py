@@ -23,6 +23,17 @@ async def nucleus(mock_config):
         return nucleus
 
 
+# Nueva clase EntidadConError para simular un error al cambiar el estado
+class EntidadConError(Entidad):
+    @property
+    def estado(self):
+        return "inactiva"
+
+    @estado.setter
+    def estado(self, value):
+        raise Exception("Error al asignar estado")
+
+
 @pytest.mark.asyncio
 async def test_bloque_procesar_exitoso(nucleus, monkeypatch):
     """Prueba el procesamiento exitoso de un bloque simbiótico."""
@@ -100,18 +111,14 @@ async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_bloque_reparar_error(nucleus, monkeypatch):
+async def test_bloque_reparar_error(nucleus):
     """Prueba la reparación con un error."""
-    entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
-    # Agregamos el atributo estado manualmente
-    entidades[0].estado = "inactiva"
+    # Usamos EntidadConError en lugar de Entidad
+    entidades = [EntidadConError("ent_1", 1, lambda: {"valor": 0.5})]
+    entidades[0].estado = "inactiva"  # Esto no debería cambiar el estado, pero lo seteamos para claridad
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     with patch.object(bloque.logger, "error") as mock_logger, \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
-        # Simulamos un error al intentar modificar el estado
-        def raise_error(value):
-            raise Exception("Error")
-        monkeypatch.setattr(entidades[0], "estado", property(lambda self: "inactiva", raise_error))
         with pytest.raises(Exception):  # Capturamos la excepción relanzada
             await bloque.reparar()
         assert mock_logger.called
