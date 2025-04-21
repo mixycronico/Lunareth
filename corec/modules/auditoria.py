@@ -40,7 +40,7 @@ class ModuloAuditoria(ComponenteBase):
                 "mensaje": str(e),
                 "timestamp": random.random()
             })
-            raise
+            raise  # Relanzamos la excepción para que el test pueda capturarla
 
     async def detener(self):
         """Detiene el módulo de auditoría."""
