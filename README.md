@@ -123,33 +123,51 @@ Es ideal para construir sistemas de alta disponibilidad, escalables y modulares,
 
 🌟 ¿Qué Puede Hacer CoreC?
 CoreC es increíblemente versátil. Aquí tienes algunos ejemplos de lo que puedes construir con él:
+
 	•	Red de Sensores Inteligentes: Usa el bloque enjambre_sensor para procesar datos de miles de sensores en tiempo real, detectando anomalías y almacenando resultados.
+ 
 	•	Sistema de Trading Automatizado: Con el plugin crypto_trading, puedes analizar mercados y ejecutar operaciones automáticamente.
+ 
 	•	Plataforma de Análisis de IA: El bloque ia_analisis puede manejar grandes volúmenes de datos para aplicaciones de inteligencia artificial.
+ 
 	•	Nodo de Seguridad: El bloque nodo_seguridad asegura que tu sistema sea robusto y resistente a fallos.
 
 
 🔧 ¿Cómo Contribuir?
 ¡Nos encantaría que formes parte del proyecto! Si quieres contribuir a CoreC, sigue estos pasos:
+
 	1	Clona y Crea un Fork: git clone https://github.com/mixycronico/Lunareth.git
+ 
 	2	cd genesis
+ 
 	3	
+ 
 	4	Crea una Rama para tu Contribución: git checkout -b mi-nueva-funcionalidad
 	5	
+ 
 	6	Haz tus Cambios: Añade tu código, prueba con pytest, y asegúrate de que el estilo cumpla con flake8: pytest tests/ -v --capture=no
+ 
 	7	flake8 corec/ tests/ --max-line-length=300
+ 
 	8	
+ 
 	9	Envía un Pull Request: Sube tus cambios y crea un pull request en GitHub. Nuestro pipeline de CI/CD verificará automáticamente tu código.
 
 📋 Requisitos
 Para usar CoreC, necesitas:
+
 	•	Python: 3.10 o superior.
+ 
 	•	Redis: Servidor Redis para alertas y tareas asíncronas (por defecto: localhost:6379).
+ 
 	•	PostgreSQL: Base de datos para almacenamiento persistente (por defecto: localhost:5432).
+ 
 	•	Dependencias: Asegúrate de instalar las librerías listadas en requirements.txt.
+ 
 
 🖼️ Estructura del Proyecto
 Aquí tienes una visión general de cómo está organizado CoreC:
+
 genesis/
 ├── config/                  # Archivos de configuración
 │   └── corec_config.json
@@ -194,6 +212,7 @@ genesis/
 ├── requirements.txt         # Dependencias del proyecto
 ├── run.sh                   # Script principal para iniciar CoreC
 └── run_corec.py             # Lógica de arranque de CoreC
+
 
 📦 ¿Por Qué Elegir CoreC?
 CoreC es más que un simple sistema: es una base sólida para construir aplicaciones distribuidas avanzadas. Ya sea que estés trabajando en un sistema de sensores inteligentes, una plataforma de trading automatizado, o un nodo de análisis de datos, CoreC te ofrece la flexibilidad y la potencia que necesitas. Su diseño modular y su capacidad para autorepararse lo hacen ideal para proyectos que requieren alta disponibilidad y escalabilidad.
