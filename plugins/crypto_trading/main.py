@@ -17,12 +17,10 @@ from plugins.crypto_trading.processors.ia_analysis_processor import IAAnalisisPr
 from plugins.crypto_trading.processors.settlement_processor import SettlementProcessor
 from plugins.crypto_trading.strategies.momentum_strategy import MomentumStrategy
 from plugins.crypto_trading.utils.db import TradingDB
-from plugins.crypto_trading.utils.settlement_utils import calcular_ganancias, registrar_historial
-from plugins.crypto_trading.data.alpha_vantage_fetcher import AlphaVantageFetcher
-from plugins.crypto_trading.data.coinmarketcap_fetcher import CoinMarketCapFetcher
 import datetime
 import random
 import json
+import heapq
 
 class CryptoTrading(ComponenteBase):
     def __init__(self):
@@ -45,9 +43,8 @@ class CryptoTrading(ComponenteBase):
         self.trading_db = None
         self.paper_mode = True
         self.open_trades = {}
-        self.alpha_vantage = None
-        self.coinmarketcap = None
         self.config = None
+        self.task_queue = []  # Usar una cola de prioridad para escalonamiento
 
     async def inicializar(self, nucleus, config=None):
         try:
@@ -62,19 +59,6 @@ class CryptoTrading(ComponenteBase):
             self.paper_mode = config.get("paper_mode", True)
             self.logger.info(f"[CryptoTrading] Modo paper: {self.paper_mode}")
 
-            self.alpha_vantage = AlphaVantageFetcher(self.config)
-            self.coinmarketcap = CoinMarketCapFetcher(self.config)
-
-            db_config = self.config.get("db_config", {
-                "dbname": "crypto_trading_db",
-                "user": "postgres",
-                "password": "secure_password",
-                "host": "localhost",
-                "port": 5432
-            })
-            self.trading_db = TradingDB(db_config)
-            await self.trading_db.connect()
-
             self.analyzer_processor = AnalyzerProcessor(config, self.redis_client)
             self.capital_processor = CapitalProcessor(config, self.redis_client, self.trading_db, self.nucleus)
             self.exchange_processor = ExchangeProcessor(config, self.nucleus)
@@ -88,6 +72,16 @@ class CryptoTrading(ComponenteBase):
             self.settlement_processor = SettlementProcessor(config, self.redis_client, self.trading_db, self.nucleus, self.strategy, self.execution_processor, self.capital_processor)
             await self.predictor_processor.inicializar()
             await self.ia_processor.inicializar()
+
+            db_config = self.config.get("db_config", {
+                "dbname": "crypto_trading_db",
+                "user": "postgres",
+                "password": "secure_password",
+                "host": "localhost",
+                "port": 5432
+            })
+            self.trading_db = TradingDB(db_config)
+            await self.trading_db.connect()
 
             activos = await self.exchange_processor.detectar_disponibles()
             for ex in activos:
@@ -133,12 +127,17 @@ class CryptoTrading(ComponenteBase):
 
             self.exchanges = list(self.trading_pairs_by_exchange.keys())
             for idx, exchange in enumerate(self.exchanges):
-                asyncio.create_task(self._monitor_loop_for_exchange(exchange, initial_offset=idx * 30))
+                # Programar la primera ejecución con desfase
+                heapq.heappush(self.task_queue, (idx * 30, exchange))
 
+            asyncio.create_task(self._monitor_queue())
             asyncio.create_task(self.macro_processor.data_fetch_loop())
             asyncio.create_task(self.predictor_processor.adjust_trading_flow())
             asyncio.create_task(self.monitor_processor.continuous_open_trades_monitor(self.settlement_processor.close_trade))
             asyncio.create_task(self.settlement_processor.daily_close_loop(self.open_trades))
+            asyncio.create_task(self.settlement_processor.micro_cycle_loop(self.open_trades))
+            asyncio.create_task(self.settlement_processor.handle_market_crash(self.open_trades))
+            asyncio.create_task(self.capital_processor.adjust_base_capital())
 
             self.logger.info("[CryptoTrading] Plugin inicializado correctamente")
         except Exception as e:
@@ -164,9 +163,18 @@ class CryptoTrading(ComponenteBase):
             self.logger.error(f"[CryptoTrading] Error al manejar comando: {e}")
             return {"status": "error", "message": str(e)}
 
-    async def _monitor_loop_for_exchange(self, exchange: str, initial_offset: float = 0):
-        await asyncio.sleep(initial_offset)
+    async def _monitor_queue(self):
+        """Procesa la cola de prioridad para manejar el monitoreo de exchanges."""
         while True:
+            if not self.task_queue:
+                await asyncio.sleep(1)
+                continue
+
+            next_execution_time, exchange = heapq.heappop(self.task_queue)
+            current_time = asyncio.get_event_loop().time()
+            if next_execution_time > current_time:
+                await asyncio.sleep(next_execution_time - current_time)
+
             try:
                 now = datetime.datetime.now()
                 start_time = now.replace(hour=6, minute=0, second=0, microsecond=0)
@@ -177,33 +185,32 @@ class CryptoTrading(ComponenteBase):
                 adjusted_interval = 180
 
                 if within_trading_hours:
-                    # Obtener datos de mercado desde Redis (publicados por MacroProcessor)
                     market_data = await self.redis_client.get("market_data")
                     if not market_data:
                         self.logger.warning(f"No hay datos de mercado disponibles para {exchange}")
-                        await asyncio.sleep(180)
+                        heapq.heappush(self.task_queue, (asyncio.get_event_loop().time() + 180, exchange))
                         continue
                     market_data = json.loads(market_data)
                     macro_data = market_data["macro"]
                     crypto_data = market_data["crypto"]
 
-                    # Obtener ajustes del flujo de trading desde PredictorProcessor
                     adjustments = await self.redis_client.get("trading_flow_adjustments")
                     if adjustments:
                         adjustments = json.loads(adjustments)
                         interval_factor = adjustments.get("interval_factor", 1.0)
                         trade_multiplier_adjustment = adjustments.get("trade_multiplier", 2)
+                        if adjustments.get("pause", False):
+                            self.logger.info(f"Pausa por baja volatilidad para {exchange}, reprogramando en 300 segundos")
+                            heapq.heappush(self.task_queue, (asyncio.get_event_loop().time() + 300, exchange))
+                            continue
                     else:
                         interval_factor = 1.0
                         trade_multiplier_adjustment = 2
 
-                    for block in self.monitor_blocks:
-                        result = await block.procesar(0.5)
-                        if result["status"] != "success":
-                            self.logger.warning(f"Error en monitoreo para {exchange}: {result['motivo']}")
-                            continue
-
-                        volatilidad = result["result"]["volatilidad"]
+                    # Usar AnalyzerProcessor para analizar volatilidad
+                    volatility_result = await self.analyzer_processor.analizar_volatilidad()
+                    if volatility_result["status"] == "ok":
+                        volatilidad = volatility_result["datos"]
                         prioritized_pairs = []
                         pairs = self.trading_pairs_by_exchange[exchange]
                         for pair in pairs:
@@ -217,34 +224,40 @@ class CryptoTrading(ComponenteBase):
 
                         avg_volatility = sum(v for _, v in prioritized_pairs) / len(prioritized_pairs) if prioritized_pairs else 0.01
 
-                        for pair, vol in prioritized_pairs:
-                            combined_crypto_data = crypto_data.get(pair, {"volume": 0, "market_cap": 0})
-                            prices = [50000 + i * 100 for i in range(50)]
-                            sentiment = await self.strategy.calculate_momentum(macro_data, combined_crypto_data, prices, vol)
-                            side = self.strategy.decide_trade(exchange, pair, sentiment, vol)
-
-                            if side == "pending":
+                        for block in self.monitor_blocks:
+                            result = await block.procesar(0.5)
+                            if result["status"] != "success":
+                                self.logger.warning(f"Error en monitoreo para {exchange}: {result['motivo']}")
                                 continue
 
-                            trade_multiplier = self.strategy.get_trade_multiplier() * trade_multiplier_adjustment
-                            async for trade_result in self.execution_processor.ejecutar_operacion(exchange, {
-                                "precio": 50000,
-                                "cantidad": 0.1,
-                                "activo": pair,
-                                "tipo": side
-                            }, paper_mode=self.paper_mode, trade_multiplier=trade_multiplier):
-                                self.open_trades[f"{exchange}:{pair}"] = trade_result
-                                await self.settlement_processor.update_capital_after_trade(side, trade_result)
+                            for pair, vol in prioritized_pairs:
+                                combined_crypto_data = crypto_data.get(pair, {"volume": 0, "market_cap": 0})
+                                prices = [50000 + i * 100 for i in range(50)]
+                                sentiment = await self.strategy.calculate_momentum(macro_data, combined_crypto_data, prices, vol)
+                                side = self.strategy.decide_trade(exchange, pair, sentiment, vol)
+
+                                if side == "pending":
+                                    continue
+
+                                trade_multiplier = self.strategy.get_trade_multiplier() * trade_multiplier_adjustment
+                                async for trade_result in self.execution_processor.ejecutar_operacion(exchange, {
+                                    "precio": 50000,
+                                    "cantidad": 0.1,
+                                    "activo": pair,
+                                    "tipo": side
+                                }, paper_mode=self.paper_mode, trade_multiplier=trade_multiplier):
+                                    self.open_trades[f"{exchange}:{pair}"] = trade_result
+                                    await self.settlement_processor.update_capital_after_trade(side, trade_result)
 
                 base_interval = 180
                 volatility_factor = max(avg_volatility / 0.01, 1.0)
                 variation = random.uniform(-60, 60)
                 adjusted_interval = max(120, min(240, (base_interval / volatility_factor + variation) * interval_factor))
+                heapq.heappush(self.task_queue, (asyncio.get_event_loop().time() + adjusted_interval, exchange))
                 self.logger.info(f"[CryptoTrading] Próximo monitoreo para {exchange} en {adjusted_interval} segundos (Volatilidad promedio: {avg_volatility})")
-                await asyncio.sleep(adjusted_interval)
             except Exception as e:
                 self.logger.error(f"[CryptoTrading] Error en bucle de monitoreo para {exchange}: {e}")
-                await asyncio.sleep(180)
+                heapq.heappush(self.task_queue, (asyncio.get_event_loop().time() + 180, exchange))
 
     async def detener(self):
         await self.exchange_processor.close()
