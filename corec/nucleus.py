@@ -11,6 +11,7 @@ from corec.modules.auditoria import ModuloAuditoria
 from corec.entities import crear_entidad
 from corec.blocks import BloqueSimbiotico
 from plugins import PluginBlockConfig, PluginCommand
+import random
 
 
 def cargar_config(config_path: str) -> Dict[str, Any]:
@@ -64,9 +65,10 @@ class CoreCNucleus:
                         block_config.max_size_mb if hasattr(block_config, "max_size_mb") else 10.0
                     )
                 except ValidationError as e:
+                    block_id = block_config.get("id", "unknown")  # Usamos get para manejar el caso de un dict
                     await self.publicar_alerta({
                         "tipo": "error_config_bloque",
-                        "bloque_id": block_config.id,
+                        "bloque_id": block_id,
                         "mensaje": str(e),
                         "timestamp": random.random()
                     })
