@@ -7,6 +7,25 @@ from corec.modules.ejecucion import ModuloEjecucion
 from corec.modules.auditoria import ModuloAuditoria
 from corec.entities import crear_entidad
 from corec.blocks import BloqueSimbiotico
+from corec.nucleus import CoreCNucleus
+
+
+@pytest.fixture
+def mock_config():
+    return {
+        "db_config": {"host": "localhost"},
+        "redis_config": {"host": "localhost", "port": 6379},
+        "bloques": [],
+        "plugins": {}
+    }
+
+
+@pytest.fixture
+async def nucleus(mock_config):
+    nucleus = CoreCNucleus("config.yml")
+    nucleus.redis_client = MagicMock()  # Mockeamos redis_client para que publicar_alerta funcione
+    with patch("corec.nucleus.cargar_config", return_value=mock_config):
+        return nucleus
 
 
 @pytest.mark.asyncio
@@ -214,6 +233,7 @@ async def test_modulo_auditoria_detectar_anomalias_error(nucleus):
     auditoria = ModuloAuditoria()
     await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
+    registro.bloques = {"block1": {"fitness": -1.0, "num_entidades": 10}}  # Añadimos bloques para que el error ocurra
     nucleus.modules["registro"] = registro
     with patch.object(auditoria.logger, "error") as mock_logger, \
          patch("corec.modules.auditoria.random.random", side_effect=Exception("Error")):
