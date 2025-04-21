@@ -1,164 +1,135 @@
 import logging
-import random
+import yaml
 import aioredis
-from typing import Dict
-from corec.core import ComponenteBase, cargar_config, PluginBlockConfig, PluginCommand
-from corec.db import init_postgresql
-from corec.blocks import BloqueSimbiotico
+import asyncpg
+from pydantic import ValidationError
+from typing import Dict, Any
 from corec.modules.registro import ModuloRegistro
 from corec.modules.sincronizacion import ModuloSincronizacion
 from corec.modules.ejecucion import ModuloEjecucion
 from corec.modules.auditoria import ModuloAuditoria
-from pydantic import ValidationError
 from corec.entities import crear_entidad
+from corec.blocks import BloqueSimbiotico
+from plugins import PluginBlockConfig, PluginCommand
+
+
+def cargar_config(config_path: str) -> Dict[str, Any]:
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f)
+
+
+async def init_postgresql(config: Dict[str, Any]):
+    return await asyncpg.connect(**config)
 
 
 class CoreCNucleus:
     def __init__(self, config_path: str):
         self.logger = logging.getLogger("CoreCNucleus")
-        self.config = cargar_config(config_path)
-        self.db_config = self.config.get("db_config", {})
-        self.redis_config = self.config.get("redis_config", {})
+        self.config_path = config_path
+        self.config = None
+        self.db_pool = None
         self.redis_client = None
-        self.modules: Dict[str, ComponenteBase] = {}
-        self.plugins: Dict[str, ComponenteBase] = {}
-        self.bloques_plugins: Dict[str, BloqueSimbiotico] = {}
+        self.modules = {}
+        self.plugins = {}
 
     async def inicializar(self):
-        """Inicializa el núcleo, configurando base de datos, módulos y plugins."""
         try:
-            self.logger.info("[Nucleus] Inicializando núcleo")
-            init_postgresql(self.db_config)
-            if self.redis_config:
+            self.config = cargar_config(self.config_path)
+            self.db_pool = await init_postgresql(self.config["db_config"])
+            self.redis_client = await aioredis.from_url(
+                f"redis://{self.config['redis_config']['host']}:{self.config['redis_config']['port']}"
+            )
+            self.modules["registro"] = ModuloRegistro()
+            self.modules["sincronizacion"] = ModuloSincronizacion()
+            self.modules["ejecucion"] = ModuloEjecucion()
+            self.modules["auditoria"] = ModuloAuditoria()
+            for name, module in self.modules.items():
+                await module.inicializar(self, self.config.get(f"{name}_config"))
+            for block_config in self.config.get("bloques", []):
                 try:
-                    self.redis_client = await aioredis.from_url(
-                        f"redis://{self.redis_config['host']}:{self.redis_config['port']}",
-                        username=self.redis_config.get("username"),
-                        password=self.redis_config.get("password")
+                    block_config = PluginBlockConfig(**block_config)
+                    entidades = [crear_entidad(f"ent_{i}", block_config.canal, lambda carga: {"valor": 0.5})
+                                 for i in range(block_config.entidades)]
+                    bloque = BloqueSimbiotico(
+                        block_config.id,
+                        block_config.canal,
+                        entidades,
+                        block_config.max_size_mb if hasattr(block_config, "max_size_mb") else 10.0,
+                        self
                     )
-                except Exception as e:
-                    self.logger.error(f"[Nucleus] Error conectando a Redis: {e}")
-                    self.redis_client = None
-
-            # Inicializar módulos
-            self.modules = {
-                "registro": ModuloRegistro(),
-                "sincronizacion": ModuloSincronizacion(),
-                "ejecucion": ModuloEjecucion(),
-                "auditoria": ModuloAuditoria()
-            }
-            for nombre, modulo in self.modules.items():
-                await modulo.inicializar(self)
-                self.logger.info(f"[Nucleus] Módulo '{nombre}' inicializado")
-
-            # Cargar bloques desde config
-            for bloque_conf in self.config.get("bloques", []):
-                try:
-                    config = PluginBlockConfig(**bloque_conf)
-                    entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
-                    bloque = BloqueSimbiotico(config.id, config.canal, entidades, self)
                     await self.modules["registro"].registrar_bloque(
-                        config.id, config.canal, config.entidades
+                        block_config.id,
+                        block_config.canal,
+                        block_config.entidades,
+                        block_config.max_size_mb if hasattr(block_config, "max_size_mb") else 10.0
                     )
                 except ValidationError as e:
-                    self.logger.error(f"[Nucleus] Configuración inválida para bloque: {e}")
                     await self.publicar_alerta({
-                        "tipo": "error_registro",
-                        "bloque_id": bloque_conf.get("id", "desconocido"),
+                        "tipo": "error_config_bloque",
+                        "bloque_id": block_config.id,
                         "mensaje": str(e),
                         "timestamp": random.random()
                     })
-
-            # Cargar plugins desde config
-            for nombre, conf in self.config.get("plugins", {}).items():
-                if conf.get("enabled", False):
-                    try:
-                        bloque_conf = conf.get("bloque", {})
-                        config = PluginBlockConfig(**bloque_conf)
-                        entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
-                        bloque = BloqueSimbiotico(config.bloque_id, config.canal, entidades, self)
-                        self.bloques_plugins[nombre] = bloque
-                        await self.modules["registro"].registrar_bloque(
-                            config.bloque_id, config.canal, config.entidades
-                        )
-                    except ValidationError as e:
-                        self.logger.error(f"[Nucleus] Configuración de bloque inválida para '{nombre}': {e}")
-
+            self.logger.info("[Núcleo] Inicialización completa")
         except Exception as e:
-            self.logger.error(f"[Nucleus] Error inicializando núcleo: {e}")
+            self.logger.error(f"[Núcleo] Error inicializando: {e}")
+            if "redis" in str(e).lower():
+                self.redis_client = None
 
-    def registrar_plugin(self, nombre: str, plugin: ComponenteBase):
-        """Registra un plugin en el núcleo."""
+    def registrar_plugin(self, plugin_id: str, plugin: Any):
         try:
-            self.plugins[nombre] = plugin
-            conf = self.config.get("plugins", {}).get(nombre, {})
-            bloque_conf = conf.get("bloque", {})
-            if bloque_conf:
-                try:
-                    config = PluginBlockConfig(**bloque_conf)
-                    entidades = [crear_entidad(f"ent_{i}", config.canal, lambda: {"valor": random.uniform(0, 1)}) for i in range(config.entidades)]
-                    bloque = BloqueSimbiotico(config.bloque_id, config.canal, entidades, self)
-                    self.bloques_plugins[nombre] = bloque
-                    self.logger.info(f"[Nucleus] Plugin '{nombre}' registrado con bloque")
-                except ValidationError as e:
-                    self.logger.error(f"[Nucleus] Configuración de bloque inválida para '{nombre}': {e}")
-            else:
-                self.logger.info(f"[Nucleus] Plugin '{nombre}' registrado sin bloque")
-        except Exception as e:
-            self.logger.error(f"[Nucleus] Error registrando plugin '{nombre}': {e}")
-
-    async def ejecutar_plugin(self, nombre: str, comando: dict) -> dict:
-        """Ejecuta un comando en un plugin registrado."""
-        if nombre not in self.plugins:
-            raise ValueError(f"Plugin '{nombre}' no encontrado")
-        try:
-            cmd = PluginCommand(**comando)
-            resultado = await self.plugins[nombre].manejar_comando(cmd)
-            self.logger.info(f"[Nucleus] Comando ejecutado en '{nombre}': {comando}")
-            return resultado  # Retornar resultado
+            plugin_config = self.config.get("plugins", {}).get(plugin_id)
+            if plugin_config:
+                block_config = PluginBlockConfig(**plugin_config["bloque"])
+                entidades = [crear_entidad(f"ent_{i}", block_config.canal, lambda carga: {"valor": 0.5})
+                             for i in range(block_config.entidades)]
+                bloque = BloqueSimbiotico(
+                    block_config.id,
+                    block_config.canal,
+                    entidades,
+                    block_config.max_size_mb if hasattr(block_config, "max_size_mb") else 10.0,
+                    self
+                )
+                plugin.bloque = bloque
+            self.plugins[plugin_id] = plugin
+            self.logger.info(f"[Núcleo] Plugin '{plugin_id}' registrado")
         except ValidationError as e:
-            self.logger.error(f"[Nucleus] Comando inválido para '{nombre}': {e}")
-            return {"status": "error", "message": f"Comando inválido: {e}"}
+            self.logger.error(f"[Núcleo] Configuración inválida para plugin '{plugin_id}': {e}")
         except Exception as e:
-            self.logger.error(f"[Nucleus] Error ejecutando comando en '{nombre}': {e}")
+            self.logger.error(f"[Núcleo] Error registrando plugin '{plugin_id}': {e}")
+
+    async def ejecutar_plugin(self, plugin_id: str, comando: Dict[str, Any]) -> Dict[str, Any]:
+        plugin = self.plugins.get(plugin_id)
+        if not plugin:
+            raise ValueError(f"Plugin '{plugin_id}' no encontrado")
+        try:
+            comando = PluginCommand(**comando)
+            result = await plugin.manejar_comando(comando)
+            self.logger.info(f"[Núcleo] Comando ejecutado en plugin '{plugin_id}'")
+            return result
+        except ValidationError as e:
+            self.logger.error(f"[Núcleo] Comando inválido para plugin '{plugin_id}': {e}")
+            return {"status": "error", "message": str(e)}
+        except Exception as e:
+            self.logger.error(f"[Núcleo] Error ejecutando comando en plugin '{plugin_id}': {e}")
             return {"status": "error", "message": str(e)}
 
-    async def publicar_alerta(self, alerta: dict):
-        """Publica una alerta en el canal corec_alerts."""
+    async def publicar_alerta(self, alerta: Dict[str, Any]):
         try:
+            if not self.redis_client:
+                self.logger.warning("[Alerta] Redis client no inicializado")
+                return
+            stream_key = f"alertas:{alerta['tipo']}"
+            await self.redis_client.xadd(stream_key, alerta)
             self.logger.warning(f"[Alerta] {alerta}")
-            if self.redis_client:
-                await self.redis_client.xadd("corec_alerts", alerta)
-            else:
-                self.logger.error("[Alerta] Redis client no inicializado")
         except Exception as e:
-            self.logger.error(f"[Alerta] Error publicando en corec_alerts: {e}")
-
-    async def coordinar_bloques(self):
-        """Coordina bloques simbióticos, priorizando tareas activas."""
-        try:
-            for nombre, bloque in self.bloques_plugins.items():
-                carga = random.random()  # TODO: Calcular carga real
-                await bloque.procesar(carga)
-                self.logger.debug(
-                    f"[Nucleus] Bloque '{bloque.id}' procesado, "
-                    f"fitness: {bloque.fitness:.2f}"
-                )
-        except Exception as e:
-            self.logger.error(f"[Nucleus] Error coordinando bloques: {e}")
-            await self.publicar_alerta({
-                "tipo": "error_coordinacion",
-                "mensaje": str(e),
-                "timestamp": random.random()
-            })
+            self.logger.error(f"[Alerta] Error publicando alerta: {e}")
 
     async def detener(self):
-        """Detiene el núcleo y cierra conexiones."""
-        try:
-            for modulo in self.modules.values():
-                await modulo.detener()
-            if self.redis_client:
-                await self.redis_client.close()
-            self.logger.info("[Nucleus] Núcleo detenido")
-        except Exception as e:
-            self.logger.error(f"[Nucleus] Error deteniendo núcleo: {e}")
+        for module in self.modules.values():
+            await module.detener()
+        if self.redis_client:
+            await self.redis_client.close()
+        if self.db_pool:
+            await self.db_pool.close()
+        self.logger.info("[Núcleo] Detención completa")
