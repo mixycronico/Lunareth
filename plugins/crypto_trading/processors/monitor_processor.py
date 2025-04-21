@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-plugins/crypto_trading/processors/monitor_processor.py
-Monitorea precios en tiempo real para detectar anomalías.
-"""
-
 import logging
 import aiohttp
 from datetime import datetime
@@ -46,6 +39,8 @@ class MonitorProcessor:
                         else:
                             self.logger.warning(f"Error al consultar {symbol}: {resp.status}")
 
+            # Almacenar en Redis para que MonitorBlock lo use
+            await self.redis.set("volatility_data", json.dumps(resultados))
             self.logger.info(f"Volatilidad analizada en {len(resultados)} símbolos")
             return {"status": "ok", "datos": resultados}
         except Exception as e:
