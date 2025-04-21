@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import datetime  # Añadimos el import
+import datetime
 from typing import Dict, Any
 from corec.core import ComponenteBase
 from corec.entities import crear_entidad
@@ -53,7 +53,11 @@ class OrchestratorProcessor(ComponenteBase):
             # Inicializar procesadores dinámicamente
             await self.load_processor("analyzer", AnalyzerProcessor(self.config["analyzer_config"], self.redis_client))
             await self.load_processor("capital", CapitalProcessor(self.config["capital_config"], self.redis_client, self.trading_db, self.nucleus))
-            await self.load_processor("execution", ExecutionProcessor({"open_trades": {}, "num_exchanges": len(self.config.get("exchange_config", {}).get("exchanges", [])), "capital": self.capital}, self.redis_client))
+            await self.load_processor("execution", ExecutionProcessor({
+                "open_trades": {},
+                "num_exchanges": len(self.config.get("exchange_config", {}).get("exchanges", [])),
+                "capital": self.capital
+            }, self.redis_client))
             await self.load_processor("macro", MacroProcessor(self.config["macro_config"], self.redis_client))
             await self.load_processor("monitor", MonitorProcessor(self.config["monitor_config"], self.redis_client, self.processors["execution"].open_trades))
             await self.load_processor("predictor", PredictorProcessor(self.config["predictor_config"], self.redis_client))
