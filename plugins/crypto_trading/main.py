@@ -40,6 +40,7 @@ class CryptoTrading(ComponenteBase):
         self.open_trades = {}
         self.alpha_vantage = None
         self.coinmarketcap = None
+        self.config = None
 
     async def inicializar(self, nucleus, config=None):
         """Inicializa el plugin CryptoTrading."""
@@ -49,22 +50,25 @@ class CryptoTrading(ComponenteBase):
             if not self.redis_client:
                 raise ValueError("Redis client no inicializado")
 
+            # Guardar config para pasarlo a los fetchers
+            self.config = config
+
             # Configuración del modo paper desde config
             self.paper_mode = config.get("paper_mode", True)
             self.logger.info(f"[CryptoTrading] Modo paper: {self.paper_mode}")
 
             # Inicializar fetchers de datos
-            self.alpha_vantage = AlphaVantageFetcher(api_key="tu_api_key_alpha_vantage")
-            self.coinmarketcap = CoinMarketCapFetcher(api_key="tu_api_key_coinmarketcap")
+            self.alpha_vantage = AlphaVantageFetcher(self.config)
+            self.coinmarketcap = CoinMarketCapFetcher(self.config)
 
             # Inicializar base de datos independiente para CryptoTrading
-            db_config = {
+            db_config = self.config.get("db_config", {
                 "dbname": "crypto_trading_db",
                 "user": "postgres",
                 "password": "secure_password",
                 "host": "localhost",
                 "port": 5432
-            }
+            })
             self.trading_db = TradingDB(db_config)
             await self.trading_db.connect()
 
@@ -166,7 +170,6 @@ class CryptoTrading(ComponenteBase):
                         crypto_data = {}
                         for pair in self.trading_pairs:
                             crypto_data[pair] = await self.coinmarketcap.fetch_crypto_data(pair)
-                        # Promedio de volumen y capitalización de mercado
                         avg_volume = sum(data["volume"] for data in crypto_data.values()) / len(crypto_data)
                         avg_market_cap = sum(data["market_cap"] for data in crypto_data.values()) / len(crypto_data)
                         combined_crypto_data = {"volume": avg_volume, "market_cap": avg_market_cap}
