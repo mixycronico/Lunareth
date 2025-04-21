@@ -3,7 +3,6 @@ import numpy as np
 import json
 from datetime import datetime
 from plugins.crypto_trading.utils.helpers import CircuitBreaker
-from typing import Dict, Any  # Añadimos las importaciones necesarias
 
 class AnalyzerProcessor:
     def __init__(self, config, redis):
@@ -66,6 +65,7 @@ class AnalyzerProcessor:
                     "timestamp": datetime.utcnow().isoformat()
                 })
 
+            # Priorizar pares
             prioritized_pairs = []
             for res in resultados:
                 if res["alerta"]:
