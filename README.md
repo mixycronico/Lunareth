@@ -33,7 +33,7 @@ Es ideal para construir sistemas de alta disponibilidad, escalables y modulares,
 	
         2	cd genesis
 	
-        3	
+        	
 	
         4	Configura tu Entorno:
 	
