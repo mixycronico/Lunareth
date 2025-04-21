@@ -169,27 +169,45 @@ Para usar CoreC, necesitas:
 Aquí tienes una visión general de cómo está organizado CoreC:
 
 genesis/
+
 ├── config/                  # Archivos de configuración
+
 │   └── corec_config.json
+
 ├── corec/                   # Código fuente de CoreC
+
 │   ├── __init__.py
+
 │   ├── blocks.py           # Clase BloqueSimbiotico
+
 │   ├── entities.py         # Clase Entidad y factory
+
 │   ├── nucleus.py          # Clase CoreCNucleus
+
 │   ├── core.py             # ComponenteBase (interfaz)
+
 │   ├── db.py               # Conexión a PostgreSQL
+
 │   ├── plugins.py          # Modelos Pydantic para plugins
+
 │   ├── processors.py       # Procesadores de datos
+
 │   ├── redis.py            # Conexión a Redis
+
 │   ├── serialization.py    # Serialización de mensajes
+
 │   ├── worker.py           # Configuración de Celery
+
 │   └── modules/            # Módulos del sistema
+
 │       ├── __init__.py
 │       ├── registro.py
 │       ├── sincronizacion.py
 │       ├── ejecucion.py
 │       └── auditoria.py
+
 ├── plugins/                 # Plugins personalizados
+
 │   ├── example_plugin/
 │   │   └── main.py
 │   ├── codex/
@@ -198,7 +216,9 @@ genesis/
 │   │   └── config.json
 │   └── crypto_trading/
 │       └── config.json
+
 ├── tests/                   # Pruebas unitarias
+
 │   ├── __init__.py
 │   ├── conftest.py
 │   ├── test_blocks.py
@@ -206,12 +226,17 @@ genesis/
 │   ├── test_modules.py
 │   ├── test_nucleus.py
 │   └── test_plugin.py
+
 ├── .github/                 # Configuración de CI/CD
 │   └── workflows/
 │       └── ci.yml
+
 ├── requirements.txt         # Dependencias del proyecto
+
 ├── run.sh                   # Script principal para iniciar CoreC
+
 └── run_corec.py             # Lógica de arranque de CoreC
+
 
 
 📦 ¿Por Qué Elegir CoreC?
