@@ -1,17 +1,8 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-corec/db/trading_db.py
-
-Módulo de acceso asincrónico a la base de datos para CryptoTrading.
-"""
-
 import logging
 import json
 import psycopg2
 from typing import Dict, Any, List
 from datetime import datetime
-
 
 class TradingDB:
     def __init__(self, db_config: Dict[str, Any]):
@@ -137,8 +128,6 @@ class TradingDB:
             self.logger.error(f"Error obteniendo {label}: {e}")
             return 0.0
 
-    # Métodos públicos
-
     async def save_price(self, exchange, symbol, market, price, timestamp):
         await self._insert("INSERT INTO market_data (exchange, symbol, market, price, timestamp) VALUES (%s, %s, %s, %s, %s)",
                            (exchange, symbol, market, price, timestamp), "precio")
@@ -163,11 +152,11 @@ class TradingDB:
 
     async def update_pool(self, pool_total: float):
         await self._insert("INSERT INTO pool_state (pool_total, active_capital, timestamp) VALUES (%s, %s, %s)",
-                           (pool_total, await self.get_active_capital(), datetime.utcnow().timestamp()), "pool state")
+                           (pool_total, await self.get_active_capital(), datetime.datetime.utcnow().timestamp()), "pool state")
 
     async def update_active_capital(self, active_capital: float):
         await self._insert("INSERT INTO pool_state (pool_total, active_capital, timestamp) VALUES (%s, %s, %s)",
-                           (await self.get_pool_total(), active_capital, datetime.utcnow().timestamp()), "capital activo")
+                           (await self.get_pool_total(), active_capital, datetime.datetime.utcnow().timestamp()), "capital activo")
 
     async def save_report(self, date, total_profit, roi_percent, total_trades, report_data, timestamp):
         await self._insert("INSERT INTO settlement_reports (date, total_profit, roi_percent, total_trades, report_data, timestamp) VALUES (%s, %s, %s, %s, %s, %s)",
@@ -175,7 +164,7 @@ class TradingDB:
 
     async def save_macro_data(self, data):
         await self._insert("INSERT INTO macro_data (data, timestamp) VALUES (%s, %s)",
-                           (json.dumps(data), data.get("timestamp", datetime.utcnow().timestamp())), "macro")
+                           (json.dumps(data), data.get("timestamp", datetime.datetime.utcnow().timestamp())), "macro")
 
     async def save_prediction(self, nano_id, symbol, prediction, actual_value, error, macro_context, timestamp):
         await self._insert("INSERT INTO predictions (nano_id, symbol, prediction, actual_value, error, macro_context, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s)",
