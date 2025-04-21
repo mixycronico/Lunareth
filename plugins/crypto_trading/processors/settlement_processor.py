@@ -48,9 +48,9 @@ class SettlementProcessor:
         self.backup_file = "trading_backup.pkl"
         self.predictor = RNNPredictor()
         self.predictor.eval()
-        self.average_slippage = 0.0  # Promedio de deslizamiento
-        self.slippage_threshold = 0.005  # Umbral de deslizamiento del 0.5%
-        self.trade_size_adjustment = 1.0  # Ajuste dinámico del tamaño de las operaciones
+        self.average_slippage = 0.0
+        self.slippage_threshold = 0.005
+        self.trade_size_adjustment = 1.0
 
     async def monitor_services(self):
         while True:
@@ -161,7 +161,6 @@ class SettlementProcessor:
             self.logger.error(f"Error al restaurar estado: {e}")
 
     async def monitor_slippage(self):
-        """Monitorea el deslizamiento promedio y ajusta dinámicamente el tamaño de las operaciones."""
         while True:
             try:
                 slippage_data = self.execution_processor.slippage_history
@@ -175,7 +174,7 @@ class SettlementProcessor:
                         self.trade_size_adjustment = min(1.0, self.trade_size_adjustment * 1.1)
                         self.logger.info(f"Deslizamiento bajo, aumentando tamaño de operaciones: {self.trade_size_adjustment*100:.2f}%")
                     await self.redis.set("trade_size_adjustment", self.trade_size_adjustment)
-                await asyncio.sleep(300)  # Verificar cada 5 minutos
+                await asyncio.sleep(300)
             except Exception as e:
                 self.logger.error(f"Error al monitorear deslizamiento: {e}")
                 await asyncio.sleep(60)
@@ -204,85 +203,77 @@ class SettlementProcessor:
                 self.logger.error(f"[SettlementProcessor] Error en micro-ciclo: {e}")
                 await asyncio.sleep(60)
 
-    async def daily_close_loop(self):
-        while True:
-            try:
-                now = datetime.datetime.now()
-                close_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
-                if now.hour == 22 and now.minute == 0:
-                    daily_profit = 0
-                    for trade_id, trade in list(self.open_trades.items()):
-                        exchange, pair = trade_id.split(":")
-                        current_price = 50000
-                        profit = trade["cantidad"] * (current_price - trade["precio"])
-                        daily_profit += profit
-                        await registrar_historial(self.redis, f"trade_history:{exchange}:{pair}", {
-                            "precio_entrada": trade["precio"],
-                            "precio_salida": current_price,
-                            "cantidad": trade["cantidad"],
-                            "timestamp": trade["close_timestamp"]
-                        })
-                        await self.close_trade(exchange, pair, trade)
-                    self.execution_processor.reset_active_capital()
-                    self.daily_profit_loss += daily_profit
-                    await self.capital_processor.update_strategy_performance(daily_profit)
+    async def daily_close_process(self):
+        try:
+            now = datetime.datetime.now()
+            daily_profit = 0
+            for trade_id, trade in list(self.open_trades.items()):
+                exchange, pair = trade_id.split(":")
+                current_price = 50000
+                profit = trade["cantidad"] * (current_price - trade["precio"])
+                daily_profit += profit
+                await registrar_historial(self.redis, f"trade_history:{exchange}:{pair}", {
+                    "precio_entrada": trade["precio"],
+                    "precio_salida": current_price,
+                    "cantidad": trade["cantidad"],
+                    "timestamp": trade["close_timestamp"]
+                })
+                await self.close_trade(exchange, pair, trade)
+            self.execution_processor.reset_active_capital()
+            self.daily_profit_loss += daily_profit
+            await self.capital_processor.update_strategy_performance(daily_profit)
 
-                    sharpe_ratio = self.calculate_sharpe_ratio()
-                    max_drawdown = self.calculate_max_drawdown()
-                    win_rate = self.calculate_win_rate()
-                    trades_per_day = self.calculate_trades_per_day()
+            sharpe_ratio = self.calculate_sharpe_ratio()
+            max_drawdown = self.calculate_max_drawdown()
+            win_rate = self.calculate_win_rate()
+            trades_per_day = self.calculate_trades_per_day()
 
-                    predicted_trend = self.predict_trend()
-                    if predicted_trend:
-                        trend_adjustment = {"trend": "alcista" if predicted_trend > 0 else "bajista", "magnitude": abs(predicted_trend)}
-                        await self.redis.set("predicted_trend", json.dumps(trend_adjustment))
-                        self.logger.info(f"Tendencia predicha: {trend_adjustment}")
+            predicted_trend = self.predict_trend()
+            if predicted_trend:
+                trend_adjustment = {"trend": "alcista" if predicted_trend > 0 else "bajista", "magnitude": abs(predicted_trend)}
+                await self.redis.set("predicted_trend", json.dumps(trend_adjustment))
+                self.logger.info(f"Tendencia predicha: {trend_adjustment}")
 
-                    await self.generate_roi_plot(now)
+            await self.generate_roi_plot(now)
 
-                    report = {
-                        "sharpe_ratio": sharpe_ratio,
-                        "max_drawdown": max_drawdown,
-                        "daily_profit": daily_profit,
-                        "total_profit_loss": self.daily_profit_loss,
-                        "capital": self.capital,
-                        "win_rate": win_rate,
-                        "trades_per_day": trades_per_day,
-                        "predicted_trend": predicted_trend,
-                        "average_slippage": self.average_slippage
-                    }
-                    await self.redis.set(f"historical_report:{now.strftime('%Y-%m-%d')}", json.dumps(report))
+            report = {
+                "sharpe_ratio": sharpe_ratio,
+                "max_drawdown": max_drawdown,
+                "daily_profit": daily_profit,
+                "total_profit_loss": self.daily_profit_loss,
+                "capital": self.capital,
+                "win_rate": win_rate,
+                "trades_per_day": trades_per_day,
+                "predicted_trend": predicted_trend,
+                "average_slippage": self.average_slippage
+            }
+            await self.redis.set(f"historical_report:{now.strftime('%Y-%m-%d')}", json.dumps(report))
 
-                    await self.nucleus.publicar_alerta({
-                        "tipo": "cierre_diario",
-                        "plugin_id": "crypto_trading",
-                        "profit_loss": daily_profit,
-                        "total_profit_loss": self.daily_profit_loss,
-                        "capital": self.capital,
-                        "sharpe_ratio": sharpe_ratio,
-                        "max_drawdown": max_drawdown,
-                        "win_rate": win_rate,
-                        "trades_per_day": trades_per_day,
-                        "timestamp": datetime.datetime.now().isoformat()
-                    })
-                    await self.trading_db.save_report(
-                        date=now.strftime("%Y-%m-%d"),
-                        total_profit=daily_profit,
-                        roi_percent=(daily_profit / self.capital) * 100 if self.capital != 0 else 0,
-                        total_trades=len(self.open_trades),
-                        report_data={"open_trades": 0, "sharpe_ratio": sharpe_ratio, "max_drawdown": max_drawdown, "win_rate": win_rate, "trades_per_day": trades_per_day},
-                        timestamp=now.timestamp()
-                    )
-                    self.logger.info(f"[SettlementProcessor] Cierre diario: Ganancia/Pérdida: ${daily_profit}, Total: ${self.daily_profit_loss}, Capital: ${self.capital}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "cierre_diario",
+                "plugin_id": "crypto_trading",
+                "profit_loss": daily_profit,
+                "total_profit_loss": self.daily_profit_loss,
+                "capital": self.capital,
+                "sharpe_ratio": sharpe_ratio,
+                "max_drawdown": max_drawdown,
+                "win_rate": win_rate,
+                "trades_per_day": trades_per_day,
+                "timestamp": datetime.datetime.now().isoformat()
+            })
+            await self.trading_db.save_report(
+                date=now.strftime("%Y-%m-%d"),
+                total_profit=daily_profit,
+                roi_percent=(daily_profit / self.capital) * 100 if self.capital != 0 else 0,
+                total_trades=len(self.open_trades),
+                report_data={"open_trades": 0, "sharpe_ratio": sharpe_ratio, "max_drawdown": max_drawdown, "win_rate": win_rate, "trades_per_day": trades_per_day},
+                timestamp=now.timestamp()
+            )
+            self.logger.info(f"[SettlementProcessor] Cierre diario: Ganancia/Pérdida: ${daily_profit}, Total: ${self.daily_profit_loss}, Capital: ${self.capital}")
 
-                    await self.cleanup_old_data(now)
-
-                    await asyncio.sleep(86400 - 60)
-                else:
-                    await asyncio.sleep(60)
-            except Exception as e:
-                self.logger.error(f"[SettlementProcessor] Error en cierre diario: {e}")
-                await asyncio.sleep(60)
+            await self.cleanup_old_data(now)
+        except Exception as e:
+            self.logger.error(f"[SettlementProcessor] Error en cierre diario: {e}")
 
     async def cleanup_old_data(self, now):
         try:
