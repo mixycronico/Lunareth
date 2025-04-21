@@ -78,6 +78,10 @@ class CoreCNucleus:
 
     def registrar_plugin(self, plugin_id: str, plugin: Any):
         try:
+            if self.config is None:
+                self.logger.warning("[Núcleo] Configuración no inicializada, registrando plugin sin configuración")
+                self.plugins[plugin_id] = plugin
+                return
             plugin_config = self.config.get("plugins", {}).get(plugin_id)
             if plugin_config:
                 block_config = PluginBlockConfig(**plugin_config["bloque"])
@@ -95,8 +99,10 @@ class CoreCNucleus:
             self.logger.info(f"[Núcleo] Plugin '{plugin_id}' registrado")
         except ValidationError as e:
             self.logger.error(f"[Núcleo] Configuración inválida para plugin '{plugin_id}': {e}")
+            self.plugins[plugin_id] = plugin  # Registrar el plugin incluso si la configuración falla
         except Exception as e:
             self.logger.error(f"[Núcleo] Error registrando plugin '{plugin_id}': {e}")
+            self.plugins[plugin_id] = plugin  # Registrar el plugin incluso si hay un error
 
     async def ejecutar_plugin(self, plugin_id: str, comando: Dict[str, Any]) -> Dict[str, Any]:
         plugin = self.plugins.get(plugin_id)
@@ -117,7 +123,7 @@ class CoreCNucleus:
     async def publicar_alerta(self, alerta: Dict[str, Any]):
         try:
             if not self.redis_client:
-                self.logger.warning("[Alerta] Redis client no inicializado")
+                self.logger.warning("[Alerta] Redis client no inicializado, alerta no publicada")
                 return
             stream_key = f"alertas:{alerta['tipo']}"
             await self.redis_client.xadd(stream_key, alerta)
