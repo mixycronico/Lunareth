@@ -1,71 +1,158 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-plugins/crypto_trading/main.py
-Inicialización del plugin CryptoTrading con CoreC.
-"""
-
 import asyncio
 import logging
-from corec.plugins.base import PluginBase
+import yaml
+from typing import Dict, Any
+from corec.core import ComponenteBase
+from corec.entities import crear_entidad
+from plugins.crypto_trading.blocks.trading_block import TradingBlock
+from plugins.crypto_trading.blocks.monitor_block import MonitorBlock
 from plugins.crypto_trading.processors.analyzer_processor import AnalyzerProcessor
+from plugins.crypto_trading.processors.capital_processor import CapitalProcessor
+from plugins.crypto_trading.processors.exchange_processor import ExchangeProcessor
 from plugins.crypto_trading.processors.execution_processor import ExecutionProcessor
-from plugins.crypto_trading.processors.monitor_processor import MonitorProcessor
 from plugins.crypto_trading.processors.macro_processor import MacroProcessor
+from plugins.crypto_trading.processors.monitor_processor import MonitorProcessor
 from plugins.crypto_trading.processors.predictor_processor import PredictorProcessor
-from plugins.crypto_trading.processors.settlement_processor import SettlementProcessor
-from plugins.crypto_trading.utils.db import TradingDB
+from plugins.crypto_trading.strategies.momentum_strategy import MomentumStrategy
+import datetime
 
-class CryptoTrading(PluginBase):
-    def __init__(self, nucleus, config):
-        self.nucleus = nucleus
-        self.config = config["crypto_trading"]
+class CryptoTrading(ComponenteBase):
+    def __init__(self):
         self.logger = logging.getLogger("CryptoTrading")
-        self.db = TradingDB(self.config["db_config"])
+        self.nucleus = None
+        self.redis_client = None
+        self.trading_pairs = ["ALT3/USDT", "ALT4/USDT"]
+        self.trading_blocks = []
+        self.monitor_blocks = []
+        self.analyzer_processor = None
+        self.capital_processor = None
+        self.exchange_processor = None
+        self.execution_processor = None
+        self.macro_processor = None
+        self.monitor_processor = None
+        self.predictor_processor = None
+        self.strategy = MomentumStrategy()
 
-        self.analyzer = AnalyzerProcessor(self.config, self.db, nucleus.redis_client)
-        self.execution = ExecutionProcessor(self.config, self.db, nucleus.redis_client)
-        self.monitor   = MonitorProcessor(self.config, self.db, nucleus.redis_client)
-        self.macro     = MacroProcessor(self.config, self.db, nucleus.redis_client)
-        self.predictor = PredictorProcessor(self.config, self.db, nucleus.redis_client)
-        self.settlement= SettlementProcessor(self.config, self.db, nucleus.redis_client)
+    async def inicializar(self, nucleus, config=None):
+        """Inicializa el plugin CryptoTrading."""
+        try:
+            self.nucleus = nucleus
+            self.redis_client = self.nucleus.redis_client
+            if not self.redis_client:
+                raise ValueError("Redis client no inicializado")
 
-    async def inicializar(self, nucleus, config):
-        self.logger.info("Inicializando CryptoTrading...")
-        await self.db.connect()
+            # Inicializar procesadores
+            self.analyzer_processor = AnalyzerProcessor(config, self.redis_client)
+            self.capital_processor = CapitalProcessor(config)
+            self.exchange_processor = ExchangeProcessor(config, self.nucleus)
+            self.execution_processor = ExecutionProcessor(config, self.redis_client)
+            self.macro_processor = MacroProcessor(config, self.redis_client)
+            self.monitor_processor = MonitorProcessor(config, self.redis_client)
+            self.predictor_processor = PredictorProcessor(config, self.redis_client)
+            await self.predictor_processor.inicializar()
 
-        await self.analyzer.inicializar()
-        await self.execution.inicializar()
-        await self.monitor.inicializar()
-        await self.macro.inicializar()
-        await self.predictor.inicializar()
-        await self.settlement.inicializar()
+            # Inicializar bloques simbióticos
+            trading_entities = [
+                crear_entidad(f"trade_ent_{i}", 3, lambda carga: {"valor": 0.5})
+                for i in range(1000)
+            ]
+            trading_block = TradingBlock(
+                id="trading_block_1",
+                canal=3,
+                entidades=trading_entities,
+                max_size_mb=5,
+                nucleus=self.nucleus,
+                execution_processor=self.execution_processor
+            )
+            self.trading_blocks.append(trading_block)
 
-        self.logger.info("CryptoTrading listo")
+            monitor_entities = [
+                crear_entidad(f"monitor_ent_{i}", 3, lambda carga: {"valor": 0.5})
+                for i in range(1000)
+            ]
+            monitor_block = MonitorBlock(
+                id="monitor_block_1",
+                canal=3,
+                entidades=monitor_entities,
+                max_size_mb=5,
+                nucleus=self.nucleus,
+                analyzer_processor=self.analyzer_processor,
+                monitor_processor=self.monitor_processor
+            )
+            self.monitor_blocks.append(monitor_block)
 
-    async def ejecutar(self):
-        self.logger.info("Ejecutando CryptoTrading...")
-        await asyncio.gather(
-            self.analyzer.ejecutar(),
-            self.execution.ejecutar(),
-            self.monitor.ejecutar(),
-            self.macro.ejecutar(),
-            self.predictor.ejecutar(),
-            self.settlement.ejecutar()
-        )
+            # Registrar bloques compartidos en CoreCNucleus
+            self.nucleus.bloques.extend(self.trading_blocks + self.monitor_blocks)
+
+            # Iniciar bucle de monitoreo
+            asyncio.create_task(self._monitor_loop())
+
+            self.logger.info("[CryptoTrading] Plugin inicializado correctamente")
+        except Exception as e:
+            self.logger.error(f"[CryptoTrading] Error al inicializar: {e}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "error_inicializacion_plugin",
+                "plugin_id": "crypto_trading",
+                "mensaje": str(e),
+                "timestamp": datetime.datetime.utcnow().timestamp()
+            })
+            raise
+
+    async def manejar_comando(self, comando: Dict[str, Any]) -> Dict[str, Any]:
+        """Maneja comandos recibidos, como operaciones de trading."""
+        try:
+            action = comando.get("action")
+            params = comando.get("params", {})
+
+            if action == "ejecutar_operacion":
+                return await self._execute_trade(params.get("pair"), params.get("side"))
+            else:
+                return {"status": "error", "message": f"Acción no soportada: {action}"}
+        except Exception as e:
+            self.logger.error(f"[CryptoTrading] Error al manejar comando: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def _monitor_loop(self):
+        """Bucle de monitoreo que verifica el mercado cada 5 minutos."""
+        while True:
+            try:
+                now = datetime.datetime.now()
+                start_time = now.replace(hour=7, minute=0, second=0, microsecond=0)
+                end_time = now.replace(hour=17, minute=0, second=0, microsecond=0)
+
+                if start_time <= now <= end_time:
+                    # Monitorear el mercado
+                    for block in self.monitor_blocks:
+                        result = await block.procesar(0.5)
+                        if result["status"] != "success":
+                            self.logger.warning(f"Error en monitoreo: {result['motivo']}")
+                            continue
+
+                        # Simulación de datos (en producción, usar datos reales)
+                        macro_data = {"sp500": 0.02, "nasdaq": 0.01, "dxy": -0.01, "gold": 0.005, "oil": 0.03}
+                        crypto_data = {"volume": 1000000, "market_cap": 2000000000}
+                        sentiment = self.strategy.calculate_momentum(macro_data, crypto_data)
+                        side = self.strategy.decide_trade(sentiment)
+
+                        # Ejecutar operación basada en el sentimiento
+                        for pair in self.trading_pairs:
+                            for trading_block in self.trading_blocks:
+                                await trading_block.procesar(0.5, pair, side)
+
+                await asyncio.sleep(300)  # Esperar 5 minutos
+            except Exception as e:
+                self.logger.error(f"[CryptoTrading] Error en bucle de monitoreo: {e}")
+                await asyncio.sleep(300)  # Continuar tras error
+
+    async def _execute_trade(self, pair: str, side: str) -> Dict[str, Any]:
+        """Ejecuta una operación de trading usando el TradingBlock."""
+        for block in self.trading_blocks:
+            result = await block.procesar(0.5, pair, side)
+            if result["status"] == "success":
+                return result
+        return {"status": "error", "motivo": "No se pudo ejecutar la operación"}
 
     async def detener(self):
-        self.logger.info("Deteniendo CryptoTrading...")
-        await self.analyzer.detener()
-        await self.execution.detener()
-        await self.monitor.detener()
-        await self.macro.detener()
-        await self.predictor.detener()
-        await self.settlement.detener()
-        await self.db.disconnect()
-        self.logger.info("CryptoTrading detenido")
-
-def inicializar(nucleus, config):
-    plugin = CryptoTrading(nucleus, config)
-    asyncio.create_task(plugin.inicializar(nucleus, config))
-    return plugin
+        """Detiene el plugin CryptoTrading."""
+        await self.exchange_processor.close()
+        self.logger.info("[CryptoTrading] Plugin detenido")
