@@ -6,10 +6,25 @@ from datetime import datetime
 from plugins.crypto_trading.utils.helpers import CircuitBreaker
 from plugins.crypto_trading.utils.settlement_utils import calcular_ganancias, registrar_historial
 import numpy as np
-from statsmodels.tsa.arima.model import ARIMA
-import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import plotly.graph_objects as go
+import redis
+import asyncpg
 
-class SettlementProcessor:
+class SimpleRNN(nn.Module):
+    def __init__(self, input_size=1, hidden_size=32, num_layers=1):
+        super(SimpleRNN, self).__init__()
+        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        h0 = torch.zeros(1, x.size(0), 32).to(x.device)
+        out, _ = self.rnn(x, h0)
+        out = self.fc(out[:, -1, :])
+        return out
+
+class SettlementProcessor(ComponenteBase):
     def __init__(self, config, redis, trading_db, nucleus, strategy, execution_processor, capital_processor):
         self.logger = logging.getLogger("SettlementProcessor")
         self.config = config
@@ -30,9 +45,10 @@ class SettlementProcessor:
         self.is_paused = False
         self.recovery_capital_percentage = 0.1
         self.open_trades = {}
-        self.crash_threshold = -0.2  # Umbral inicial para caídas del mercado
-        self.crash_count = 0  # Contador de caídas para aprendizaje
+        self.crash_threshold = -0.2
+        self.crash_count = 0
         self.backup_file = "trading_backup.pkl"
+        self.rnn_model = SimpleRNN()
 
     async def update_capital_after_trade(self, side: str, trade_result: Dict[str, Any]):
         if side == "buy":
@@ -80,7 +96,6 @@ class SettlementProcessor:
         await self.backup_state()
 
     async def backup_state(self):
-        """Guarda el estado crítico en un archivo local."""
         try:
             state = {
                 "capital": self.capital,
@@ -97,7 +112,6 @@ class SettlementProcessor:
             self.logger.error(f"Error al respaldar estado: {e}")
 
     async def restore_state(self):
-        """Restaura el estado crítico desde un archivo local."""
         try:
             if os.path.exists(self.backup_file):
                 with open(self.backup_file, "rb") as f:
@@ -116,6 +130,58 @@ class SettlementProcessor:
                 self.logger.warning("No se encontró archivo de respaldo, iniciando con estado predeterminado")
         except Exception as e:
             self.logger.error(f"Error al restaurar estado: {e}")
+
+    async def monitor_resources(self):
+        """Monitorea activamente los recursos del sistema y la conectividad de Redis y PostgreSQL."""
+        while True:
+            try:
+                # Simular monitoreo de CPU y memoria (valores ficticios)
+                cpu_usage = random.uniform(0, 100)  # Porcentaje de uso de CPU
+                memory_usage = random.uniform(0, 100)  # Porcentaje de uso de memoria
+                if cpu_usage > 80 or memory_usage > 80:
+                    self.logger.warning(f"Alto uso de recursos detectado: CPU {cpu_usage:.2f}%, Memoria {memory_usage:.2f}%")
+                    alert = {
+                        "tipo": "alerta_recursos",
+                        "plugin_id": "crypto_trading",
+                        "detalle": f"Alto uso de recursos: CPU {cpu_usage:.2f}%, Memoria {memory_usage:.2f}%",
+                        "timestamp": datetime.datetime.now().isoformat()
+                    }
+                    await self.redis.xadd("system_alerts", {"data": json.dumps(alert)})
+                    await self.nucleus.publicar_alerta(alert)
+
+                # Verificar conectividad de Redis
+                try:
+                    await self.redis.ping()
+                except redis.RedisError as e:
+                    self.logger.error(f"Fallo en la conexión a Redis: {e}")
+                    alert = {
+                        "tipo": "alerta_conectividad",
+                        "plugin_id": "crypto_trading",
+                        "detalle": f"Fallo en la conexión a Redis: {e}",
+                        "timestamp": datetime.datetime.now().isoformat()
+                    }
+                    await self.redis.xadd("system_alerts", {"data": json.dumps(alert)})
+                    await self.nucleus.publicar_alerta(alert)
+
+                # Verificar conectividad de PostgreSQL
+                try:
+                    async with self.trading_db.pool.acquire() as conn:
+                        await conn.execute("SELECT 1")
+                except asyncpg.PostgresError as e:
+                    self.logger.error(f"Fallo en la conexión a PostgreSQL: {e}")
+                    alert = {
+                        "tipo": "alerta_conectividad",
+                        "plugin_id": "crypto_trading",
+                        "detalle": f"Fallo en la conexión a PostgreSQL: {e}",
+                        "timestamp": datetime.datetime.now().isoformat()
+                    }
+                    await self.redis.xadd("system_alerts", {"data": json.dumps(alert)})
+                    await self.nucleus.publicar_alerta(alert)
+
+                await asyncio.sleep(300)  # Monitorear cada 5 minutos
+            except Exception as e:
+                self.logger.error(f"Error al monitorear recursos: {e}")
+                await asyncio.sleep(300)
 
     async def micro_cycle_loop(self):
         while True:
@@ -169,14 +235,12 @@ class SettlementProcessor:
                     win_rate = self.calculate_win_rate()
                     trades_per_day = self.calculate_trades_per_day()
 
-                    # Análisis predictivo con ARIMA
-                    predicted_trend = self.predict_trend()
+                    predicted_trend = await self.predict_trend()
                     if predicted_trend:
                         trend_adjustment = {"trend": "alcista" if predicted_trend > 0 else "bajista", "magnitude": abs(predicted_trend)}
                         await self.redis.set("predicted_trend", json.dumps(trend_adjustment))
                         self.logger.info(f"Tendencia predicha: {trend_adjustment}")
 
-                    # Generar gráfico de ROI diario
                     await self.generate_roi_plot(now)
 
                     report = {
@@ -220,6 +284,7 @@ class SettlementProcessor:
                     await asyncio.sleep(60)
             except Exception as e:
                 self.logger.error(f"[SettlementProcessor] Error en cierre diario: {e}")
+                await self.backup_state()  # Respaldo en caso de error
                 await asyncio.sleep(60)
 
     async def cleanup_old_data(self, now):
@@ -269,21 +334,22 @@ class SettlementProcessor:
         days = (timestamps[-1] - timestamps[0]).days + 1
         return len(self.trades_history) / days
 
-    def predict_trend(self):
-        """Usa ARIMA para predecir la tendencia futura basada en datos históricos."""
+    async def predict_trend(self):
+        """Usa una RNN para predecir la tendencia futura basada en datos históricos."""
         try:
             if len(self.historical_profits) < 5:
                 return None
-            model = ARIMA(self.historical_profits, order=(1, 1, 1))
-            model_fit = model.fit()
-            forecast = model_fit.forecast(steps=1)
-            return forecast.iloc[0]
+            data = torch.tensor(self.historical_profits[-5:], dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
+            self.rnn_model.eval()
+            with torch.no_grad():
+                prediction = self.rnn_model(data).item()
+            return prediction
         except Exception as e:
             self.logger.error(f"Error al predecir tendencia: {e}")
             return None
 
     async def generate_roi_plot(self, now):
-        """Genera un gráfico de ROI diario y lo guarda en un archivo."""
+        """Genera un gráfico interactivo de ROI diario con Plotly."""
         try:
             dates = []
             daily_roi = []
@@ -303,17 +369,16 @@ class SettlementProcessor:
                 dates.append(current_date)
                 daily_roi.append((daily_profit / self.capital) * 100)
 
-            plt.figure(figsize=(10, 5))
-            plt.plot(dates, daily_roi, marker='o')
-            plt.title("ROI Diario")
-            plt.xlabel("Fecha")
-            plt.ylabel("ROI (%)")
-            plt.grid(True)
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-            plt.savefig(f"roi_plot_{now.strftime('%Y-%m-%d')}.png")
-            plt.close()
-            self.logger.info(f"Gráfico de ROI generado: roi_plot_{now.strftime('%Y-%m-%d')}.png")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=dates, y=daily_roi, mode='lines+markers', name='ROI (%)'))
+            fig.update_layout(
+                title="ROI Diario",
+                xaxis_title="Fecha",
+                yaxis_title="ROI (%)",
+                template="plotly_dark"
+            )
+            fig.write_html(f"roi_plot_{now.strftime('%Y-%m-%d')}.html")
+            self.logger.info(f"Gráfico interactivo de ROI generado: roi_plot_{now.strftime('%Y-%m-%d')}.html")
         except Exception as e:
             self.logger.error(f"Error al generar gráfico de ROI: {e}")
 
@@ -336,7 +401,6 @@ class SettlementProcessor:
                     self.recovery_capital_percentage = 0.1
                     self.crash_count += 1
 
-                    # Aprender de eventos críticos: ajustar umbral si las caídas son frecuentes
                     if self.crash_count > 2:
                         self.crash_threshold = max(self.crash_threshold * 0.75, -0.15)
                         self.crash_count = 0
@@ -365,4 +429,5 @@ class SettlementProcessor:
                     await asyncio.sleep(60)
             except Exception as e:
                 self.logger.error(f"Error al manejar caída del mercado: {e}")
+                await self.backup_state()
                 await asyncio.sleep(60)
