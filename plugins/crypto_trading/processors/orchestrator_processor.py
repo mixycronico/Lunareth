@@ -27,19 +27,9 @@ class OrchestratorProcessor(ComponenteBase):
         self.trading_pairs_by_exchange = {}
         self.trading_blocks = []
         self.monitor_blocks = []
-        self.analyzer_processor = None
-        self.capital_processor = None
-        self.exchange_processor = None
-        self.execution_processor = None
-        self.macro_processor = None
-        self.monitor_processor = None
-        self.predictor_processor = None
-        self.ia_processor = None
-        self.settlement_processor = None
-        self.strategy = None
+        self.processors = {}
         self.trading_db = None
         self.paper_mode = True
-        self.open_trades = {}  # Gestionado por SettlementProcessor
 
     async def initialize(self):
         """Inicializa todos los componentes y programa las tareas."""
@@ -58,16 +48,17 @@ class OrchestratorProcessor(ComponenteBase):
             self.trading_db = TradingDB(db_config)
             await self.trading_db.connect()
 
-            self.analyzer_processor = AnalyzerProcessor(self.config, self.redis_client)
-            self.capital_processor = CapitalProcessor(self.config, self.redis_client, self.trading_db, self.nucleus)
-            self.execution_processor = ExecutionProcessor({"open_trades": self.open_trades, "num_exchanges": len(self.config.get("exchanges", [])), "capital": self.capital}, self.redis_client)
-            self.macro_processor = MacroProcessor(self.config, self.redis_client)
-            self.monitor_processor = MonitorProcessor(self.config, self.redis_client, self.open_trades)
-            self.predictor_processor = PredictorProcessor(self.config, self.redis_client)
-            self.ia_processor = IAAnalisisProcessor(self.config, self.redis_client)
-            self.strategy = MomentumStrategy(self.capital, self.ia_processor, self.predictor_processor)
-            await self.predictor_processor.inicializar()
-            await self.ia_processor.inicializar()
+            # Inicializar procesadores dinámicamente
+            await self.load_processor("analyzer", AnalyzerProcessor(self.config, self.redis_client))
+            await self.load_processor("capital", CapitalProcessor(self.config, self.redis_client, self.trading_db, self.nucleus))
+            await self.load_processor("execution", ExecutionProcessor({"open_trades": {}, "num_exchanges": len(self.config.get("exchanges", [])), "capital": self.capital}, self.redis_client))
+            await self.load_processor("macro", MacroProcessor(self.config, self.redis_client))
+            await self.load_processor("monitor", MonitorProcessor(self.config, self.redis_client, self.processors["execution"].open_trades))
+            await self.load_processor("predictor", PredictorProcessor(self.config, self.redis_client))
+            await self.load_processor("ia", IAAnalisisProcessor(self.config, self.redis_client))
+            await self.load_processor("strategy", MomentumStrategy(self.capital, self.processors["ia"], self.processors["predictor"]))
+            await self.processors["predictor"].inicializar()
+            await self.processors["ia"].inicializar()
 
             trading_entities = [
                 crear_entidad(f"trade_ent_{i}", 3, lambda carga: {"valor": 0.5})
@@ -79,7 +70,7 @@ class OrchestratorProcessor(ComponenteBase):
                 entidades=trading_entities,
                 max_size_mb=5,
                 nucleus=self.nucleus,
-                execution_processor=self.execution_processor,
+                execution_processor=self.processors["execution"],
                 trading_db=self.trading_db
             )
             self.trading_blocks.append(trading_block)
@@ -94,39 +85,41 @@ class OrchestratorProcessor(ComponenteBase):
                 entidades=monitor_entities,
                 max_size_mb=5,
                 nucleus=self.nucleus,
-                analyzer_processor=self.analyzer_processor,
-                monitor_processor=self.monitor_processor
+                analyzer_processor=self.processors["analyzer"],
+                monitor_processor=self.processors["monitor"]
             )
             self.monitor_blocks.append(monitor_block)
 
             self.nucleus.bloques.extend(self.trading_blocks + self.monitor_blocks)
 
-            self.exchange_processor = ExchangeProcessor(self.config, self.nucleus, self.strategy, self.execution_processor, self.settlement_processor, self.monitor_blocks)
-            await self.exchange_processor.inicializar()
+            await self.load_processor("exchange", ExchangeProcessor(self.config, self.nucleus, self.processors["strategy"], self.processors["execution"], self.processors.get("settlement"), self.monitor_blocks))
+            await self.processors["exchange"].inicializar()
 
-            activos = await self.exchange_processor.detectar_disponibles()
+            activos = await self.processors["exchange"].detectar_disponibles()
             for ex in activos:
                 exchange_name = ex["name"]
                 client = ex["client"]
-                top_pairs = await self.exchange_processor.obtener_top_activos(client)
+                top_pairs = await self.processors["exchange"].obtener_top_activos(client)
                 self.trading_pairs_by_exchange[exchange_name] = top_pairs
                 self.logger.info(f"Pares configurados para {exchange_name}: {top_pairs}")
 
-            self.capital_processor.distribuir_capital(list(self.trading_pairs_by_exchange.keys()))
-            self.settlement_processor = SettlementProcessor(self.config, self.redis_client, self.trading_db, self.nucleus, self.strategy, self.execution_processor, self.capital_processor)
+            self.processors["capital"].distribuir_capital(list(self.trading_pairs_by_exchange.keys()))
+            await self.load_processor("settlement", SettlementProcessor(self.config, self.redis_client, self.trading_db, self.nucleus, self.processors["strategy"], self.processors["execution"], self.processors["capital"]))
+            await self.processors["settlement"].restore_state()
 
             self.exchanges = list(self.trading_pairs_by_exchange.keys())
             for idx, exchange in enumerate(self.exchanges):
-                asyncio.create_task(self.exchange_processor.monitor_exchange(exchange, self.trading_pairs_by_exchange[exchange], initial_offset=idx * 30))
+                asyncio.create_task(self.processors["exchange"].monitor_exchange(exchange, self.trading_pairs_by_exchange[exchange], initial_offset=idx * 30))
 
-            asyncio.create_task(self.macro_processor.data_fetch_loop())
-            asyncio.create_task(self.predictor_processor.adjust_trading_flow())
-            asyncio.create_task(self.monitor_processor.continuous_open_trades_monitor(self.settlement_processor.close_trade))
-            asyncio.create_task(self.settlement_processor.daily_close_loop(self.open_trades))
-            asyncio.create_task(self.settlement_processor.micro_cycle_loop(self.open_trades))
-            asyncio.create_task(self.settlement_processor.handle_market_crash(self.open_trades))
-            asyncio.create_task(self.capital_processor.adjust_base_capital())
-            asyncio.create_task(self.capital_processor.vote_strategy())
+            asyncio.create_task(self.processors["macro"].data_fetch_loop())
+            asyncio.create_task(self.processors["predictor"].adjust_trading_flow())
+            asyncio.create_task(self.processors["monitor"].continuous_open_trades_monitor(self.processors["settlement"].close_trade))
+            asyncio.create_task(self.processors["settlement"].daily_close_loop())
+            asyncio.create_task(self.processors["settlement"].micro_cycle_loop())
+            asyncio.create_task(self.processors["settlement"].handle_market_crash())
+            asyncio.create_task(self.processors["settlement"].monitor_resources())
+            asyncio.create_task(self.processors["capital"].adjust_base_capital())
+            asyncio.create_task(self.processors["capital"].vote_strategy())
 
             self.logger.info("[OrchestratorProcessor] Componentes inicializados y tareas programadas")
         except Exception as e:
@@ -139,7 +132,21 @@ class OrchestratorProcessor(ComponenteBase):
             })
             raise
 
+    async def load_processor(self, name: str, processor: ComponenteBase):
+        """Carga un procesador dinámicamente."""
+        self.processors[name] = processor
+        self.logger.info(f"Procesador {name} cargado dinámicamente")
+
+    async def unload_processor(self, name: str):
+        """Descarga un procesador dinámicamente."""
+        if name in self.processors:
+            processor = self.processors[name]
+            if hasattr(processor, "detener"):
+                await processor.detener()
+            del self.processors[name]
+            self.logger.info(f"Procesador {name} descargado dinámicamente")
+
     async def detener(self):
-        await self.exchange_processor.close()
-        await self.trading_db.disconnect()
+        for name in list(self.processors.keys()):
+            await self.unload_processor(name)
         self.logger.info("[OrchestratorProcessor] Componentes detenidos")
