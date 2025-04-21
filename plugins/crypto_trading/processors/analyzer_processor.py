@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-plugins/crypto_trading/processors/analyzer_processor.py
-Analiza volúmenes y tendencias para BTC, ETH y altcoins principales.
-"""
-
 import logging
 from datetime import datetime
 from plugins.crypto_trading.utils.helpers import CircuitBreaker
@@ -33,6 +26,8 @@ class AnalyzerProcessor:
                     "tendencia": tendencia,
                     "timestamp": datetime.utcnow().isoformat()
                 }
+            # Almacenar en Redis para que MonitorBlock lo use
+            await self.redis.set("analyzer_data", json.dumps(resultados))
             return {"status": "ok", "data": resultados}
         except Exception as e:
             self.logger.exception("Error en analizar()")
