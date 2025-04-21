@@ -9,22 +9,20 @@ import numpy as np
 import torch
 import torch.nn as nn
 import plotly.graph_objects as go
-import redis
 import asyncpg
 
-class SimpleRNN(nn.Module):
-    def __init__(self, input_size=1, hidden_size=32, num_layers=1):
-        super(SimpleRNN, self).__init__()
+class RNNPredictor(nn.Module):
+    def __init__(self, input_size=1, hidden_size=10, num_layers=1):
+        super(RNNPredictor, self).__init__()
         self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, 1)
 
     def forward(self, x):
-        h0 = torch.zeros(1, x.size(0), 32).to(x.device)
-        out, _ = self.rnn(x, h0)
+        out, _ = self.rnn(x)
         out = self.fc(out[:, -1, :])
         return out
 
-class SettlementProcessor(ComponenteBase):
+class SettlementProcessor:
     def __init__(self, config, redis, trading_db, nucleus, strategy, execution_processor, capital_processor):
         self.logger = logging.getLogger("SettlementProcessor")
         self.config = config
@@ -48,7 +46,34 @@ class SettlementProcessor(ComponenteBase):
         self.crash_threshold = -0.2
         self.crash_count = 0
         self.backup_file = "trading_backup.pkl"
-        self.rnn_model = SimpleRNN()
+        self.predictor = RNNPredictor()
+        self.predictor.eval()
+        self.average_slippage = 0.0  # Promedio de deslizamiento
+        self.slippage_threshold = 0.005  # Umbral de deslizamiento del 0.5%
+        self.trade_size_adjustment = 1.0  # Ajuste dinámico del tamaño de las operaciones
+
+    async def monitor_services(self):
+        while True:
+            try:
+                await self.redis.ping()
+                self.logger.debug("Redis está operativo")
+
+                async with self.trading_db.pool.acquire() as conn:
+                    await conn.execute("SELECT 1")
+                self.logger.debug("PostgreSQL está operativo")
+
+                await asyncio.sleep(300)
+            except Exception as e:
+                alert = {
+                    "tipo": "servicio_fallando",
+                    "plugin_id": "crypto_trading",
+                    "detalle": f"Problema detectado: {str(e)}",
+                    "timestamp": datetime.datetime.now().isoformat()
+                }
+                await self.redis.xadd("critical_events", {"data": json.dumps(alert)})
+                await self.nucleus.publicar_alerta(alert)
+                self.logger.error(f"Error en servicio: {e}")
+                await asyncio.sleep(60)
 
     async def update_capital_after_trade(self, side: str, trade_result: Dict[str, Any]):
         if side == "buy":
@@ -103,7 +128,9 @@ class SettlementProcessor(ComponenteBase):
                 "historical_profits": self.historical_profits,
                 "trades_history": self.trades_history,
                 "crash_threshold": self.crash_threshold,
-                "crash_count": self.crash_count
+                "crash_count": self.crash_count,
+                "average_slippage": self.average_slippage,
+                "trade_size_adjustment": self.trade_size_adjustment
             }
             with open(self.backup_file, "wb") as f:
                 pickle.dump(state, f)
@@ -122,6 +149,8 @@ class SettlementProcessor(ComponenteBase):
                 self.trades_history = state["trades_history"]
                 self.crash_threshold = state["crash_threshold"]
                 self.crash_count = state["crash_count"]
+                self.average_slippage = state.get("average_slippage", 0.0)
+                self.trade_size_adjustment = state.get("trade_size_adjustment", 1.0)
                 self.strategy.update_capital(self.capital)
                 self.execution_processor.update_capital(self.capital)
                 self.capital_processor.actualizar_total_capital(self.capital)
@@ -131,57 +160,25 @@ class SettlementProcessor(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error al restaurar estado: {e}")
 
-    async def monitor_resources(self):
-        """Monitorea activamente los recursos del sistema y la conectividad de Redis y PostgreSQL."""
+    async def monitor_slippage(self):
+        """Monitorea el deslizamiento promedio y ajusta dinámicamente el tamaño de las operaciones."""
         while True:
             try:
-                # Simular monitoreo de CPU y memoria (valores ficticios)
-                cpu_usage = random.uniform(0, 100)  # Porcentaje de uso de CPU
-                memory_usage = random.uniform(0, 100)  # Porcentaje de uso de memoria
-                if cpu_usage > 80 or memory_usage > 80:
-                    self.logger.warning(f"Alto uso de recursos detectado: CPU {cpu_usage:.2f}%, Memoria {memory_usage:.2f}%")
-                    alert = {
-                        "tipo": "alerta_recursos",
-                        "plugin_id": "crypto_trading",
-                        "detalle": f"Alto uso de recursos: CPU {cpu_usage:.2f}%, Memoria {memory_usage:.2f}%",
-                        "timestamp": datetime.datetime.now().isoformat()
-                    }
-                    await self.redis.xadd("system_alerts", {"data": json.dumps(alert)})
-                    await self.nucleus.publicar_alerta(alert)
-
-                # Verificar conectividad de Redis
-                try:
-                    await self.redis.ping()
-                except redis.RedisError as e:
-                    self.logger.error(f"Fallo en la conexión a Redis: {e}")
-                    alert = {
-                        "tipo": "alerta_conectividad",
-                        "plugin_id": "crypto_trading",
-                        "detalle": f"Fallo en la conexión a Redis: {e}",
-                        "timestamp": datetime.datetime.now().isoformat()
-                    }
-                    await self.redis.xadd("system_alerts", {"data": json.dumps(alert)})
-                    await self.nucleus.publicar_alerta(alert)
-
-                # Verificar conectividad de PostgreSQL
-                try:
-                    async with self.trading_db.pool.acquire() as conn:
-                        await conn.execute("SELECT 1")
-                except asyncpg.PostgresError as e:
-                    self.logger.error(f"Fallo en la conexión a PostgreSQL: {e}")
-                    alert = {
-                        "tipo": "alerta_conectividad",
-                        "plugin_id": "crypto_trading",
-                        "detalle": f"Fallo en la conexión a PostgreSQL: {e}",
-                        "timestamp": datetime.datetime.now().isoformat()
-                    }
-                    await self.redis.xadd("system_alerts", {"data": json.dumps(alert)})
-                    await self.nucleus.publicar_alerta(alert)
-
-                await asyncio.sleep(300)  # Monitorear cada 5 minutos
+                slippage_data = self.execution_processor.slippage_history
+                if len(slippage_data) > 0:
+                    self.average_slippage = sum(slippage_data[-10:]) / min(len(slippage_data), 10)
+                    self.logger.info(f"Deslizamiento promedio (últimas 10 operaciones): {self.average_slippage*100:.2f}%")
+                    if self.average_slippage > self.slippage_threshold:
+                        self.trade_size_adjustment = max(0.5, self.trade_size_adjustment * 0.9)
+                        self.logger.warning(f"Deslizamiento alto detectado, reduciendo tamaño de operaciones: {self.trade_size_adjustment*100:.2f}%")
+                    else:
+                        self.trade_size_adjustment = min(1.0, self.trade_size_adjustment * 1.1)
+                        self.logger.info(f"Deslizamiento bajo, aumentando tamaño de operaciones: {self.trade_size_adjustment*100:.2f}%")
+                    await self.redis.set("trade_size_adjustment", self.trade_size_adjustment)
+                await asyncio.sleep(300)  # Verificar cada 5 minutos
             except Exception as e:
-                self.logger.error(f"Error al monitorear recursos: {e}")
-                await asyncio.sleep(300)
+                self.logger.error(f"Error al monitorear deslizamiento: {e}")
+                await asyncio.sleep(60)
 
     async def micro_cycle_loop(self):
         while True:
@@ -235,7 +232,7 @@ class SettlementProcessor(ComponenteBase):
                     win_rate = self.calculate_win_rate()
                     trades_per_day = self.calculate_trades_per_day()
 
-                    predicted_trend = await self.predict_trend()
+                    predicted_trend = self.predict_trend()
                     if predicted_trend:
                         trend_adjustment = {"trend": "alcista" if predicted_trend > 0 else "bajista", "magnitude": abs(predicted_trend)}
                         await self.redis.set("predicted_trend", json.dumps(trend_adjustment))
@@ -251,7 +248,8 @@ class SettlementProcessor(ComponenteBase):
                         "capital": self.capital,
                         "win_rate": win_rate,
                         "trades_per_day": trades_per_day,
-                        "predicted_trend": predicted_trend
+                        "predicted_trend": predicted_trend,
+                        "average_slippage": self.average_slippage
                     }
                     await self.redis.set(f"historical_report:{now.strftime('%Y-%m-%d')}", json.dumps(report))
 
@@ -284,7 +282,6 @@ class SettlementProcessor(ComponenteBase):
                     await asyncio.sleep(60)
             except Exception as e:
                 self.logger.error(f"[SettlementProcessor] Error en cierre diario: {e}")
-                await self.backup_state()  # Respaldo en caso de error
                 await asyncio.sleep(60)
 
     async def cleanup_old_data(self, now):
@@ -334,22 +331,21 @@ class SettlementProcessor(ComponenteBase):
         days = (timestamps[-1] - timestamps[0]).days + 1
         return len(self.trades_history) / days
 
-    async def predict_trend(self):
-        """Usa una RNN para predecir la tendencia futura basada en datos históricos."""
+    def predict_trend(self):
         try:
-            if len(self.historical_profits) < 5:
+            if len(self.historical_profits) < 10:
                 return None
-            data = torch.tensor(self.historical_profits[-5:], dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
-            self.rnn_model.eval()
+            data = np.array(self.historical_profits[-10:]).reshape(-1, 1)
+            data = (data - np.mean(data)) / np.std(data)
+            input_data = torch.tensor(data, dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
             with torch.no_grad():
-                prediction = self.rnn_model(data).item()
-            return prediction
+                prediction = self.predictor(input_data).item()
+            return prediction * np.std(data) + np.mean(data)
         except Exception as e:
             self.logger.error(f"Error al predecir tendencia: {e}")
             return None
 
     async def generate_roi_plot(self, now):
-        """Genera un gráfico interactivo de ROI diario con Plotly."""
         try:
             dates = []
             daily_roi = []
@@ -429,5 +425,4 @@ class SettlementProcessor(ComponenteBase):
                     await asyncio.sleep(60)
             except Exception as e:
                 self.logger.error(f"Error al manejar caída del mercado: {e}")
-                await self.backup_state()
                 await asyncio.sleep(60)
