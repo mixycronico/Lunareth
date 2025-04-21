@@ -58,32 +58,28 @@ class BloqueSimbiotico:
     async def reparar(self):
         """Repara el bloque simbiótico reactivando entidades inactivas."""
         error_msg = None
-        try:
-            for entidad in self.entidades:
-                if getattr(entidad, "estado", None) == "inactiva":  # Verificamos si el atributo existe
-                    try:
-                        entidad.estado = "activa"
-                        self.logger.info(f"[Bloque {self.id}] Entidad {entidad.id} reactivada")
-                    except Exception as e:
-                        self.logger.error(f"[Bloque {self.id}] Error al reactivar entidad {entidad.id}: {str(e)}")
-                        error_msg = str(e)
-                        raise  # Relanzamos para que el bloque except externo lo capture
-            self.fallos = 0
-            await self.nucleus.publicar_alerta({
-                "tipo": "bloque_reparado",
-                "bloque_id": self.id,
-                "timestamp": time.time()
-            })
-        except Exception as e:
-            self.logger.error(f"[Bloque {self.id}] Error reparando: {str(e)}")
-            if self.nucleus and error_msg:  # Solo publicamos la alerta si el error ocurrió dentro del bucle
-                await self.nucleus.publicar_alerta({
-                    "tipo": "error_reparacion",
-                    "bloque_id": self.id,
-                    "mensaje": str(e),
-                    "timestamp": time.time()
-                })
-            raise  # Relanzamos la excepción para que el test pueda capturarla
+        for entidad in self.entidades:
+            if getattr(entidad, "estado", None) == "inactiva":  # Verificamos si el atributo existe
+                try:
+                    entidad.estado = "activa"
+                    self.logger.info(f"[Bloque {self.id}] Entidad {entidad.id} reactivada")
+                except Exception as e:
+                    self.logger.error(f"[Bloque {self.id}] Error al reactivar entidad {entidad.id}: {str(e)}")
+                    error_msg = str(e)
+                    if self.nucleus:
+                        await self.nucleus.publicar_alerta({
+                            "tipo": "error_reparacion",
+                            "bloque_id": self.id,
+                            "mensaje": str(e),
+                            "timestamp": time.time()
+                        })
+                    raise Exception(f"Repair failed: {error_msg}")  # Relanzamos la excepción para que el test la capture
+        self.fallos = 0
+        await self.nucleus.publicar_alerta({
+            "tipo": "bloque_reparado",
+            "bloque_id": self.id,
+            "timestamp": time.time()
+        })
 
     async def escribir_postgresql(self, conn):
         """Escribe los mensajes del bloque en PostgreSQL."""
