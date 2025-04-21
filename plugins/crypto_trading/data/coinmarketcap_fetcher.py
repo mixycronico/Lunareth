@@ -3,16 +3,15 @@ import logging
 from typing import Dict
 
 class CoinMarketCapFetcher:
-    def __init__(self, api_key: str):
+    def __init__(self, config: Dict):
         self.logger = logging.getLogger("CoinMarketCapFetcher")
-        self.api_key = api_key
+        self.api_key = config.get("macro_config", {}).get("api_keys", {}).get("coinmarketcap", "default_key")
         self.base_url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency"
 
     async def fetch_crypto_data(self, symbol: str) -> Dict[str, float]:
         """Obtiene datos de criptomonedas de CoinMarketCap."""
         try:
             async with aiohttp.ClientSession() as session:
-                # Convertir el símbolo (por ejemplo, ALT3/USDT -> ALT3)
                 crypto_symbol = symbol.split("/")[0]
                 headers = {
                     "Accept": "application/json",
