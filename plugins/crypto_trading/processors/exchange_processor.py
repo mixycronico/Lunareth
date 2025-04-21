@@ -21,12 +21,11 @@ class ExchangeProcessor(ComponenteBase):
         self.exchange_clients = {}
         self.api_limits = {}
         self.liquidity_threshold = 100000
-        self.task_queues = {}  # Cola de prioridad por exchange
-        self.node_id = 0  # Identificador de nodo para balanceo de carga
-        self.total_nodes = 2  # Número total de nodos (simulado)
+        self.task_queues = {}  # Cola de prioridad por exchange (simulando RabbitMQ)
+        self.node_id = 0
+        self.total_nodes = 2
 
     async def inicializar(self):
-        """Inicializa los clientes de los exchanges y comienza los bucles de monitoreo."""
         for ex in self.exchanges:
             try:
                 nombre = ex["name"]
@@ -121,7 +120,6 @@ class ExchangeProcessor(ComponenteBase):
             return ["BTC/USDT", "ETH/USDT"]
 
     async def monitor_exchange(self, exchange: str, pairs: list, initial_offset: float = 0):
-        """Monitorea un exchange específico usando una cola de prioridad."""
         await asyncio.sleep(initial_offset)
         heapq.heappush(self.task_queues[exchange], (asyncio.get_event_loop().time(), "monitor"))
 
@@ -144,15 +142,19 @@ class ExchangeProcessor(ComponenteBase):
                 avg_volatility = 0.01
                 adjusted_interval = 180
                 session_multiplier = 1.0
+                weekend_multiplier = 1.0
 
                 if within_trading_hours:
                     # Ajustar actividad según sesiones de trading
-                    if (6 <= now.hour < 9) or (19 <= now.hour < 22):  # Sesiones activas: 6:00 AM - 9:00 AM, 7:00 PM - 10:00 PM
-                        session_multiplier = 1.5  # Más operaciones
-                    elif 12 <= now.hour < 15:  # Sesión menos activa: 12:00 PM - 3:00 PM
-                        session_multiplier = 0.5  # Menos operaciones
+                    if (6 <= now.hour < 9) or (19 <= now.hour < 22):
+                        session_multiplier = 1.5
+                    elif 12 <= now.hour < 15:
+                        session_multiplier = 0.5
 
-                    # Balanceo de carga: asignar tareas según el nodo
+                    # Reducir actividad los fines de semana (sábado y domingo)
+                    if now.weekday() >= 5:
+                        weekend_multiplier = 0.5
+
                     current_node = hash(exchange) % self.total_nodes
                     if current_node != self.node_id:
                         self.logger.debug(f"Tarea para {exchange} asignada al nodo {current_node}, este nodo es {self.node_id}, reprogramando...")
@@ -204,14 +206,20 @@ class ExchangeProcessor(ComponenteBase):
                             if side == "pending":
                                 continue
 
-                            trade_multiplier = self.strategy.get_trade_multiplier() * trade_multiplier_adjustment * session_multiplier
+                            # Simular errores humanos: retraso ocasional
+                            if random.random() < 0.03:  # 3% de probabilidad
+                                delay = random.uniform(60, 300)  # Retraso de 1 a 5 minutos
+                                self.logger.info(f"Simulando error humano: retrasando operación en {exchange}:{pair} por {delay} segundos")
+                                await asyncio.sleep(delay)
+
+                            trade_multiplier = self.strategy.get_trade_multiplier() * trade_multiplier_adjustment * session_multiplier * weekend_multiplier
                             async for trade_result in self.execution_processor.ejecutar_operacion(exchange, {
                                 "precio": 50000,
                                 "cantidad": 0.1,
                                 "activo": pair,
                                 "tipo": side
                             }, paper_mode=self.config.get("paper_mode", True), trade_multiplier=int(trade_multiplier)):
-                                self.open_trades[f"{exchange}:{pair}"] = trade_result
+                                self.settlement_processor.open_trades[f"{exchange}:{pair}"] = trade_result
                                 await self.settlement_processor.update_capital_after_trade(side, trade_result)
 
                 base_interval = 180
