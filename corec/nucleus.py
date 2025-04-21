@@ -81,6 +81,7 @@ class CoreCNucleus:
             if self.config is None:
                 self.logger.warning("[Núcleo] Configuración no inicializada, registrando plugin sin configuración")
                 self.plugins[plugin_id] = plugin
+                self.logger.info(f"[Núcleo] Plugin '{plugin_id}' registrado sin configuración")
                 return
             plugin_config = self.config.get("plugins", {}).get(plugin_id)
             if plugin_config:
@@ -100,6 +101,7 @@ class CoreCNucleus:
         except ValidationError as e:
             self.logger.error(f"[Núcleo] Configuración inválida para plugin '{plugin_id}': {e}")
             self.plugins[plugin_id] = plugin  # Registrar el plugin incluso si la configuración falla
+            self.logger.info(f"[Núcleo] Plugin '{plugin_id}' registrado a pesar de configuración inválida")
         except Exception as e:
             self.logger.error(f"[Núcleo] Error registrando plugin '{plugin_id}': {e}")
             self.plugins[plugin_id] = plugin  # Registrar el plugin incluso si hay un error
