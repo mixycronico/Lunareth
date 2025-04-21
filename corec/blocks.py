@@ -69,7 +69,7 @@ class BloqueSimbiotico:
                 "timestamp": time.time()
             })
         except Exception as e:
-            self.logger.error(f"[Bloque {self.id}] Error reparando: {e}")
+            self.logger.error(f"[Bloque {self.id}] Error reparando: {str(e)}")
             if self.nucleus:
                 await self.nucleus.publicar_alerta({
                     "tipo": "error_reparacion",
@@ -77,6 +77,7 @@ class BloqueSimbiotico:
                     "mensaje": str(e),
                     "timestamp": time.time()
                 })
+            raise  # Relanzamos la excepción para que el test pueda capturarla
 
     async def escribir_postgresql(self, conn):
         """Escribe los mensajes del bloque en PostgreSQL."""
