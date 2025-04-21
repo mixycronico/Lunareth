@@ -57,6 +57,7 @@ class BloqueSimbiotico:
 
     async def reparar(self):
         """Repara el bloque simbiótico reactivando entidades inactivas."""
+        error_occurred = False
         try:
             for entidad in self.entidades:
                 if getattr(entidad, "estado", None) == "inactiva":  # Verificamos si el atributo existe
@@ -65,13 +66,15 @@ class BloqueSimbiotico:
                         self.logger.info(f"[Bloque {self.id}] Entidad {entidad.id} reactivada")
                     except Exception as e:
                         self.logger.error(f"[Bloque {self.id}] Error al reactivar entidad {entidad.id}: {str(e)}")
+                        error_occurred = True
                         raise  # Relanzamos para que el bloque except externo lo capture
-            self.fallos = 0
-            await self.nucleus.publicar_alerta({
-                "tipo": "bloque_reparado",
-                "bloque_id": self.id,
-                "timestamp": time.time()
-            })
+            if not error_occurred:  # Solo publicamos la alerta si no hubo errores
+                self.fallos = 0
+                await self.nucleus.publicar_alerta({
+                    "tipo": "bloque_reparado",
+                    "bloque_id": self.id,
+                    "timestamp": time.time()
+                })
         except Exception as e:
             self.logger.error(f"[Bloque {self.id}] Error reparando: {str(e)}")
             if self.nucleus:
