@@ -1,5 +1,4 @@
 import pytest
-import random
 from unittest.mock import patch, AsyncMock, MagicMock
 from corec.nucleus import CoreCNucleus
 from pydantic import ValidationError
