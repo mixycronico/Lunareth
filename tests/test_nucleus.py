@@ -3,6 +3,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from corec.nucleus import CoreCNucleus
 from pydantic import ValidationError
 
+
 @pytest.mark.asyncio
 async def test_nucleus_inicializar_exitoso(mock_postgresql, mock_config, nucleus):
     """Prueba la inicialización exitosa del núcleo."""
@@ -15,6 +16,7 @@ async def test_nucleus_inicializar_exitoso(mock_postgresql, mock_config, nucleus
         assert mock_logger.called
         assert len(nucleus.modules) == 4
 
+
 @pytest.mark.asyncio
 async def test_nucleus_inicializar_redis_error(mock_postgresql, mock_config, nucleus):
     """Prueba la inicialización con un error en Redis."""
@@ -26,6 +28,7 @@ async def test_nucleus_inicializar_redis_error(mock_postgresql, mock_config, nuc
         assert mock_redis.called
         assert mock_logger.called
         assert nucleus.redis_client is None
+
 
 @pytest.mark.asyncio
 async def test_nucleus_inicializar_bloque_exitoso(mock_postgresql, mock_config, nucleus):
@@ -41,6 +44,7 @@ async def test_nucleus_inicializar_bloque_exitoso(mock_postgresql, mock_config, 
         assert mock_entidad.called
         assert mock_bloque.called
 
+
 @pytest.mark.asyncio
 async def test_nucleus_inicializar_bloque_config_invalida(mock_postgresql, mock_config, nucleus):
     """Prueba la inicialización con un bloque de configuración inválida."""
@@ -54,6 +58,7 @@ async def test_nucleus_inicializar_bloque_config_invalida(mock_postgresql, mock_
         await nucleus.inicializar()
         assert mock_alerta.called
         assert mock_entidad.called
+
 
 @pytest.mark.asyncio
 async def test_nucleus_registrar_plugin_exitoso(mock_config):
@@ -73,6 +78,7 @@ async def test_nucleus_registrar_plugin_exitoso(mock_config):
         assert mock_entidad.called
         assert mock_bloque.called
 
+
 @pytest.mark.asyncio
 async def test_nucleus_registrar_plugin_config_invalida(mock_config):
     """Prueba el registro de un plugin con configuración inválida."""
@@ -86,6 +92,7 @@ async def test_nucleus_registrar_plugin_config_invalida(mock_config):
         assert nucleus.plugins["test_plugin"] == plugin
         assert mock_logger.called
         assert mock_config_class.called
+
 
 @pytest.mark.asyncio
 async def test_nucleus_ejecutar_plugin_exitoso(mock_config):
@@ -101,6 +108,7 @@ async def test_nucleus_ejecutar_plugin_exitoso(mock_config):
         assert mock_logger.called
         assert mock_command.called
 
+
 @pytest.mark.asyncio
 async def test_nucleus_ejecutar_plugin_no_encontrado(mock_config):
     """Prueba la ejecución de un plugin no encontrado."""
@@ -108,6 +116,7 @@ async def test_nucleus_ejecutar_plugin_no_encontrado(mock_config):
     nucleus.config = mock_config
     with pytest.raises(ValueError, match="Plugin 'test_plugin' no encontrado"):
         await nucleus.ejecutar_plugin("test_plugin", {"action": "test"})
+
 
 @pytest.mark.asyncio
 async def test_nucleus_ejecutar_plugin_comando_invalido(mock_config):
@@ -123,6 +132,7 @@ async def test_nucleus_ejecutar_plugin_comando_invalido(mock_config):
         assert mock_logger.called
         assert mock_command.called
 
+
 @pytest.mark.asyncio
 async def test_nucleus_publicar_alerta_exitoso(mock_config):
     """Prueba la publicación exitosa de una alerta."""
@@ -133,6 +143,7 @@ async def test_nucleus_publicar_alerta_exitoso(mock_config):
         await nucleus.publicar_alerta({"tipo": "test"})
         assert nucleus.redis_client.xadd.called
         assert mock_logger.called
+
 
 @pytest.mark.asyncio
 async def test_nucleus_detener_exitoso(mock_config):
