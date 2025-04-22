@@ -1,10 +1,12 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from corec.nucleus import CoreCNucleus
 from corec.entities import Entidad
 
+
 # Clase EntidadConError para simular un error al cambiar el estado
+
+
 class EntidadConError(Entidad):
     def __init__(self, id: str, canal: int, procesar_func):
         self._estado = "inactiva"
@@ -22,6 +24,7 @@ class EntidadConError(Entidad):
             raise Exception("Error al asignar estado")
         self._estado = value
 
+
 @pytest.fixture
 def mock_redis():
     redis = AsyncMock()
@@ -31,6 +34,7 @@ def mock_redis():
     redis.xadd.return_value = None
     redis.close.return_value = None
     yield redis
+
 
 @pytest.fixture
 def mock_db_pool():
@@ -44,6 +48,7 @@ def mock_db_pool():
     conn.close.return_value = None
     yield conn
 
+
 @pytest.fixture
 def mock_postgresql():
     # Simulamos un objeto de conexión síncrono compatible con psycopg2
@@ -55,6 +60,7 @@ def mock_postgresql():
     conn.commit.return_value = None
     conn.close.return_value = None
     yield conn
+
 
 @pytest.fixture
 def test_config():
@@ -117,6 +123,7 @@ def test_config():
         }
     }
 
+
 @pytest.fixture
 async def nucleus(mock_redis, mock_db_pool, test_config):
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
@@ -128,6 +135,7 @@ async def nucleus(mock_redis, mock_db_pool, test_config):
         await nucleus.inicializar()
         yield nucleus
         await nucleus.detener()
+
 
 @pytest.fixture
 def mock_config():
