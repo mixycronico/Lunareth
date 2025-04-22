@@ -1,8 +1,9 @@
 import logging
-import numpy as np
 import json
+import numpy as np
 from datetime import datetime
 from plugins.crypto_trading.utils.helpers import CircuitBreaker
+from typing import Dict, Any, List  # Añadimos las importaciones necesarias
 
 class AnalyzerProcessor:
     def __init__(self, config, redis):
@@ -16,7 +17,7 @@ class AnalyzerProcessor:
         self.min_volumen = 1000000
         self.min_cap = 100000000
 
-    def _calcular_tendencias(self, volumenes, market_caps):
+    def _calcular_tendencias(self, volumenes: Dict[str, float], market_caps: Dict[str, float]) -> Dict[str, str]:
         """Calcula tendencias para cada símbolo."""
         tendencias = {}
         for symbol in volumenes:
@@ -29,11 +30,11 @@ class AnalyzerProcessor:
             tendencias[symbol] = tendencia
         return tendencias
 
-    def _top_altcoins(self, volumenes: dict) -> list:
+    def _top_altcoins(self, volumenes: Dict[str, float]) -> List[str]:
         altcoins = [k for k in volumenes if k not in ["BTC", "ETH"]]
         return sorted(altcoins, key=lambda x: volumenes[x], reverse=True)[:10]
 
-    async def analizar_volatilidad(self, exchange: str, pairs: list) -> Dict[str, Any]:
+    async def analizar_volatilidad(self, exchange: str, pairs: List[str]) -> Dict[str, Any]:
         """Analiza la volatilidad de los símbolos y prioriza pares para operar."""
         if not self.cb.check():
             self.logger.warning("Circuit breaker activo, omitiendo análisis de volatilidad")
@@ -88,7 +89,7 @@ class AnalyzerProcessor:
             self.cb.register_failure()
             return {"status": "error", "motivo": str(e)}
 
-    async def analizar(self):
+    async def analizar(self) -> Dict[str, Any]:
         """Analiza volúmenes y tendencias."""
         if not self.cb.check():
             self.logger.warning("Circuit breaker activo, omitiendo análisis")
