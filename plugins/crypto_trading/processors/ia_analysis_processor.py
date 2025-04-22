@@ -6,7 +6,8 @@ plugins/crypto_trading/processors/ia_analysis_processor.py
 Analiza volúmenes, precios y datos macroeconómicos usando IA avanzada (CNN-LSTM-Transformer con métodos Bayesianos),
 para generar recomendaciones automáticas para trading dinámico.
 """
-from corec.core import ComponenteBase, serializar_mensaje  # Eliminamos zstd de aquí
+from corec.core import ComponenteBase  # Eliminamos serializar_mensaje de aquí
+from corec.messages import serializar_mensaje  # Importamos directamente desde corec.messages
 from ..utils.helpers import CircuitBreaker
 import torch
 import torch.nn as nn
@@ -18,7 +19,7 @@ import asyncio
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 from torch.distributions import Normal
-import zstd  # Importamos zstd directamente
+import zstd
 
 class TransformerEncoder(nn.Module):
     def __init__(self, d_model, nhead, num_layers):
