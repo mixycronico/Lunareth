@@ -6,10 +6,9 @@ from plugins import PluginCommand
 
 @pytest.mark.asyncio
 async def test_integration_process_and_audit(nucleus):
-    with patch.object(nucleus.scheduler, "schedule_periodic", new_callable=AsyncMock) as mock_schedule:
-        bloque = nucleus.bloques[0]
-        nucleus.modules["ejecucion"].encolar_bloque = AsyncMock()
-        nucleus.modules["auditoria"].detectar_anomalias = AsyncMock()
+    with patch("corec.modules.ejecucion.ModuloEjecucion.encolar_bloque", new_callable=AsyncMock) as mock_encolar, \
+         patch("corec.modules.auditoria.ModuloAuditoria.detectar_anomalias", new_callable=AsyncMock) as mock_detectar, \
+         patch.object(nucleus.scheduler, "schedule_periodic", new_callable=AsyncMock) as mock_schedule:
         async def execute_task(func, *args, **kwargs):
             await func(*args, **kwargs)
         mock_schedule.side_effect = [
@@ -19,13 +18,13 @@ async def test_integration_process_and_audit(nucleus):
         ]
         await nucleus.inicializar()
         await asyncio.sleep(2)
-        assert nucleus.modules["ejecucion"].encolar_bloque.called
-        assert nucleus.modules["auditoria"].detectar_anomalias.called
+        assert mock_encolar.called
+        assert mock_detectar.called
 
 @pytest.mark.asyncio
 async def test_integration_synchronize_and_plugin_execution(nucleus):
-    with patch.object(nucleus.scheduler, "schedule_periodic", new_callable=AsyncMock) as mock_schedule:
-        nucleus.synchronize_bloques = AsyncMock()
+    with patch("corec.nucleus.CoreCNucleus.synchronize_bloques", new_callable=AsyncMock) as mock_synchronize, \
+         patch.object(nucleus.scheduler, "schedule_periodic", new_callable=AsyncMock) as mock_schedule:
         plugin_id = "crypto_trading"
         comando = {"action": "ejecutar_operacion", "params": {"exchange": "binance", "pair": "BTC/USDT", "side": "buy"}}
         plugin_mock = AsyncMock()
@@ -40,7 +39,7 @@ async def test_integration_synchronize_and_plugin_execution(nucleus):
         ]
         await nucleus.inicializar()
         await asyncio.sleep(2)
-        assert nucleus.synchronize_bloques.called
+        assert mock_synchronize.called
         result = await nucleus.ejecutar_plugin(plugin_id, comando)
         assert result["status"] == "success"
         plugin_mock.manejar_comando.assert_called_once_with(PluginCommand(**comando))
