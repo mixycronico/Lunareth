@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import importlib
+import json  # Añadimos la importación de json
 from pathlib import Path
 
 from corec.nucleus import CoreCNucleus
@@ -10,6 +11,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
 )
+
 
 async def load_plugins(nucleus: CoreCNucleus):
     """
@@ -47,6 +49,7 @@ async def load_plugins(nucleus: CoreCNucleus):
 
         except Exception as e:
             nucleus.logger.error(f"[Bootstrap] Error cargando plugin '{name}': {e}")
+
 
 async def main():
     nucleus = CoreCNucleus("config/corec_config.json")
