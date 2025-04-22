@@ -1,12 +1,14 @@
 import pytest
 from corec.config_loader import load_config_dict, CoreCConfig
 
+
 def test_load_config_valid():
     config = load_config_dict("config/corec_config.json")
     assert config["instance_id"] == "corec1"
     assert len(config["bloques"]) == 3
     assert config["plugins"]["crypto_trading"]["enabled"] is True
     assert config["redis_config"]["username"] == "corec_user"
+
 
 def test_load_config_invalid():
     invalid_config = {
@@ -29,6 +31,7 @@ def test_load_config_invalid():
     }
     with pytest.raises(ValueError):
         CoreCConfig(**invalid_config)
+
 
 def test_load_config_missing_field():
     invalid_config = {
