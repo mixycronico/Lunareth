@@ -7,26 +7,6 @@ from corec.modules.ejecucion import ModuloEjecucion
 from corec.modules.auditoria import ModuloAuditoria
 from corec.entities import crear_entidad
 from corec.blocks import BloqueSimbiotico
-from corec.nucleus import CoreCNucleus
-
-
-@pytest.fixture
-def mock_config():
-    return {
-        "db_config": {"host": "localhost"},
-        "redis_config": {"host": "localhost", "port": 6379},
-        "bloques": [],
-        "plugins": {}
-    }
-
-
-@pytest.fixture
-async def nucleus(mock_config):
-    nucleus = CoreCNucleus("config.yml")
-    nucleus.redis_client = MagicMock()  # Mockeamos redis_client para que publicar_alerta funcione
-    with patch("corec.nucleus.cargar_config", return_value=mock_config):
-        return nucleus
-
 
 @pytest.mark.asyncio
 async def test_modulo_registro_inicializar(nucleus):
@@ -35,7 +15,6 @@ async def test_modulo_registro_inicializar(nucleus):
     with patch.object(registro.logger, "info") as mock_logger:
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_modulo_registro_registrar_bloque(nucleus):
@@ -49,7 +28,6 @@ async def test_modulo_registro_registrar_bloque(nucleus):
         assert mock_alerta.called
         assert mock_logger.called
 
-
 @pytest.mark.asyncio
 async def test_modulo_registro_registrar_bloque_config_invalida(nucleus):
     """Prueba el registro de un bloque con configuración inválida en ModuloRegistro."""
@@ -59,9 +37,8 @@ async def test_modulo_registro_registrar_bloque_config_invalida(nucleus):
         await asyncio.wait_for(registro.inicializar(nucleus), timeout=5)
         with pytest.raises(ValueError):
             await asyncio.wait_for(registro.registrar_bloque(None, -1, 0), timeout=5)
-        assert mock_alerta.call_count == 1  # Solo para el error
+        assert mock_alerta.call_count == 1
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_modulo_registro_detener(nucleus):
@@ -72,7 +49,6 @@ async def test_modulo_registro_detener(nucleus):
         await registro.detener()
         assert mock_logger.called_with_call("[Registro] Módulo detenido")
 
-
 @pytest.mark.asyncio
 async def test_modulo_sincronizacion_inicializar(nucleus):
     """Prueba la inicialización de ModuloSincronizacion."""
@@ -80,7 +56,6 @@ async def test_modulo_sincronizacion_inicializar(nucleus):
     with patch.object(sincronizacion.logger, "info") as mock_logger:
         await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_modulo_sincronizacion_redirigir_entidades(nucleus):
@@ -99,7 +74,6 @@ async def test_modulo_sincronizacion_redirigir_entidades(nucleus):
         assert mock_alerta.called
         assert mock_logger.called
 
-
 @pytest.mark.asyncio
 async def test_modulo_sincronizacion_redirigir_entidades_error(nucleus):
     """Prueba la redirección de entidades con un error en ModuloSincronizacion."""
@@ -116,7 +90,6 @@ async def test_modulo_sincronizacion_redirigir_entidades_error(nucleus):
         with pytest.raises(Exception):
             await asyncio.wait_for(sincronizacion.redirigir_entidades(bloque1, bloque2, 0.1, canal=2), timeout=5)
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_modulo_sincronizacion_adaptar_bloque_fusionar(nucleus):
@@ -135,7 +108,6 @@ async def test_modulo_sincronizacion_adaptar_bloque_fusionar(nucleus):
         assert mock_alerta.called
         assert mock_logger.called
 
-
 @pytest.mark.asyncio
 async def test_modulo_sincronizacion_detener(nucleus):
     """Prueba la detención de ModuloSincronizacion."""
@@ -145,7 +117,6 @@ async def test_modulo_sincronizacion_detener(nucleus):
         await sincronizacion.detener()
         assert mock_logger.called_with_call("[Sincronización] Módulo detenido")
 
-
 @pytest.mark.asyncio
 async def test_modulo_ejecucion_inicializar(nucleus):
     """Prueba la inicialización de ModuloEjecucion."""
@@ -153,7 +124,6 @@ async def test_modulo_ejecucion_inicializar(nucleus):
     with patch.object(ejecucion.logger, "info") as mock_logger:
         await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_modulo_ejecucion_encolar_tareas(nucleus):
@@ -170,7 +140,6 @@ async def test_modulo_ejecucion_encolar_tareas(nucleus):
         await asyncio.wait_for(ejecucion.encolar_bloque(bloque), timeout=5)
         assert mock_alerta.called
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_modulo_ejecucion_encolar_tareas_error(nucleus):
@@ -189,19 +158,17 @@ async def test_modulo_ejecucion_encolar_tareas_error(nucleus):
             await asyncio.wait_for(ejecucion.encolar_bloque(bloque), timeout=5)
         except Exception:
             pass
-        assert mock_alerta.call_count == 1  # Solo para el error
+        assert mock_alerta.call_count == 1
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_modulo_ejecucion_detener(nucleus):
     """Prueba la detención de ModuloEjecucion."""
     ejecucion = ModuloEjecucion()
-    with patch.object(ejecucion.logger, "info") as mock_logger:
+    with patch.object(e trotz.logger, "info") as mock_logger:
         await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
         await ejecucion.detener()
         assert mock_logger.called_with_call("[Ejecución] Módulo detenido")
-
 
 @pytest.mark.asyncio
 async def test_modulo_auditoria_inicializar(nucleus):
@@ -210,7 +177,6 @@ async def test_modulo_auditoria_inicializar(nucleus):
     with patch.object(auditoria.logger, "info") as mock_logger:
         await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_modulo_auditoria_detectar_anomalias(nucleus):
@@ -226,21 +192,19 @@ async def test_modulo_auditoria_detectar_anomalias(nucleus):
         assert mock_alerta.called
         assert mock_logger.called
 
-
 @pytest.mark.asyncio
 async def test_modulo_auditoria_detectar_anomalias_error(nucleus):
     """Prueba la detección de anomalías con un error en ModuloAuditoria."""
     auditoria = ModuloAuditoria()
     await asyncio.wait_for(auditoria.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
-    registro.bloques = {"block1": {"fitness": -1.0, "num_entidades": 10}}  # Añadimos bloques para que el error ocurra
+    registro.bloques = {"block1": {"fitness": -1.0, "num_entidades": 10}}
     nucleus.modules["registro"] = registro
     with patch.object(auditoria.logger, "error") as mock_logger, \
          patch("corec.modules.auditoria.random.random", side_effect=Exception("Error")):
         with pytest.raises(Exception):
             await asyncio.wait_for(auditoria.detectar_anomalias(), timeout=5)
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_modulo_auditoria_detener(nucleus):
