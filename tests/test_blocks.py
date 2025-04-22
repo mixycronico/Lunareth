@@ -116,8 +116,16 @@ async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_postgresql, monk
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
+    # Configuramos el mock para simular un objeto de conexión síncrono
+    conn = MagicMock()
+    cursor = MagicMock()
+    cursor.execute.return_value = None
+    cursor.close.return_value = None
+    conn.cursor.return_value = cursor
+    conn.commit.return_value = None
+
     with patch.object(bloque.logger, "info") as mock_logger:
-        await bloque.escribir_postgresql(mock_postgresql)
+        await bloque.escribir_postgresql(conn)
         assert len(bloque.mensajes) == 0
         assert mock_logger.called
 
@@ -131,16 +139,14 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_postgresql, monkey
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
-    # Ajustamos el mock para asegurar que la excepción se lance
-    async def mock_aenter():
-        conn = AsyncMock()
-        conn.execute = AsyncMock(side_effect=Exception("DB Error"))
-        return conn
-    async def mock_aexit(exc_type, exc_val, exc_tb):
-        return False  # No suprimimos la excepción
-    mock_postgresql.acquire.return_value.__aenter__ = mock_aenter
-    mock_postgresql.acquire.return_value.__aexit__ = mock_aexit
+    # Configuramos el mock para simular un objeto de conexión síncrono que lanza una excepción
+    conn = MagicMock()
+    cursor = MagicMock()
+    cursor.execute.side_effect = Exception("DB Error")
+    cursor.close.return_value = None
+    conn.cursor.return_value = cursor
+    conn.commit.return_value = None
 
     with patch.object(bloque.logger, "error") as mock_logger:
-        await bloque.escribir_postgresql(mock_postgresql)
+        await bloque.escribir_postgresql(conn)
         assert mock_logger.called
