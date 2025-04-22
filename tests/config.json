@@ -1,0 +1,14 @@
+import tempfile
+import json
+
+@pytest.mark.asyncio
+async def test_config_load_valid(mock_config_trading):
+    """Prueba la carga y validación de la configuración."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as temp_file:
+        json.dump({"crypto_trading": mock_config_trading}, temp_file)
+        temp_file.flush()
+        with patch("plugins.crypto_trading.config_loader.Path", return_value=Path(temp_file.name)):
+            config = load_config_dict()
+            assert config["exchange_config"]["exchanges"][0]["name"] == "binance"
+            assert config["capital_config"]["total_capital"] == 1000.0
+            assert config["settlement_config"]["settlement_time"] == "23:59"
