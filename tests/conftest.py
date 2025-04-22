@@ -35,28 +35,28 @@ def mock_redis():
 @pytest.fixture
 def mock_db_pool():
     db_pool = AsyncMock()
+    # Creamos un mock para la conexión
     conn = AsyncMock()
-    # Definimos execute como un método asíncrono
-    conn.execute = AsyncMock(return_value=None)
-    # Configuramos el contexto asíncrono correctamente
-    async def mock_aenter():
-        return conn
-    db_pool.acquire.return_value.__aenter__ = AsyncMock(side_effect=mock_aenter)
-    db_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+    conn.execute = AsyncMock(return_value=None)  # Método asíncrono que devuelve None
+    # Configuramos acquire para devolver un administrador de contexto
+    context_manager = AsyncMock()
+    context_manager.__aenter__.return_value = conn
+    context_manager.__aexit__.return_value = None
+    db_pool.acquire.return_value = context_manager
     db_pool.close = AsyncMock(return_value=None)
     yield db_pool
 
 @pytest.fixture
 def mock_postgresql():
     db_pool = AsyncMock()
+    # Creamos un mock para la conexión
     conn = AsyncMock()
-    # Definimos execute como un método asíncrono
-    conn.execute = AsyncMock(return_value=None)
-    # Configuramos el contexto asíncrono correctamente
-    async def mock_aenter():
-        return conn
-    db_pool.acquire.return_value.__aenter__ = AsyncMock(side_effect=mock_aenter)
-    db_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+    conn.execute = AsyncMock(return_value=None)  # Método asíncrono que devuelve None
+    # Configuramos acquire para devolver un administrador de contexto
+    context_manager = AsyncMock()
+    context_manager.__aenter__.return_value = conn
+    context_manager.__aexit__.return_value = None
+    db_pool.acquire.return_value = context_manager
     db_pool.close = AsyncMock(return_value=None)
     yield db_pool
 
