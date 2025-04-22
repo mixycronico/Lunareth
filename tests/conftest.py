@@ -34,39 +34,31 @@ def mock_redis():
 
 @pytest.fixture
 def mock_db_pool():
-    db_pool = AsyncMock()
+    db_pool = MagicMock()
     # Creamos un mock para la conexión
     conn = AsyncMock()
     conn.execute = AsyncMock(return_value=None)  # Método asíncrono que devuelve None
     # Creamos un administrador de contexto asíncrono
-    async def mock_aenter():
-        return conn
-    async def mock_aexit(*args, **kwargs):
-        return None
-    # Configuramos acquire para devolver un administrador de contexto
     context_manager = MagicMock()
-    context_manager.__aenter__ = AsyncMock(side_effect=mock_aenter)
-    context_manager.__aexit__ = AsyncMock(side_effect=mock_aexit)
-    db_pool.acquire = AsyncMock(return_value=context_manager)
+    context_manager.__aenter__ = AsyncMock(return_value=conn)
+    context_manager.__aexit__ = AsyncMock(return_value=None)
+    # Configuramos acquire para devolver directamente el administrador de contexto
+    db_pool.acquire.return_value = context_manager
     db_pool.close = AsyncMock(return_value=None)
     yield db_pool
 
 @pytest.fixture
 def mock_postgresql():
-    db_pool = AsyncMock()
+    db_pool = MagicMock()
     # Creamos un mock para la conexión
     conn = AsyncMock()
     conn.execute = AsyncMock(return_value=None)  # Método asíncrono que devuelve None
     # Creamos un administrador de contexto asíncrono
-    async def mock_aenter():
-        return conn
-    async def mock_aexit(*args, **kwargs):
-        return None
-    # Configuramos acquire para devolver un administrador de contexto
     context_manager = MagicMock()
-    context_manager.__aenter__ = AsyncMock(side_effect=mock_aenter)
-    context_manager.__aexit__ = AsyncMock(side_effect=mock_aexit)
-    db_pool.acquire = AsyncMock(return_value=context_manager)
+    context_manager.__aenter__ = AsyncMock(return_value=conn)
+    context_manager.__aexit__ = AsyncMock(return_value=None)
+    # Configuramos acquire para devolver directamente el administrador de contexto
+    db_pool.acquire.return_value = context_manager
     db_pool.close = AsyncMock(return_value=None)
     yield db_pool
 
