@@ -7,7 +7,6 @@ Analiza volúmenes, precios y datos macroeconómicos usando IA avanzada (CNN-LST
 para generar recomendaciones automáticas para trading dinámico.
 """
 from corec.core import ComponenteBase  # Eliminamos serializar_mensaje de aquí
-from corec.messages import serializar_mensaje  # Importamos directamente desde corec.messages
 from ..utils.helpers import CircuitBreaker
 import torch
 import torch.nn as nn
@@ -20,6 +19,10 @@ from typing import Dict, Any, List
 from datetime import datetime, timedelta
 from torch.distributions import Normal
 import zstd
+
+async def serializar_mensaje(id: int, canal: str, valor: float, flag: bool) -> str:
+    """Serializa un mensaje en un formato simple para pruebas."""
+    return f"{id}:{canal}:{valor}:{flag}"
 
 class TransformerEncoder(nn.Module):
     def __init__(self, d_model, nhead, num_layers):
