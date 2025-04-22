@@ -132,6 +132,6 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_postgresql, monkey
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
     with patch.object(bloque.logger, "error") as mock_logger, \
-            patch.object(mock_postgresql, "execute", side_effect=Exception("DB Error")):
+            patch.object(mock_postgresql.acquire.return_value.__aenter__.return_value, "execute", side_effect=Exception("DB Error")):
         await bloque.escribir_postgresql(mock_postgresql)
         assert mock_logger.called
