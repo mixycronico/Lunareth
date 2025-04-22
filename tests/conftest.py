@@ -38,11 +38,16 @@ def mock_db_pool():
     # Creamos un mock para la conexión
     conn = AsyncMock()
     conn.execute = AsyncMock(return_value=None)  # Método asíncrono que devuelve None
+    # Creamos un administrador de contexto asíncrono
+    async def mock_aenter():
+        return conn
+    async def mock_aexit(*args, **kwargs):
+        return None
     # Configuramos acquire para devolver un administrador de contexto
-    context_manager = AsyncMock()
-    context_manager.__aenter__.return_value = conn
-    context_manager.__aexit__.return_value = None
-    db_pool.acquire.return_value = context_manager
+    context_manager = MagicMock()
+    context_manager.__aenter__ = AsyncMock(side_effect=mock_aenter)
+    context_manager.__aexit__ = AsyncMock(side_effect=mock_aexit)
+    db_pool.acquire = AsyncMock(return_value=context_manager)
     db_pool.close = AsyncMock(return_value=None)
     yield db_pool
 
@@ -52,11 +57,16 @@ def mock_postgresql():
     # Creamos un mock para la conexión
     conn = AsyncMock()
     conn.execute = AsyncMock(return_value=None)  # Método asíncrono que devuelve None
+    # Creamos un administrador de contexto asíncrono
+    async def mock_aenter():
+        return conn
+    async def mock_aexit(*args, **kwargs):
+        return None
     # Configuramos acquire para devolver un administrador de contexto
-    context_manager = AsyncMock()
-    context_manager.__aenter__.return_value = conn
-    context_manager.__aexit__.return_value = None
-    db_pool.acquire.return_value = context_manager
+    context_manager = MagicMock()
+    context_manager.__aenter__ = AsyncMock(side_effect=mock_aenter)
+    context_manager.__aexit__ = AsyncMock(side_effect=mock_aexit)
+    db_pool.acquire = AsyncMock(return_value=context_manager)
     db_pool.close = AsyncMock(return_value=None)
     yield db_pool
 
