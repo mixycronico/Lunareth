@@ -10,6 +10,8 @@ import torch
 import torch.nn as nn
 import plotly.graph_objects as go
 import asyncpg
+import asyncio  # Añadimos asyncio para usar asyncio.sleep
+from typing import Dict, Any  # Añadimos las importaciones necesarias
 
 class RNNPredictor(nn.Module):
     def __init__(self, input_size=1, hidden_size=10, num_layers=1):
@@ -86,7 +88,7 @@ class SettlementProcessor:
         self.logger.info(f"[SettlementProcessor] Capital actualizado: ${self.capital}")
         await self.backup_state()
 
-    async def close_trade(self, exchange: str, pair: str, trade: dict):
+    async def close_trade(self, exchange: str, pair: str, trade: Dict[str, Any]):
         trade_id = f"{exchange}:{pair}"
         self.logger.info(f"[SettlementProcessor] Cerrando operación para {trade_id}")
         trade["status"] = "closed"
