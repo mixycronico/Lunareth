@@ -1,9 +1,29 @@
 import logging
-import asyncio
+import json
+import pickle
+import os
+import random  # Añadimos la importación de random que se usa en adjust_trading_flow
 from datetime import datetime
 from plugins.crypto_trading.utils.helpers import CircuitBreaker
-import json
-import random
+from plugins.crypto_trading.utils.settlement_utils import calcular_ganancias, registrar_historial
+import numpy as np
+import torch
+import torch.nn as nn
+import plotly.graph_objects as go
+import asyncpg
+import asyncio  # Añadimos la importación de asyncio que se usa explícitamente
+from typing import Dict, Any  # Añadimos las importaciones necesarias
+
+class RNNPredictor(nn.Module):
+    def __init__(self, input_size=1, hidden_size=10, num_layers=1):
+        super(RNNPredictor, self).__init__()
+        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        out, _ = self.rnn(x)
+        out = self.fc(out[:, -1, :])
+        return out
 
 class PredictorProcessor:
     def __init__(self, config, redis):
@@ -56,7 +76,7 @@ class PredictorProcessor:
             self.cb.register_failure()
             return {"status": "error", "motivo": str(e)}
 
-    async def adjust_trading_flow(self):
+    async def adjust_trading_flow(self) -> None:
         """Ajusta dinámicamente el flujo de operaciones cada 5 minutos, con pausas y distracciones."""
         while True:
             try:
