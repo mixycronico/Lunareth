@@ -1,46 +1,138 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 from corec.nucleus import CoreCNucleus
+from corec.entities import Entidad
 
+# Clase EntidadConError para simular un error al cambiar el estado
+class EntidadConError(Entidad):
+    def __init__(self, id: str, canal: int, procesar_func):
+        self._estado = "inactiva"
+        self.id = id
+        self.canal = canal
+        self.procesar_func = procesar_func
 
-test_config = {
-    "db_config": {
-        "dbname": "test_db",
-        "user": "test_user",
-        "password": "test_pass",
-        "host": "localhost",
-        "port": 5432
-    },
-    "redis_config": {
-        "host": "localhost",
-        "port": 6379
-    },
-    "bloques": [
-        {"id": "test_block", "canal": 1, "entidades": 1000}
-    ],
-    "plugins": {
-        "test_plugin": {
-            "enabled": True,
-            "bloque": {"id": "test_plugin", "canal": 4, "entidades": 500}
-        }
-    }
-}
+    @property
+    def estado(self):
+        return self._estado
 
-
-@pytest.fixture
-def nucleus():
-    nucleus = CoreCNucleus("test_config.yaml")
-    nucleus.config = test_config
-    yield nucleus
-
+    @estado.setter
+    def estado(self, value):
+        if value == "activa":
+            raise Exception("Error al asignar estado")
+        self._estado = value
 
 @pytest.fixture
 def mock_redis():
-    return AsyncMock()
+    redis = AsyncMock()
+    redis.get.return_value = None
+    redis.set.return_value = None
+    redis.ping.return_value = True
+    redis.xadd.return_value = None
+    yield redis
 
+@pytest.fixture
+def mock_db_pool():
+    db_pool = AsyncMock()
+    db_pool.acquire.return_value.__aenter__.return_value = AsyncMock()
+    yield db_pool
 
 @pytest.fixture
 def mock_postgresql():
     mock = MagicMock()
     mock.cursor.return_value = MagicMock()
-    return mock
+    yield mock
+
+@pytest.fixture
+def test_config():
+    return {
+        "instance_id": "corec1",
+        "db_config": {
+            "dbname": "corec_db",
+            "user": "postgres",
+            "password": "your_password",
+            "host": "localhost",
+            "port": 5432
+        },
+        "redis_config": {
+            "host": "localhost",
+            "port": 6379,
+            "username": "corec_user",
+            "password": "secure_password"
+        },
+        "bloques": [
+            {
+                "id": "enjambre_sensor",
+                "canal": 1,
+                "entidades": 100,
+                "max_size_mb": 1,
+                "entidades_por_bloque": 1000,
+                "autoreparacion": {
+                    "max_errores": 0.05,
+                    "min_fitness": 0.2
+                }
+            },
+            {
+                "id": "nodo_seguridad",
+                "canal": 2,
+                "entidades": 100,
+                "max_size_mb": 1,
+                "entidades_por_bloque": 1000,
+                "autoreparacion": {
+                    "max_errores": 0.02,
+                    "min_fitness": 0.5
+                }
+            }
+        ],
+        "plugins": {
+            "crypto_trading": {
+                "enabled": True,
+                "path": "plugins/crypto_trading/config.json",
+                "bloque": {
+                    "bloque_id": "trading_block",
+                    "canal": 3,
+                    "entidades": 2000,
+                    "max_size_mb": 5,
+                    "max_errores": 0.1,
+                    "min_fitness": 0.3
+                }
+            },
+            "test_plugin": {
+                "enabled": True,
+                "bloque": {"id": "test_plugin", "canal": 4, "entidades": 500}
+            }
+        }
+    }
+
+@pytest.fixture
+async def nucleus(mock_redis, mock_db_pool, test_config):
+    with patch("corec.nucleus.init_postgresql", return_value=mock_db_pool):
+        with patch("aioredis.from_url", return_value=mock_redis):
+            nucleus = CoreCNucleus("config/corec_config.json")
+            nucleus.config = test_config  # Asignamos la configuración directamente
+            nucleus.redis_client = mock_redis
+            nucleus.db_pool = mock_db_pool
+            await nucleus.inicializar()
+            yield nucleus
+            await nucleus.detener()
+
+@pytest.fixture
+def mock_config():
+    return {
+        "instance_id": "corec1",
+        "db_config": {
+            "dbname": "corec_db",
+            "user": "postgres",
+            "password": "your_password",
+            "host": "localhost",
+            "port": 5432
+        },
+        "redis_config": {
+            "host": "localhost",
+            "port": 6379,
+            "username": "corec_user",
+            "password": "secure_password"
+        },
+        "bloques": [],
+        "plugins": {}
+    }
