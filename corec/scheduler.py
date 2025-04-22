@@ -3,6 +3,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta
 
+
 class Scheduler:
     def __init__(self):
         self._sched = AsyncIOScheduler()
