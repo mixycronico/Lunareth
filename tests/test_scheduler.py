@@ -1,10 +1,16 @@
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch
+from corec.nucleus import CoreCNucleus
+from corec.modules.auditoria import ModuloAuditoria
 
 @pytest.mark.asyncio
 async def test_scheduler_process_bloques(nucleus):
     with patch("corec.scheduler.Scheduler.schedule_periodic", new_callable=AsyncMock) as mock_schedule:
+        # Configuramos el mock para process_bloque con una firma válida
+        nucleus.process_bloque = AsyncMock(
+            __code__=CoreCNucleus.process_bloque.__code__  # Simulamos la firma
+        )
         mock_schedule.return_value = None  # No ejecutamos tareas reales
         await nucleus.inicializar()
         # Simulamos la ejecución manual de la tarea
@@ -16,6 +22,10 @@ async def test_scheduler_process_bloques(nucleus):
 @pytest.mark.asyncio
 async def test_scheduler_audit_anomalies(nucleus):
     with patch("corec.scheduler.Scheduler.schedule_periodic", new_callable=AsyncMock) as mock_schedule:
+        # Configuramos el mock para detectar_anomalias con una firma válida
+        nucleus.modules["auditoria"].detectar_anomalias = AsyncMock(
+            __code__=ModuloAuditoria.detectar_anomalias.__code__  # Simulamos la firma
+        )
         mock_schedule.return_value = None  # No ejecutamos tareas reales
         await nucleus.inicializar()
         # Simulamos la ejecución manual de la tarea
@@ -26,6 +36,10 @@ async def test_scheduler_audit_anomalies(nucleus):
 @pytest.mark.asyncio
 async def test_scheduler_synchronize_bloques(nucleus):
     with patch("corec.scheduler.Scheduler.schedule_periodic", new_callable=AsyncMock) as mock_schedule:
+        # Configuramos el mock para synchronize_bloques con una firma válida
+        nucleus.synchronize_bloques = AsyncMock(
+            __code__=CoreCNucleus.synchronize_bloques.__code__  # Simulamos la firma
+        )
         mock_schedule.return_value = None  # No ejecutamos tareas reales
         await nucleus.inicializar()
         # Simulamos la ejecución manual de la sincronización
