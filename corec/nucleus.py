@@ -79,27 +79,27 @@ class CoreCNucleus:
             self.scheduler.start()
 
             # Programar tareas con el scheduler
-            # Procesamiento de bloques (cada 60 segundos)
+            # Procesamiento de bloques (cada 1 segundo para pruebas)
             for bloque in self.bloques:
                 self.scheduler.schedule_periodic(
                     func=self.process_bloque,
-                    seconds=60,
+                    seconds=1,  # Reducido para pruebas
                     job_id=f"process_{bloque.id}",
                     args=[bloque]
                 )
 
-            # Auditoría (cada 120 segundos)
+            # Auditoría (cada 1 segundo para pruebas)
             self.scheduler.schedule_periodic(
                 func=self.modules["auditoria"].detectar_anomalias,
-                seconds=120,
+                seconds=1,  # Reducido para pruebas
                 job_id="audit_anomalies"
             )
 
-            # Sincronización de bloques (cada 180 segundos, si hay al menos 2 bloques)
+            # Sincronización de bloques (cada 1 segundo para pruebas, si hay al menos 2 bloques)
             if len(self.bloques) >= 2:
                 self.scheduler.schedule_periodic(
                     func=self.synchronize_bloques,
-                    seconds=180,
+                    seconds=1,  # Reducido para pruebas
                     job_id="synchronize_bloques",
                     args=[self.bloques[0], self.bloques[1], 0.1, self.bloques[1].canal]
                 )
