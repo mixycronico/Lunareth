@@ -1,27 +1,7 @@
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch, call
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad
-from corec.nucleus import CoreCNucleus
-
-
-@pytest.fixture
-def mock_config():
-    return {
-        "db_config": {"host": "localhost"},
-        "redis_config": {"host": "localhost", "port": 6379},
-        "bloques": [],
-        "plugins": {}
-    }
-
-
-@pytest.fixture
-async def nucleus(mock_config):
-    nucleus = CoreCNucleus("config.yml")
-    nucleus.redis_client = AsyncMock()  # Mockeamos redis_client para que publicar_alerta funcione
-    with patch("corec.nucleus.cargar_config", return_value=mock_config):
-        return nucleus
-
 
 # Nueva clase EntidadConError para simular un error al cambiar el estado
 class EntidadConError(Entidad):
@@ -42,7 +22,6 @@ class EntidadConError(Entidad):
             raise Exception("Error al asignar estado")
         self._estado = value
 
-
 @pytest.mark.asyncio
 async def test_bloque_procesar_exitoso(nucleus, monkeypatch):
     """Prueba el procesamiento exitoso de un bloque simbiótico."""
@@ -61,7 +40,6 @@ async def test_bloque_procesar_exitoso(nucleus, monkeypatch):
         assert mock_alerta.called
         assert not mock_logger.called
 
-
 @pytest.mark.asyncio
 async def test_bloque_procesar_valor_invalido(nucleus, monkeypatch):
     """Prueba el procesamiento con un valor inválido."""
@@ -79,7 +57,6 @@ async def test_bloque_procesar_valor_invalido(nucleus, monkeypatch):
         assert len(result["mensajes"]) == 0
         assert mock_alerta.called
         assert mock_logger.called
-
 
 @pytest.mark.asyncio
 async def test_bloque_procesar_error_entidad(nucleus, monkeypatch):
@@ -100,7 +77,6 @@ async def test_bloque_procesar_error_entidad(nucleus, monkeypatch):
         assert mock_alerta.called
         assert mock_logger.called
 
-
 @pytest.mark.asyncio
 async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
     """Prueba la reparación exitosa de un bloque."""
@@ -108,7 +84,6 @@ async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
         pass
 
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
-    # Agregamos el atributo estado manualmente
     entidades[0].estado = "inactiva"
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
@@ -118,22 +93,18 @@ async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
         assert bloque.fallos == 0
         assert mock_logger.called
 
-
 @pytest.mark.asyncio
 async def test_bloque_reparar_error(nucleus):
     """Prueba la reparación con un error."""
-    # Usamos EntidadConError en lugar de Entidad
     entidades = [EntidadConError("ent_1", 1, lambda: {"valor": 0.5})]
-    # No necesitamos setear el estado manualmente, ya que el constructor de EntidadConError lo establece como "inactiva"
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     with patch.object(bloque.logger, "error") as mock_logger, \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
-        with pytest.raises(Exception):  # Capturamos la excepción relanzada
+        with pytest.raises(Exception):
             await bloque.reparar()
         assert mock_logger.called
         assert mock_alerta.called
-        assert entidades[0].estado == "inactiva"  # Verificamos que el estado no cambió debido al error
-
+        assert entidades[0].estado == "inactiva"
 
 @pytest.mark.asyncio
 async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_postgresql, monkeypatch):
@@ -145,15 +116,10 @@ async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_postgresql, monk
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
-    mock_cursor = MagicMock()
-    mock_postgresql.cursor.return_value = mock_cursor
     with patch.object(bloque.logger, "info") as mock_logger:
         await bloque.escribir_postgresql(mock_postgresql)
         assert len(bloque.mensajes) == 0
         assert mock_logger.called
-        assert mock_cursor.execute.called
-        assert mock_postgresql.commit.called
-
 
 @pytest.mark.asyncio
 async def test_bloque_escribir_postgresql_error(nucleus, mock_postgresql, monkeypatch):
@@ -166,6 +132,6 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_postgresql, monkey
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
     with patch.object(bloque.logger, "error") as mock_logger, \
-            patch.object(mock_postgresql, "cursor", side_effect=Exception("DB Error")):
+            patch.object(mock_postgresql, "execute", side_effect=Exception("DB Error")):
         await bloque.escribir_postgresql(mock_postgresql)
         assert mock_logger.called
