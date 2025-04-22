@@ -1,8 +1,6 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, patch
-from corec.nucleus import CoreCNucleus
-from corec.modules.auditoria import ModuloAuditoria
+
 
 @pytest.mark.asyncio
 async def test_scheduler_process_bloques(nucleus):
@@ -15,6 +13,7 @@ async def test_scheduler_process_bloques(nucleus):
         assert mock_process.called
         assert mock_process.call_count >= 1
 
+
 @pytest.mark.asyncio
 async def test_scheduler_audit_anomalies(nucleus):
     # Mockeamos detectar_anomalias en el módulo para evitar sobrescritura
@@ -25,6 +24,7 @@ async def test_scheduler_audit_anomalies(nucleus):
         await nucleus.modules["auditoria"].detectar_anomalias()
         assert mock_detectar.called
         assert mock_detectar.call_count >= 1
+
 
 @pytest.mark.asyncio
 async def test_scheduler_synchronize_bloques(nucleus):
