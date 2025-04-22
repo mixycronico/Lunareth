@@ -165,7 +165,7 @@ async def test_modulo_ejecucion_encolar_tareas_error(nucleus):
 async def test_modulo_ejecucion_detener(nucleus):
     """Prueba la detención de ModuloEjecucion."""
     ejecucion = ModuloEjecucion()
-    with patch.object(e trotz.logger, "info") as mock_logger:
+    with patch.object(ejecucion.logger, "info") as mock_logger:
         await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
         await ejecucion.detener()
         assert mock_logger.called_with_call("[Ejecución] Módulo detenido")
