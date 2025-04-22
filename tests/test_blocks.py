@@ -131,11 +131,15 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_postgresql, monkey
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
-    # Simplificamos el mock para asegurar que la excepción se lance
-    conn = AsyncMock()
-    conn.execute = AsyncMock(side_effect=Exception("DB Error"))
-    mock_postgresql.acquire.return_value.__aenter__.return_value = conn
-    mock_postgresql.acquire.return_value.__aexit__.return_value = None
+    # Ajustamos el mock para asegurar que la excepción se lance
+    async def mock_aenter():
+        conn = AsyncMock()
+        conn.execute = AsyncMock(side_effect=Exception("DB Error"))
+        return conn
+    async def mock_aexit(exc_type, exc_val, exc_tb):
+        return False  # No suprimimos la excepción
+    mock_postgresql.acquire.return_value.__aenter__ = mock_aenter
+    mock_postgresql.acquire.return_value.__aexit__ = mock_aexit
 
     with patch.object(bloque.logger, "error") as mock_logger:
         await bloque.escribir_postgresql(mock_postgresql)
