@@ -244,6 +244,10 @@ class CoreCNucleus:
 
     async def detener(self):
         try:
+            # Detener el scheduler primero para evitar tareas pendientes
+            if self.scheduler:
+                self.scheduler.shutdown()
+                self.logger.info("[Núcleo] Scheduler detenido")
             for module in self.modules.values():
                 await module.detener()
             if self.redis_client:
