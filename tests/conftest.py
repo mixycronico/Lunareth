@@ -36,7 +36,10 @@ def mock_redis():
 def mock_db_pool():
     db_pool = AsyncMock()
     conn = AsyncMock()
-    conn.execute.return_value = None
+    # Simulamos el método execute para que sea un coroutine que devuelve None
+    async def mock_execute(*args, **kwargs):
+        return None
+    conn.execute = AsyncMock(side_effect=mock_execute)
     db_pool.acquire.return_value.__aenter__.return_value = conn
     db_pool.close.return_value = None
     yield db_pool
@@ -45,7 +48,10 @@ def mock_db_pool():
 def mock_postgresql():
     db_pool = AsyncMock()
     conn = AsyncMock()
-    conn.execute.return_value = None
+    # Simulamos el método execute para que sea un coroutine que devuelve None
+    async def mock_execute(*args, **kwargs):
+        return None
+    conn.execute = AsyncMock(side_effect=mock_execute)
     db_pool.acquire.return_value.__aenter__.return_value = conn
     db_pool.close.return_value = None
     yield db_pool
