@@ -1,9 +1,12 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch  # Eliminamos 'call', ya que no se usa
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad
 
+
 # Nueva clase EntidadConError para simular un error al cambiar el estado
+
+
 class EntidadConError(Entidad):
     def __init__(self, id: str, canal: int, procesar_func):
         # Evitamos que el constructor de Entidad intente establecer estado
@@ -21,6 +24,7 @@ class EntidadConError(Entidad):
         if value == "activa":
             raise Exception("Error al asignar estado")
         self._estado = value
+
 
 @pytest.mark.asyncio
 async def test_bloque_procesar_exitoso(nucleus, monkeypatch):
@@ -40,6 +44,7 @@ async def test_bloque_procesar_exitoso(nucleus, monkeypatch):
         assert mock_alerta.called
         assert not mock_logger.called
 
+
 @pytest.mark.asyncio
 async def test_bloque_procesar_valor_invalido(nucleus, monkeypatch):
     """Prueba el procesamiento con un valor inválido."""
@@ -57,6 +62,7 @@ async def test_bloque_procesar_valor_invalido(nucleus, monkeypatch):
         assert len(result["mensajes"]) == 0
         assert mock_alerta.called
         assert mock_logger.called
+
 
 @pytest.mark.asyncio
 async def test_bloque_procesar_error_entidad(nucleus, monkeypatch):
@@ -77,6 +83,7 @@ async def test_bloque_procesar_error_entidad(nucleus, monkeypatch):
         assert mock_alerta.called
         assert mock_logger.called
 
+
 @pytest.mark.asyncio
 async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
     """Prueba la reparación exitosa de un bloque."""
@@ -93,6 +100,7 @@ async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
         assert bloque.fallos == 0
         assert mock_logger.called
 
+
 @pytest.mark.asyncio
 async def test_bloque_reparar_error(nucleus):
     """Prueba la reparación con un error."""
@@ -105,6 +113,7 @@ async def test_bloque_reparar_error(nucleus):
         assert mock_logger.called
         assert mock_alerta.called
         assert entidades[0].estado == "inactiva"
+
 
 @pytest.mark.asyncio
 async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_postgresql, monkeypatch):
@@ -128,6 +137,7 @@ async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_postgresql, monk
         await bloque.escribir_postgresql(conn)
         assert len(bloque.mensajes) == 0
         assert mock_logger.called
+
 
 @pytest.mark.asyncio
 async def test_bloque_escribir_postgresql_error(nucleus, mock_postgresql, monkeypatch):
