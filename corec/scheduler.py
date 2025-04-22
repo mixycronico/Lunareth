@@ -13,6 +13,15 @@ class Scheduler:
         self._sched.start()
         self.logger.info("CoreC Scheduler iniciado")
 
+    def shutdown(self):
+        """Detiene el scheduler y todas sus tareas programadas."""
+        try:
+            self._sched.shutdown()
+            self.logger.info("CoreC Scheduler detenido")
+        except Exception as e:
+            self.logger.error(f"Error deteniendo CoreC Scheduler: {e}")
+            raise
+
     def schedule_periodic(self, func, seconds: int, job_id: str, start_delay: int = 0, args=None, kwargs=None):
         """Programa una tarea periódica cada N segundos."""
         args = args or []
