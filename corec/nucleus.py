@@ -14,6 +14,7 @@ from plugins import PluginBlockConfig, PluginCommand
 import random
 import asyncio
 
+
 class CoreCNucleus:
     def __init__(self, config_path: str):
         self.logger = logging.getLogger("CoreCNucleus")
@@ -46,8 +47,7 @@ class CoreCNucleus:
             try:
                 redis_config = self.config.get("redis_config", {})
                 self.redis_client = aioredis.from_url(
-                    f"redis://{redis_config.get('username', 'default')}:{redis_config.get('password', 'default')}@" \
-                    f"{redis_config.get('host', 'localhost')}:{redis_config.get('port', 6379)}"
+                    f"redis://{redis_config.get('username', 'default')}:{redis_config.get('password', 'default')}@{redis_config.get('host', 'localhost')}:{redis_config.get('port', 6379)}"
                 )
                 await self.redis_client.ping()  # Verificar conexión
             except Exception as e:
@@ -142,7 +142,7 @@ class CoreCNucleus:
             if self.db_pool:
                 await bloque.escribir_postgresql(self.db_pool)
             else:
-                self.logger.warning(f"[Núcleo] No se puede escribir en PostgreSQL, db_pool no inicializado")
+                self.logger.warning("[Núcleo] No se puede escribir en PostgreSQL, db_pool no inicializado")
                 await self.publicar_alerta({
                     "tipo": "error_db_pool",
                     "bloque_id": bloque.id,
@@ -262,6 +262,7 @@ class CoreCNucleus:
                 "mensaje": str(e),
                 "timestamp": random.random()
             })
+
 
 async def init_postgresql(config: Dict[str, Any]):
     try:
