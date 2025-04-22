@@ -1,10 +1,7 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, patch
-from corec.nucleus import CoreCNucleus
-from corec.modules.ejecucion import ModuloEjecucion
-from corec.modules.auditoria import ModuloAuditoria
 from plugins import PluginCommand
+
 
 @pytest.mark.asyncio
 async def test_integration_process_and_audit(nucleus):
@@ -19,6 +16,7 @@ async def test_integration_process_and_audit(nucleus):
         await nucleus.modules["auditoria"].detectar_anomalias()
         assert mock_encolar.called
         assert mock_detectar.called
+
 
 @pytest.mark.asyncio
 async def test_integration_synchronize_and_plugin_execution(nucleus):
