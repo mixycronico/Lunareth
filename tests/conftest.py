@@ -36,24 +36,28 @@ def mock_redis():
 def mock_db_pool():
     db_pool = AsyncMock()
     conn = AsyncMock()
-    # Simulamos el método execute para que sea un coroutine que devuelve None
-    async def mock_execute(*args, **kwargs):
-        return None
-    conn.execute = AsyncMock(side_effect=mock_execute)
-    db_pool.acquire.return_value.__aenter__.return_value = conn
-    db_pool.close.return_value = None
+    # Definimos execute como un método asíncrono
+    conn.execute = AsyncMock(return_value=None)
+    # Configuramos el contexto asíncrono correctamente
+    async def mock_aenter():
+        return conn
+    db_pool.acquire.return_value.__aenter__ = AsyncMock(side_effect=mock_aenter)
+    db_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+    db_pool.close = AsyncMock(return_value=None)
     yield db_pool
 
 @pytest.fixture
 def mock_postgresql():
     db_pool = AsyncMock()
     conn = AsyncMock()
-    # Simulamos el método execute para que sea un coroutine que devuelve None
-    async def mock_execute(*args, **kwargs):
-        return None
-    conn.execute = AsyncMock(side_effect=mock_execute)
-    db_pool.acquire.return_value.__aenter__.return_value = conn
-    db_pool.close.return_value = None
+    # Definimos execute como un método asíncrono
+    conn.execute = AsyncMock(return_value=None)
+    # Configuramos el contexto asíncrono correctamente
+    async def mock_aenter():
+        return conn
+    db_pool.acquire.return_value.__aenter__ = AsyncMock(side_effect=mock_aenter)
+    db_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+    db_pool.close = AsyncMock(return_value=None)
     yield db_pool
 
 @pytest.fixture
@@ -121,7 +125,9 @@ def test_config():
 async def nucleus(mock_redis, mock_db_pool, test_config):
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.nucleus.init_postgresql", return_value=mock_db_pool), \
-         patch("aioredis.from_url", return_value=mock_redis):
+         patch("aioredis.from_url", return_value=mock_redis), \
+         patch("corec.scheduler.Scheduler.schedule_periodic", new_callable=AsyncMock) as mock_schedule:
+        mock_schedule.return_value = None  # Evitamos tareas reales en todas las pruebas
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
         yield nucleus
