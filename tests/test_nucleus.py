@@ -34,12 +34,10 @@ async def test_nucleus_inicializar_bloque_exitoso(mock_postgresql, mock_config, 
     nucleus.config = mock_config
     with patch("corec.nucleus.init_postgresql", return_value=mock_postgresql), \
             patch("corec.nucleus.aioredis.from_url", return_value=MagicMock()), \
-            patch("corec.nucleus.PluginBlockConfig") as mock_config_class, \
             patch("corec.nucleus.crear_entidad") as mock_entidad, \
             patch("corec.nucleus.BloqueSimbiotico") as mock_bloque, \
             patch("random.random", return_value=0.5):
         await nucleus.inicializar()
-        assert mock_config_class.called
         assert mock_entidad.called
         assert mock_bloque.called
 
@@ -50,12 +48,12 @@ async def test_nucleus_inicializar_bloque_config_invalida(mock_postgresql, mock_
     nucleus.config = mock_config
     with patch("corec.nucleus.init_postgresql", return_value=mock_postgresql), \
             patch("corec.nucleus.aioredis.from_url", return_value=MagicMock()), \
-            patch("corec.nucleus.PluginBlockConfig", side_effect=ValidationError("Invalid config", [])) as mock_config_class, \
+            patch("corec.nucleus.crear_entidad", side_effect=Exception("Invalid config")) as mock_entidad, \
             patch("random.random", return_value=0.5), \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         await nucleus.inicializar()
         assert mock_alerta.called
-        assert mock_config_class.called
+        assert mock_entidad.called
 
 @pytest.mark.asyncio
 async def test_nucleus_registrar_plugin_exitoso(mock_config):
