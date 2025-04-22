@@ -34,33 +34,27 @@ def mock_redis():
 
 @pytest.fixture
 def mock_db_pool():
-    db_pool = MagicMock()
-    # Creamos un mock para la conexión
-    conn = AsyncMock()
-    conn.execute = AsyncMock(return_value=None)  # Método asíncrono que devuelve None
-    # Creamos un administrador de contexto asíncrono
-    context_manager = MagicMock()
-    context_manager.__aenter__ = AsyncMock(return_value=conn)
-    context_manager.__aexit__ = AsyncMock(return_value=None)
-    # Configuramos acquire para devolver directamente el administrador de contexto
-    db_pool.acquire.return_value = context_manager
-    db_pool.close = AsyncMock(return_value=None)
-    yield db_pool
+    # Simulamos un objeto de conexión síncrono compatible con psycopg2
+    conn = MagicMock()
+    cursor = MagicMock()
+    cursor.execute.return_value = None
+    cursor.close.return_value = None
+    conn.cursor.return_value = cursor
+    conn.commit.return_value = None
+    conn.close.return_value = None
+    yield conn
 
 @pytest.fixture
 def mock_postgresql():
-    db_pool = MagicMock()
-    # Creamos un mock para la conexión
-    conn = AsyncMock()
-    conn.execute = AsyncMock(return_value=None)  # Método asíncrono que devuelve None
-    # Creamos un administrador de contexto asíncrono
-    context_manager = MagicMock()
-    context_manager.__aenter__ = AsyncMock(return_value=conn)
-    context_manager.__aexit__ = AsyncMock(return_value=None)
-    # Configuramos acquire para devolver directamente el administrador de contexto
-    db_pool.acquire.return_value = context_manager
-    db_pool.close = AsyncMock(return_value=None)
-    yield db_pool
+    # Simulamos un objeto de conexión síncrono compatible con psycopg2
+    conn = MagicMock()
+    cursor = MagicMock()
+    cursor.execute.return_value = None
+    cursor.close.return_value = None
+    conn.cursor.return_value = cursor
+    conn.commit.return_value = None
+    conn.close.return_value = None
+    yield conn
 
 @pytest.fixture
 def test_config():
