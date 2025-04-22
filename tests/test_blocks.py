@@ -70,7 +70,7 @@ async def test_bloque_procesar_error_entidad(nucleus, monkeypatch):
     with patch.object(bloque.logger, "error") as mock_logger, \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         result = await bloque.procesar(0.5)
-        assert result[" sınıbloque_id"] == "test_block"
+        assert result["bloque_id"] == "test_block"  # Corrección del error tipográfico
         assert result["fitness"] == 0
         assert len(result["mensajes"]) == 0
         assert bloque.fallos == 1
