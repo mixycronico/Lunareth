@@ -10,7 +10,7 @@ from corec.core import ComponenteBase, zstd, serializar_mensaje
 from ..utils.helpers import CircuitBreaker
 import torch
 import torch.nn as nn
-import torch.nn.functional as F  # Corregimos la importación de Torch a torch
+import torch.nn.functional as F
 import numpy as np
 import json
 import logging
