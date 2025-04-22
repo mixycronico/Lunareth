@@ -70,7 +70,7 @@ async def test_bloque_procesar_error_entidad(nucleus, monkeypatch):
     with patch.object(bloque.logger, "error") as mock_logger, \
             patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
         result = await bloque.procesar(0.5)
-        assert result["bloque_id"] == "test_block"  # Corrección del error tipográfico
+        assert result["bloque_id"] == "test_block"
         assert result["fitness"] == 0
         assert len(result["mensajes"]) == 0
         assert bloque.fallos == 1
@@ -131,15 +131,16 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_postgresql, monkey
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
-    # Mockeamos el método execute para que lance una excepción
-    with patch.object(mock_postgresql, "acquire") as mock_acquire:
-        context_manager = MagicMock()
-        conn = AsyncMock()
-        conn.execute.side_effect = Exception("DB Error")
-        context_manager.__aenter__.return_value = conn
-        context_manager.__aexit__.return_value = None  # No suprimimos la excepción
-        mock_acquire.return_value = context_manager
+    # Creamos un mock específico para acquire que lance una excepción
+    db_pool = MagicMock()
+    context_manager = MagicMock()
+    conn = AsyncMock()
+    conn.execute.side_effect = Exception("DB Error")
+    context_manager.__aenter__ = AsyncMock(return_value=conn)
+    context_manager.__aexit__ = AsyncMock(return_value=None)
+    db_pool.acquire.return_value = context_manager
+    db_pool.close = AsyncMock(return_value=None)
 
-        with patch.object(bloque.logger, "error") as mock_logger:
-            await bloque.escribir_postgresql(mock_postgresql)
-            assert mock_logger.called
+    with patch.object(bloque.logger, "error") as mock_logger:
+        await bloque.escribir_postgresql(db_pool)
+        assert mock_logger.called
