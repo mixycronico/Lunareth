@@ -43,9 +43,12 @@ def mock_db_pool():
 
 @pytest.fixture
 def mock_postgresql():
+    db_pool = AsyncMock()
     conn = AsyncMock()
     conn.execute.return_value = None
-    yield conn
+    db_pool.acquire.return_value.__aenter__.return_value = conn
+    db_pool.close.return_value = None
+    yield db_pool
 
 @pytest.fixture
 def test_config():
@@ -110,10 +113,10 @@ def test_config():
 
 @pytest.fixture
 async def nucleus(mock_redis, mock_db_pool, test_config):
-    with patch("corec.config_loader.load_config_dict", return_value=test_config):
+    with patch("corec.config_loader.load_config_dict", return_value=test_config), \
+         patch("corec.nucleus.init_postgresql", return_value=mock_db_pool), \
+         patch("aioredis.from_url", return_value=mock_redis):
         nucleus = CoreCNucleus("config/corec_config.json")
-        nucleus.redis_client = mock_redis
-        nucleus.db_pool = mock_db_pool
         await nucleus.inicializar()
         yield nucleus
         await nucleus.detener()
