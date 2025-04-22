@@ -32,11 +32,32 @@ class CoreCNucleus:
             self.config = load_config_dict(self.config_path)
 
             # Inicializar conexiones a PostgreSQL y Redis
-            self.db_pool = await init_postgresql(self.config["db_config"])
-            self.redis_client = aioredis.from_url(
-                f"redis://{self.config['redis_config']['username']}:{self.config['redis_config']['password']}@" \
-                f"{self.config['redis_config']['host']}:{self.config['redis_config']['port']}"
-            )
+            try:
+                self.db_pool = await init_postgresql(self.config.get("db_config", {}))
+            except Exception as e:
+                self.logger.error(f"[Núcleo] Error conectando a PostgreSQL: {e}")
+                self.db_pool = None
+                await self.publicar_alerta({
+                    "tipo": "error_conexion_postgresql",
+                    "mensaje": str(e),
+                    "timestamp": random.random()
+                })
+
+            try:
+                redis_config = self.config.get("redis_config", {})
+                self.redis_client = aioredis.from_url(
+                    f"redis://{redis_config.get('username', 'default')}:{redis_config.get('password', 'default')}@" \
+                    f"{redis_config.get('host', 'localhost')}:{redis_config.get('port', 6379)}"
+                )
+                await self.redis_client.ping()  # Verificar conexión
+            except Exception as e:
+                self.logger.error(f"[Núcleo] Error conectando a Redis: {e}")
+                self.redis_client = None
+                await self.publicar_alerta({
+                    "tipo": "error_conexion_redis",
+                    "mensaje": str(e),
+                    "timestamp": random.random()
+                })
 
             # Inicializar módulos
             self.modules["registro"] = ModuloRegistro()
@@ -107,14 +128,27 @@ class CoreCNucleus:
             self.logger.info("[Núcleo] Inicialización completa")
         except Exception as e:
             self.logger.error(f"[Núcleo] Error inicializando: {e}")
-            if "redis" in str(e).lower():
-                self.redis_client = None
+            await self.publicar_alerta({
+                "tipo": "error_inicializacion",
+                "mensaje": str(e),
+                "timestamp": random.random()
+            })
+            raise
 
     async def process_bloque(self, bloque: BloqueSimbiotico):
         """Procesa un bloque simbiótico y escribe los resultados en PostgreSQL."""
         try:
             await self.modules["ejecucion"].encolar_bloque(bloque)
-            await bloque.escribir_postgresql(self.db_pool)
+            if self.db_pool:
+                await bloque.escribir_postgresql(self.db_pool)
+            else:
+                self.logger.warning(f"[Núcleo] No se puede escribir en PostgreSQL, db_pool no inicializado")
+                await self.publicar_alerta({
+                    "tipo": "error_db_pool",
+                    "bloque_id": bloque.id,
+                    "mensaje": "db_pool no inicializado",
+                    "timestamp": random.random()
+                })
         except Exception as e:
             self.logger.error(f"[Núcleo] Error procesando bloque {bloque.id}: {e}")
             await self.publicar_alerta({
@@ -209,13 +243,25 @@ class CoreCNucleus:
             raise
 
     async def detener(self):
-        for module in self.modules.values():
-            await module.detener()
-        if self.redis_client:
-            await self.redis_client.close()
-        if self.db_pool:
-            await self.db_pool.close()
-        self.logger.info("[Núcleo] Detención completa")
+        try:
+            for module in self.modules.values():
+                await module.detener()
+            if self.redis_client:
+                await self.redis_client.close()
+            if self.db_pool:
+                await self.db_pool.close()
+            self.logger.info("[Núcleo] Detención completa")
+        except Exception as e:
+            self.logger.error(f"[Núcleo] Error durante la detención: {e}")
+            await self.publicar_alerta({
+                "tipo": "error_detencion",
+                "mensaje": str(e),
+                "timestamp": random.random()
+            })
 
 async def init_postgresql(config: Dict[str, Any]):
-    return await asyncpg.connect(**config)
+    try:
+        return await asyncpg.create_pool(**config)
+    except Exception as e:
+        logging.error(f"Error creando pool de PostgreSQL: {e}")
+        raise
