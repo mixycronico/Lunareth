@@ -3,8 +3,6 @@ import time
 from typing import List, Dict, Any
 from corec.entities import Entidad
 
-
-# Añadimos una línea en blanco adicional para cumplir con E302
 class BloqueSimbiotico:
     def __init__(self, id: str, canal: int, entidades: List[Entidad], max_size_mb: float, nucleus):
         self.logger = logging.getLogger("BloqueSimbiotico")
@@ -31,6 +29,8 @@ class BloqueSimbiotico:
                             "entidad_id": entidad.id,
                             "canal": self.canal,
                             "valor": mensaje["valor"],
+                            "clasificacion": mensaje.get("clasificacion", ""),
+                            "probabilidad": mensaje.get("probabilidad", 0.0),
                             "timestamp": time.time()
                         })
                         fitness_total += mensaje["valor"]
@@ -59,7 +59,7 @@ class BloqueSimbiotico:
     async def reparar(self):
         """Repara el bloque simbiótico reactivando entidades inactivas."""
         for entidad in self.entidades:
-            if getattr(entidad, "estado", None) == "inactiva":  # Verificamos si el atributo existe
+            if getattr(entidad, "estado", None) == "inactiva":
                 try:
                     entidad.estado = "activa"
                     self.logger.info(f"[Bloque {self.id}] Entidad {entidad.id} reactivada")
@@ -78,7 +78,7 @@ class BloqueSimbiotico:
                             "mensaje": str(e),
                             "timestamp": time.time()
                         })
-                    raise  # Relanzamos la excepción para que el test la capture
+                    raise
 
     async def escribir_postgresql(self, conn):
         """Escribe los mensajes del bloque en PostgreSQL."""
@@ -87,8 +87,20 @@ class BloqueSimbiotico:
             cur = conn.cursor()
             for mensaje in self.mensajes:
                 cur.execute(
-                    "INSERT INTO mensajes (bloque_id, entidad_id, canal, valor, timestamp) VALUES (%s, %s, %s, %s, %s)",
-                    (self.id, mensaje["entidad_id"], mensaje["canal"], mensaje["valor"], mensaje["timestamp"])
+                    """
+                    INSERT INTO mensajes (
+                        bloque_id, entidad_id, canal, valor, clasificacion, probabilidad, timestamp
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        self.id,
+                        mensaje["entidad_id"],
+                        mensaje["canal"],
+                        mensaje["valor"],
+                        mensaje.get("clasificacion", ""),
+                        mensaje.get("probabilidad", 0.0),
+                        mensaje["timestamp"]
+                    )
                 )
             conn.commit()
             self.mensajes = []
