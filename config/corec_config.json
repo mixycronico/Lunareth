@@ -13,6 +13,11 @@
     "username": "corec_user",
     "password": "secure_password"
   },
+  "ia_config": {
+    "enabled": true,
+    "model_path": "corec/models/mobilev3/model.pth",
+    "max_size_mb": 0.3
+  },
   "bloques": [
     {
       "id": "enjambre_sensor",
