@@ -63,7 +63,11 @@
       "canal": 4,
       "entidades": 20000,
       "max_size_mb": 50,
-      "entidades_por_bloque": 2000
+      "entidades_por_bloque": 2000,
+      "autoreparacion": {
+        "max_errores": 0.1,
+        "min_fitness": 0.3
+      }
     }
   ],
   "plugins": {
