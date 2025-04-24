@@ -21,7 +21,7 @@ class ModuloIA(ComponenteBase):
             config = config or {}
             model_path = config.get("model_path", "corec/models/mobilev3/model.pth")
             max_size_mb = config.get("max_size_mb", 50)
-            pretrained = config.get("pretrained", True)
+            pretrained = config.get("pretrained", False)
             n_classes = config.get("n_classes", 3)
 
             self.model = load_mobilenet_v3_small(model_path, pretrained=pretrained, n_classes=n_classes, device=self.device)
