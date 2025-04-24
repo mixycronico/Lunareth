@@ -4,16 +4,10 @@ import time
 import asyncio
 import psutil
 import torch
-
 from typing import Dict, Any, List
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
-from corec.utils.torch_utils import (
-    load_mobilenet_v3_small,
-    preprocess_data,
-    postprocess_logits
-)
-
+from corec.utils.torch_utils import load_mobilenet_v3_small, preprocess_data, postprocess_logits
 
 class ModuloIA(ComponenteBase):
     def __init__(self):
@@ -55,28 +49,21 @@ class ModuloIA(ComponenteBase):
         bloque: BloqueSimbiotico,
         datos_list: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """
-        Realiza una única llamada al modelo para un lote de entradas,
-        mide memoria y latencia, y aplica timeout + fallback.
-        """
-        # Monitor antes
+        """Realiza una única llamada al modelo para un lote de entradas."""
         process = psutil.Process()
-        mem_before = process.memory_info().rss / 1024**2  # MB
+        mem_before = process.memory_info().rss / 1024**2
         t0 = time.monotonic()
 
-        # Pre-procesado en batch
         tensors = [preprocess_data(datos, self.device) for datos in datos_list]
         batch_input = torch.cat(tensors, dim=0)
 
         try:
-            # Inference en thread pool con timeout (circuit-breaker)
             loop = asyncio.get_event_loop()
             logits = await asyncio.wait_for(
                 loop.run_in_executor(None, lambda: self.model(batch_input)),
                 timeout=self.timeout
             )
         except asyncio.TimeoutError:
-            # Fallback: mensajes vacíos o por defecto
             await self.nucleus.publicar_alerta({
                 "tipo": "timeout_ia",
                 "bloque_id": bloque.id,
@@ -92,13 +79,10 @@ class ModuloIA(ComponenteBase):
                 "timestamp": time.time()
             } for i in range(len(datos_list))]
 
-        # Post-procesado
         resultados = postprocess_logits(logits, bloque.id)
-
         t1 = time.monotonic()
         mem_after = process.memory_info().rss / 1024**2
 
-        # Publicar métricas
         await self.nucleus.publicar_alerta({
             "tipo": "ia_metrics",
             "bloque_id": bloque.id,
@@ -108,7 +92,6 @@ class ModuloIA(ComponenteBase):
             "timestamp": time.time()
         })
 
-        # Construir mensajes
         mensajes: List[Dict[str, Any]] = []
         for idx, res in enumerate(resultados):
             mensajes.append({
@@ -120,6 +103,28 @@ class ModuloIA(ComponenteBase):
                 "timestamp": time.time()
             })
         return mensajes
+
+    async def procesar_bloque(self, bloque: BloqueSimbiotico, datos: Dict[str, Any]) -> Dict[str, Any]:
+        """Procesa un bloque con MobileNetV3 Small."""
+        try:
+            mensajes = await self.procesar_batch(bloque, [datos])
+            await self.nucleus.publicar_alerta({
+                "tipo": "ia_procesado",
+                "bloque_id": bloque.id,
+                "num_mensajes": len(mensajes),
+                "timestamp": time.time()
+            })
+            self.logger.info(f"[IA] Bloque {bloque.id} procesado, {len(mensajes)} mensajes generados")
+            return {"mensajes": mensajes}
+        except Exception as e:
+            self.logger.error(f"[IA] Error procesando bloque {bloque.id}: {e}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "error_procesamiento_ia",
+                "bloque_id": bloque.id,
+                "mensaje": str(e),
+                "timestamp": time.time()
+            })
+            return {"mensajes": []}
 
     async def detener(self):
         """Limpia el modelo y libera caché de GPU."""
