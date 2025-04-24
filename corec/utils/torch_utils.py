@@ -3,13 +3,13 @@ import torch.nn as nn
 from typing import Dict, Any, List
 from torchvision.models import mobilenet_v3_small
 
-def load_mobilenet_v3_small(model_path: str = None, pretrained: bool = True, n_classes: int = 3, device: str = "cpu") -> nn.Module:
+def load_mobilenet_v3_small(model_path: str = None, pretrained: bool = False, n_classes: int = 3, device: str = "cpu") -> nn.Module:
     """Carga MobileNetV3 Small, preentrenado o desde un archivo."""
     try:
         model = mobilenet_v3_small(pretrained=pretrained)
         if n_classes != 1000:  # ImageNet tiene 1000 clases
             model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, n_classes)
-        if model_path and not pretrained:
+        if model_path:
             model.load_state_dict(torch.load(model_path, map_location=device))
         model.eval()
         return model.to(device)
