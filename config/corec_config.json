@@ -16,7 +16,7 @@
   "ia_config": {
     "enabled": true,
     "model_path": "corec/models/mobilev3/model.pth",
-    "max_size_mb": 0.3
+    "max_size_mb": 300
   },
   "bloques": [
     {
@@ -45,7 +45,7 @@
       "id": "ia_analisis",
       "canal": 3,
       "entidades": 20000,
-      "max_size_mb": 5,
+      "max_size_mb": 300,
       "entidades_por_bloque": 2000,
       "plugin": "procesador_inteligente"
     }
@@ -85,6 +85,18 @@
         "max_size_mb": 5,
         "max_errores": 0.1,
         "min_fitness": 0.3
+      }
+    },
+    "panel_control": {
+      "enabled": true,
+      "path": "plugins/panel_control/config.json",
+      "bloque": {
+        "bloque_id": "panel_block",
+        "canal": 8,
+        "entidades": 100,
+        "max_size_mb": 0.15,
+        "max_errores": 0.05,
+        "min_fitness": 0.5
       }
     }
   }
