@@ -1,9 +1,14 @@
-import logging
-import random
+# corec/nucleus.py
 import asyncio
+import logging
+import time
+import json
+from pathlib import Path
+import asyncpg
+import aioredis
 import pandas as pd
-from typing import Dict, Any, List
 from corec.config_loader import load_config_dict
+from corec.scheduler import Scheduler
 from corec.modules.registro import ModuloRegistro
 from corec.modules.sincronizacion import ModuloSincronizacion
 from corec.modules.ejecucion import ModuloEjecucion
@@ -12,61 +17,11 @@ from corec.modules.ia import ModuloIA
 from corec.modules.analisis_datos import ModuloAnalisisDatos
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
-from corec.scheduler import Scheduler
-from plugins import PluginBlockConfig, PluginCommand
-import asyncpg
-import aioredis
-
-async def init_postgresql(config: dict) -> asyncpg.Pool:
-    """
-    Inicializa el pool de PostgreSQL y crea las tablas 'bloques' y 'mensajes'.
-    
-    Args:
-        config: Diccionario con dbname, user, password, host, port.
-    
-    Returns:
-        asyncpg.Pool: Pool de conexiones a PostgreSQL.
-    
-    Raises:
-        asyncpg.PostgresError: Si falla la conexión o creación de tablas.
-    """
-    logger = logging.getLogger("CoreCDB")
-    try:
-        pool = await asyncpg.create_pool(**config)
-        async with pool.acquire() as conn:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS bloques (
-                    id VARCHAR(50) PRIMARY KEY,
-                    canal INTEGER,
-                    num_entidades INTEGER,
-                    fitness FLOAT,
-                    timestamp FLOAT
-                );
-                CREATE TABLE IF NOT EXISTS mensajes (
-                    id SERIAL PRIMARY KEY,
-                    bloque_id VARCHAR(50),
-                    entidad_id VARCHAR(50),
-                    canal INTEGER,
-                    valor FLOAT,
-                    clasificacion VARCHAR(50),
-                    probabilidad FLOAT,
-                    timestamp FLOAT
-                );
-            """)
-            logger.info("[DB] Tablas 'bloques' y 'mensajes' inicializadas")
-        return pool
-    except asyncpg.PostgresError as e:
-        logger.error(f"[DB] Error inicializando PostgreSQL: {e}")
-        raise
+from corec.utils.db_utils import init_postgresql, init_redis
 
 class CoreCNucleus:
     def __init__(self, config_path: str):
-        """
-        Inicializa el núcleo de CoreC.
-        
-        Args:
-            config_path: Ruta al archivo corec_config.json.
-        """
+        """Inicializa el núcleo de CoreC."""
         self.logger = logging.getLogger("CoreCNucleus")
         self.config_path = config_path
         self.config = None
@@ -76,39 +31,30 @@ class CoreCNucleus:
         self.plugins = {}
         self.bloques = []
         self.scheduler = None
+        self.fallback_storage = Path("fallback_messages.json")
 
     async def inicializar(self):
-        """
-        Configura conexiones, módulos, bloques, y tareas programadas.
-        
-        Raises:
-            FileNotFoundError: Si corec_config.json no existe.
-            ValueError: Si la configuración es inválida.
-            Exception: Para otros errores inesperados.
-        """
+        """Configura conexiones, módulos, bloques y tareas programadas."""
         try:
             self.config = load_config_dict(self.config_path)
             try:
                 self.db_pool = await init_postgresql(self.config.get("db_config", {}))
-            except asyncpg.PostgresError as e:
-                self.logger.error(f"[Núcleo] Error conectando a PostgreSQL: {e}")
+            except Exception as e:
+                self.logger.error(f"[Núcleo] Fallo en conexión a PostgreSQL tras reintentos: {e}")
                 self.db_pool = None
                 await self.publicar_alerta({
-                    "tipo": "error_conexion_postgresql",
+                    "tipo": "error_conexion_postgresql_critico",
                     "mensaje": str(e),
                     "timestamp": time.time()
                 })
 
             try:
-                rc = self.config.get("redis_config", {})
-                url = f"redis://{rc.get('username')}:{rc.get('password')}@{rc.get('host')}:{rc.get('port')}"
-                self.redis_client = aioredis.from_url(url, decode_responses=True, max_connections=rc.get("max_connections", 100))
-                await self.redis_client.ping()
-            except aioredis.RedisError as e:
-                self.logger.error(f"[Núcleo] Error conectando a Redis: {e}")
+                self.redis_client = await init_redis(self.config.get("redis_config", {}))
+            except Exception as e:
+                self.logger.error(f"[Núcleo] Fallo en conexión a Redis tras reintentos: {e}")
                 self.redis_client = None
                 await self.publicar_alerta({
-                    "tipo": "error_conexion_redis",
+                    "tipo": "error_conexion_redis_critico",
                     "mensaje": str(e),
                     "timestamp": time.time()
                 })
@@ -121,53 +67,36 @@ class CoreCNucleus:
             self.modules["analisis_datos"] = ModuloAnalisisDatos()
 
             for name, module in self.modules.items():
-                try:
-                    await module.inicializar(self, self.config.get(f"{name}_config"))
-                except Exception as e:
-                    self.logger.error(f"[Núcleo] Error inicializando módulo {name}: {e}")
-                    await self.publicar_alerta({
-                        "tipo": f"error_inicializacion_{name}",
-                        "mensaje": str(e),
-                        "timestamp": time.time()
-                    })
+                await module.inicializar(self, self.config.get(f"{name}_config"))
 
             for block_conf in self.config.get("bloques", []):
-                try:
-                    entidades = []
-                    if block_conf["id"] == "ia_analisis":
-                        async def ia_fn(carga, mod_ia=self.modules["ia"], bconf=block_conf):
-                            datos = await self.get_datos_from_redis(bconf["id"])
-                            res = await mod_ia.procesar_bloque(None, datos)
-                            return res["mensajes"][0] if res["mensajes"] else {"valor": 0.0}
-                        entidades = [
-                            crear_entidad(f"ent_{i}", block_conf["canal"], ia_fn)
-                            for i in range(block_conf["entidades"])
-                        ]
-                    else:
-                        entidades = [
-                            crear_entidad(f"ent_{i}", block_conf["canal"], lambda carga: {"valor": 0.5})
-                            for i in range(block_conf["entidades"])
-                        ]
-
-                    bloque = BloqueSimbiotico(
-                        block_conf["id"],
-                        block_conf["canal"],
-                        entidades,
-                        block_conf["max_size_mb"],
-                        self
-                    )
-                    self.bloques.append(bloque)
-                    await self.modules["registro"].registrar_bloque(
-                        bloque.id, bloque.canal, len(entidades), bloque.max_size_mb
-                    )
-                except Exception as e:
-                    self.logger.error(f"[Núcleo] Error creando bloque {block_conf.get('id', 'unknown')}: {e}")
-                    await self.publicar_alerta({
-                        "tipo": "error_config_bloque",
-                        "bloque_id": block_conf.get("id", "unknown"),
-                        "mensaje": str(e),
-                        "timestamp": time.time()
-                    })
+                entidades = []
+                if block_conf["id"] == "ia_analisis":
+                    async def ia_fn(carga, mod_ia=self.modules["ia"], bconf=block_conf):
+                        datos = await self.get_datos_from_redis(bconf["id"])
+                        res = await mod_ia.procesar_bloque(None, datos)
+                        return res["mensajes"][0] if res["mensajes"] else {"valor": 0.0}
+                    entidades = [
+                        crear_entidad(f"ent_{i}", block_conf["canal"], ia_fn)
+                        for i in range(block_conf["entidades"])
+                    ]
+                else:
+                    entidades = [
+                        crear_entidad(f"ent_{i}", block_conf["canal"], lambda carga: {"valor": 0.5})
+                        for i in range(block_conf["entidades"])
+                    ]
+                bloque = BloqueSimbiotico(
+                    block_conf["id"],
+                    block_conf["canal"],
+                    entidades,
+                    block_conf["max_size_mb"],
+                    self
+                )
+                bloque.ia_timeout_seconds = block_conf.get("ia_timeout_seconds")
+                self.bloques.append(bloque)
+                await self.modules["registro"].registrar_bloque(
+                    bloque.id, bloque.canal, len(entidades), bloque.max_size_mb
+                )
 
             self.scheduler = Scheduler()
             self.scheduler.start()
@@ -192,6 +121,12 @@ class CoreCNucleus:
                 job_id="analisis_datos_periodico"
             )
 
+            self.scheduler.schedule_periodic(
+                func=self.retry_fallback_messages,
+                seconds=300,
+                job_id="retry_fallback_messages"
+            )
+
             self.logger.info("[Núcleo] Inicialización completa")
 
         except FileNotFoundError as e:
@@ -210,23 +145,19 @@ class CoreCNucleus:
             raise
 
     async def process_bloque(self, bloque: BloqueSimbiotico):
-        """
-        Procesa un bloque y escribe sus mensajes en PostgreSQL.
-        
-        Args:
-            bloque: Instancia de BloqueSimbiotico a procesar.
-        """
+        """Procesa un bloque y escribe sus mensajes en PostgreSQL o fallback."""
         try:
             if bloque.id != "ia_analisis":
                 await self.modules["ejecucion"].encolar_bloque(bloque)
             if self.db_pool:
                 await bloque.escribir_postgresql(self.db_pool)
             else:
-                self.logger.warning(f"[Núcleo] No se puede escribir en PostgreSQL para {bloque.id}, db_pool no inicializado")
+                self.logger.warning(f"[Núcleo] PostgreSQL no disponible, usando almacenamiento fallback para {bloque.id}")
+                await self.save_fallback_messages(bloque.id, bloque.mensajes)
                 await self.publicar_alerta({
                     "tipo": "error_db_pool",
                     "bloque_id": bloque.id,
-                    "mensaje": "db_pool no inicializado",
+                    "mensaje": "db_pool no inicializado, usando fallback",
                     "timestamp": time.time()
                 })
         except Exception as e:
@@ -238,10 +169,55 @@ class CoreCNucleus:
                 "timestamp": time.time()
             })
 
+    async def save_fallback_messages(self, bloque_id: str, mensajes: list):
+        """Guarda mensajes en archivo local si PostgreSQL no está disponible."""
+        try:
+            if self.fallback_storage.exists():
+                with open(self.fallback_storage, "r") as f:
+                    existing = json.load(f)
+            else:
+                existing = []
+            existing.extend([{"bloque_id": bloque_id, "mensaje": m} for m in mensajes])
+            with open(self.fallback_storage, "w") as f:
+                json.dump(existing, f)
+            self.logger.info(f"[Núcleo] Mensajes de {bloque_id} guardados en fallback")
+        except Exception as e:
+            self.logger.error(f"[Núcleo] Error guardando mensajes en fallback: {e}")
+
+    async def retry_fallback_messages(self):
+        """Reintenta escribir mensajes guardados en fallback a PostgreSQL."""
+        if not self.db_pool or not self.fallback_storage.exists():
+            return
+        try:
+            with open(self.fallback_storage, "r") as f:
+                messages = json.load(f)
+            async with self.db_pool.acquire() as conn:
+                for msg in messages:
+                    bloque_id = msg["bloque_id"]
+                    m = msg["mensaje"]
+                    await conn.execute(
+                        """
+                        INSERT INTO mensajes (
+                            bloque_id, entidad_id, canal, valor, clasificacion, probabilidad, timestamp
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            bloque_id,
+                            m["entidad_id"],
+                            m["canal"],
+                            m["valor"],
+                            m.get("clasificacion", ""),
+                            m.get("probabilidad", 0.0),
+                            m["timestamp"]
+                        )
+                    )
+            self.fallback_storage.unlink()
+            self.logger.info("[Núcleo] Mensajes de fallback escritos en PostgreSQL")
+        except Exception as e:
+            self.logger.error(f"[Núcleo] Error reintentando mensajes de fallback: {e}")
+
     async def ejecutar_analisis(self):
-        """
-        Extrae mensajes de PostgreSQL, crea un DataFrame pivotado y ejecuta análisis.
-        """
+        """Extrae mensajes de PostgreSQL, crea un DataFrame y ejecuta análisis."""
         try:
             if not self.db_pool:
                 self.logger.warning("[Núcleo] No se puede ejecutar análisis, db_pool no inicializado")
@@ -263,20 +239,12 @@ class CoreCNucleus:
             })
 
     async def get_datos_from_redis(self, bloque_id: str) -> dict:
-        """
-        Lee mensajes de Redis para alimentar al módulo IA.
-        
-        Args:
-            bloque_id: ID del bloque que solicita datos.
-        
-        Returns:
-            dict: Diccionario con 'valores' (lista de números).
-        """
+        """Lee mensajes de Redis para alimentar al módulo IA."""
         try:
             if not self.redis_client:
                 self.logger.warning(f"[Núcleo] Redis no inicializado para {bloque_id}")
                 return {"valores": []}
-            max_length = self.config.get("redis_config", {}).get("stream_max_length", 1000)
+            max_length = self.config.get("redis_config", {}).get("stream_max_length", 5000)
             msgs = await self.redis_client.xread({"alertas:datos": "$"}, block=1000, count=10)
             valores = []
             for _, batch in msgs:
@@ -284,7 +252,7 @@ class CoreCNucleus:
                     if msg.get("bloque_id") in ["enjambre_sensor", "crypto_trading", "nodo_seguridad"]:
                         valores.extend(msg.get("valores", []))
             if len(valores) > max_length:
-                valores = valores[-max_length:]  # Limitar longitud
+                valores = valores[-max_length:]
             return {"valores": valores}
         except aioredis.RedisError as e:
             self.logger.error(f"[Núcleo] Error leyendo Redis para {bloque_id}: {e}")
@@ -297,27 +265,49 @@ class CoreCNucleus:
             return {"valores": []}
 
     async def publicar_alerta(self, alerta: dict):
-        """
-        Publica una alerta en el stream de Redis correspondiente.
-        
-        Args:
-            alerta: Diccionario con tipo, mensaje, y otros datos.
-        """
+        """Publica una alerta en Redis y la archiva en PostgreSQL si es necesario."""
         try:
             if not self.redis_client:
-                self.logger.warning("[Alerta] Redis no inicializado, no se publica alerta")
+                self.logger.warning("[Alerta] Redis no inicializado, archivando localmente")
+                await self.archive_alert(alerta)
                 return
             key = f"alertas:{alerta['tipo']}"
-            max_length = self.config.get("redis_config", {}).get("stream_max_length", 1000)
+            max_length = self.config.get("redis_config", {}).get("stream_max_length", 5000)
             await self.redis_client.xadd(key, alerta, maxlen=max_length)
             self.logger.debug(f"[Alerta] {alerta}")
+            stream_len = await self.redis_client.xlen(key)
+            if stream_len >= max_length * 0.9:
+                await self.archive_alert(alerta)
         except aioredis.RedisError as e:
             self.logger.error(f"[Núcleo] Error publicando alerta: {e}")
+            await self.archive_alert(alerta)
+
+    async def archive_alert(self, alerta: dict):
+        """Archiva una alerta en PostgreSQL."""
+        if not self.db_pool:
+            self.logger.warning("[Alerta] PostgreSQL no disponible, no se puede archivar")
+            return
+        try:
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO alertas (tipo, bloque_id, mensaje, timestamp, datos)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (
+                        alerta.get("tipo", "unknown"),
+                        alerta.get("bloque_id", ""),
+                        alerta.get("mensaje", ""),
+                        alerta.get("timestamp", time.time()),
+                        json.dumps(alerta)
+                    )
+                )
+            self.logger.info(f"[Alerta] Alerta archivada en PostgreSQL: {alerta['tipo']}")
+        except Exception as e:
+            self.logger.error(f"[Alerta] Error archivando alerta: {e}")
 
     async def ejecutar(self):
-        """
-        Mantiene vivo el núcleo; el scheduler gestiona las tareas.
-        """
+        """Mantiene vivo el núcleo; el scheduler gestiona las tareas."""
         try:
             self.logger.info("[Núcleo] Ejecutando ciclo principal (scheduler)...")
             while True:
@@ -335,9 +325,7 @@ class CoreCNucleus:
             raise
 
     async def detener(self):
-        """
-        Apaga scheduler, módulos, y cierra conexiones.
-        """
+        """Apaga scheduler, módulos y cierra conexiones."""
         try:
             if self.scheduler:
                 self.scheduler.shutdown()
