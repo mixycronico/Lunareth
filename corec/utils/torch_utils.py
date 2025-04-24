@@ -1,6 +1,6 @@
+# corec/utils/torch_utils.py
 import torch
 import torch.nn as nn
-from typing import Dict, Any, List
 from torchvision.models import mobilenet_v3_small
 
 def load_mobilenet_v3_small(
@@ -9,14 +9,17 @@ def load_mobilenet_v3_small(
     n_classes: int = 3,
     device: str = "cpu"
 ) -> nn.Module:
-    """Carga MobileNetV3 Small, preentrenado o desde un archivo."""
+    """Carga MobileNetV3 Small con cuantización dinámica."""
     try:
         model = mobilenet_v3_small(pretrained=pretrained)
-        if n_classes != 1000:  # ImageNet tiene 1000 clases
+        if n_classes != 1000:
             model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, n_classes)
         if model_path:
             state = torch.load(model_path, map_location=device)
             model.load_state_dict(state)
+        model = torch.quantization.quantize_dynamic(
+            model, {nn.Linear, nn.Conv2d}, dtype=torch.qint8
+        )
         model.eval()
         return model.to(device)
     except Exception as e:
@@ -33,10 +36,7 @@ def preprocess_data(datos: Dict[str, Any], device: str) -> torch.Tensor:
     except Exception as e:
         raise RuntimeError(f"Error preprocesando datos: {e}")
 
-def postprocess_logits(
-    logits: torch.Tensor,
-    bloque_id: str
-) -> List[Dict[str, Any]]:
+def postprocess_logits(logits: torch.Tensor, bloque_id: str) -> List[Dict[str, Any]]:
     """Convierte logits a etiquetas y probabilidades."""
     try:
         probs = torch.softmax(logits, dim=1)
