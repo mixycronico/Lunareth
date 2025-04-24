@@ -11,18 +11,23 @@
     "host": "localhost",
     "port": 6379,
     "username": "corec_user",
-    "password": "secure_password"
+    "password": "secure_password",
+    "max_connections": 100,
+    "stream_max_length": 1000
   },
   "ia_config": {
     "enabled": true,
     "model_path": "corec/models/mobilev3/model.pth",
     "max_size_mb": 50,
     "pretrained": false,
-    "n_classes": 3
+    "n_classes": 3,
+    "timeout_seconds": 5.0,
+    "batch_size": 32
   },
   "analisis_datos_config": {
     "correlation_threshold": 0.8,
-    "n_estimators": 100
+    "n_estimators": 100,
+    "max_samples": 1000
   },
   "bloques": [
     {
