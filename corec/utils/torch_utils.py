@@ -3,7 +3,6 @@ import torch.nn as nn
 from typing import Dict, Any, List
 from torchvision.models import mobilenet_v3_small
 
-
 def load_mobilenet_v3_small(
     model_path: str = None,
     pretrained: bool = False,
@@ -23,19 +22,16 @@ def load_mobilenet_v3_small(
     except Exception as e:
         raise RuntimeError(f"Error cargando MobileNetV3 Small: {e}")
 
-
 def preprocess_data(datos: Dict[str, Any], device: str) -> torch.Tensor:
     """Convierte datos de entrada a un tensor para MobileNetV3."""
     try:
         valores = datos.get("valores", [])
         if not valores:
             raise ValueError("No se proporcionaron valores en los datos")
-        # aquí asumimos un vector que convertimos a batch 1×C×H×W
         tensor = torch.tensor(valores, dtype=torch.float32).view(1, len(valores), 1, 1)
         return tensor.to(device)
     except Exception as e:
         raise RuntimeError(f"Error preprocesando datos: {e}")
-
 
 def postprocess_logits(
     logits: torch.Tensor,
@@ -45,8 +41,6 @@ def postprocess_logits(
     try:
         probs = torch.softmax(logits, dim=1)
         max_probs, labels = torch.max(probs, dim=1)
-
-        # Mapeo por bloque
         if bloque_id == "enjambre_sensor":
             etiqueta_map = {0: "normal", 1: "anomalía"}
         elif bloque_id == "crypto_trading":
@@ -55,7 +49,6 @@ def postprocess_logits(
             etiqueta_map = {0: "riesgo_bajo", 1: "riesgo_alto"}
         else:
             etiqueta_map = {i: str(i) for i in range(logits.size(1))}
-
         resultados = []
         for prob, label in zip(max_probs, labels):
             resultados.append({
@@ -63,6 +56,5 @@ def postprocess_logits(
                 "probabilidad": float(prob.item())
             })
         return resultados
-
     except Exception as e:
         raise RuntimeError(f"Error postprocesando logits: {e}")
