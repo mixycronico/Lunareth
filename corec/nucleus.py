@@ -1,10 +1,8 @@
-# corec/nucleus.py
-
 import logging
 import random
 import asyncio
 import pandas as pd
-
+from typing import Dict, Any, List
 from corec.config_loader import load_config_dict
 from corec.modules.registro import ModuloRegistro
 from corec.modules.sincronizacion import ModuloSincronizacion
@@ -16,15 +14,10 @@ from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
 from corec.scheduler import Scheduler
 from plugins import PluginBlockConfig, PluginCommand
-
 import asyncpg
 import aioredis
 
-
 async def init_postgresql(config: dict):
-    """
-    Inicializa el pool de PostgreSQL y crea las tablas 'bloques' y 'mensajes'.
-    """
     logger = logging.getLogger("CoreCDB")
     try:
         pool = await asyncpg.create_pool(**config)
@@ -54,7 +47,6 @@ async def init_postgresql(config: dict):
         logger.error(f"[DB] Error inicializando PostgreSQL: {e}")
         raise
 
-
 class CoreCNucleus:
     def __init__(self, config_path: str):
         self.logger = logging.getLogger("CoreCNucleus")
@@ -69,10 +61,7 @@ class CoreCNucleus:
 
     async def inicializar(self):
         try:
-            # 1) Cargar configuración
             self.config = load_config_dict(self.config_path)
-
-            # 2) Conectar a PostgreSQL
             try:
                 self.db_pool = await init_postgresql(self.config.get("db_config", {}))
             except Exception as e:
@@ -84,7 +73,6 @@ class CoreCNucleus:
                     "timestamp": random.random()
                 })
 
-            # 3) Conectar a Redis
             try:
                 rc = self.config.get("redis_config", {})
                 url = f"redis://{rc.get('username')}:{rc.get('password')}@{rc.get('host')}:{rc.get('port')}"
@@ -99,23 +87,19 @@ class CoreCNucleus:
                     "timestamp": random.random()
                 })
 
-            # 4) Instanciar módulos
-            self.modules["registro"]       = ModuloRegistro()
+            self.modules["registro"] = ModuloRegistro()
             self.modules["sincronizacion"] = ModuloSincronizacion()
-            self.modules["ejecucion"]      = ModuloEjecucion()
-            self.modules["auditoria"]      = ModuloAuditoria()
-            self.modules["ia"]             = ModuloIA()
+            self.modules["ejecucion"] = ModuloEjecucion()
+            self.modules["auditoria"] = ModuloAuditoria()
+            self.modules["ia"] = ModuloIA()
             self.modules["analisis_datos"] = ModuloAnalisisDatos()
 
-            # 5) Inicializar cada módulo con su sección de config
             for name, module in self.modules.items():
                 await module.inicializar(self, self.config.get(f"{name}_config"))
 
-            # 6) Crear y registrar bloques según la config
             for block_conf in self.config.get("bloques", []):
                 entidades = []
                 if block_conf["id"] == "ia_analisis":
-                    # las entidades usan el módulo IA para procesar sus datos
                     async def ia_fn(carga, mod_ia=self.modules["ia"], bconf=block_conf):
                         datos = await self.get_datos_from_redis(bconf["id"])
                         res = await mod_ia.procesar_bloque(None, datos)
@@ -142,11 +126,9 @@ class CoreCNucleus:
                     bloque.id, bloque.canal, len(entidades), bloque.max_size_mb
                 )
 
-            # 7) Iniciar y programar tareas con el Scheduler
             self.scheduler = Scheduler()
             self.scheduler.start()
 
-            # – Procesamiento de cada bloque cada 60s
             for b in self.bloques:
                 self.scheduler.schedule_periodic(
                     func=self.process_bloque,
@@ -155,14 +137,12 @@ class CoreCNucleus:
                     args=[b]
                 )
 
-            # – Auditoría de anomalías cada 120s
             self.scheduler.schedule_periodic(
                 func=self.modules["auditoria"].detectar_anomalias,
                 seconds=120,
                 job_id="audit_anomalias"
             )
 
-            # – Análisis de datos cada 300s
             self.scheduler.schedule_periodic(
                 func=self.ejecutar_analisis,
                 seconds=300,
@@ -181,14 +161,9 @@ class CoreCNucleus:
             raise
 
     async def process_bloque(self, bloque: BloqueSimbiotico):
-        """
-        Procesa un bloque y escribe sus mensajes en la BD.
-        Para 'ia_analisis' el trabajo ya está enlazado en las entidades.
-        """
         try:
             if bloque.id != "ia_analisis":
                 await self.modules["ejecucion"].encolar_bloque(bloque)
-
             if self.db_pool:
                 await bloque.escribir_postgresql(self.db_pool)
         except Exception as e:
@@ -201,24 +176,16 @@ class CoreCNucleus:
             })
 
     async def ejecutar_analisis(self):
-        """
-        Cada vez que se llama, extrae todos los mensajes de la tabla 'mensajes',
-        construye un DataFrame pivotado y llama al modulo de análisis de datos.
-        """
         try:
             if not self.db_pool:
                 return
-
             async with self.db_pool.acquire() as conn:
                 rows = await conn.fetch("SELECT bloque_id, valor FROM mensajes")
             if not rows:
                 return
-
             df = pd.DataFrame(rows, columns=["bloque_id", "valor"])
             df_wide = df.pivot(columns="bloque_id", values="valor").fillna(0)
-
             await self.modules["analisis_datos"].analizar(df_wide, "mensajes_recientes")
-
         except Exception as e:
             self.logger.error(f"[Núcleo] Error en ejecutar_analisis: {e}")
             await self.publicar_alerta({
@@ -228,7 +195,6 @@ class CoreCNucleus:
             })
 
     async def get_datos_from_redis(self, bloque_id: str) -> dict:
-        """Lee mensajes de Redis para alimentar al módulo IA."""
         try:
             msgs = await self.redis_client.xread({"alertas:datos": "$"}, block=1000, count=10)
             valores = []
@@ -248,7 +214,6 @@ class CoreCNucleus:
             return {"valores": []}
 
     async def publicar_alerta(self, alerta: dict):
-        """Publica una alerta en el stream Redis correspondiente."""
         try:
             if not self.redis_client:
                 self.logger.warning("[Alerta] Redis no inicializado, no se publica alerta")
@@ -260,9 +225,6 @@ class CoreCNucleus:
             self.logger.error(f"[Núcleo] Error publicando alerta: {e}")
 
     async def ejecutar(self):
-        """
-        Mantiene vivo el núcleo (el scheduler gestiona el trabajo).
-        """
         try:
             self.logger.info("[Núcleo] Ejecutando ciclo principal (scheduler)...")
             while True:
@@ -280,9 +242,6 @@ class CoreCNucleus:
             raise
 
     async def detener(self):
-        """
-        Apaga scheduler, módulos y cierra conexiones.
-        """
         try:
             if self.scheduler:
                 self.scheduler.shutdown()
