@@ -17,7 +17,7 @@
     "enabled": true,
     "model_path": "corec/models/mobilev3/model.pth",
     "max_size_mb": 50,
-    "pretrained": true,
+    "pretrained": false,
     "n_classes": 3
   },
   "bloques": [
