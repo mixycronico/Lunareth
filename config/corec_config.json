@@ -18,8 +18,11 @@
     "model_path": "corec/models/mobilev3/model.pth",
     "max_size_mb": 50,
     "pretrained": false,
-    "n_classes": 3,
-    "timeout_seconds": 2.0
+    "n_classes": 3
+  },
+  "analisis_datos_config": {
+    "correlation_threshold": 0.8,
+    "n_estimators": 100
   },
   "bloques": [
     {
@@ -45,8 +48,19 @@
       }
     },
     {
-      "id": "ia_analisis",
+      "id": "crypto_trading",
       "canal": 3,
+      "entidades": 2000,
+      "max_size_mb": 5,
+      "entidades_por_bloque": 2000,
+      "autoreparacion": {
+        "max_errores": 0.1,
+        "min_fitness": 0.3
+      }
+    },
+    {
+      "id": "ia_analisis",
+      "canal": 4,
       "entidades": 20000,
       "max_size_mb": 50,
       "entidades_por_bloque": 2000
@@ -56,8 +70,50 @@
     "codex": {
       "enabled": true,
       "path": "plugins/codex/config.json",
-      "bloque": { /* ... */ }
+      "bloque": {
+        "bloque_id": "codex_block",
+        "canal": 5,
+        "entidades": 500,
+        "max_size_mb": 3,
+        "max_errores": 0.05,
+        "min_fitness": 0.5
+      }
     },
-    /* resto de plugins igual */
+    "comm_system": {
+      "enabled": true,
+      "path": "plugins/comm_system/config.json",
+      "bloque": {
+        "bloque_id": "comm_block",
+        "canal": 6,
+        "entidades": 500,
+        "max_size_mb": 2,
+        "max_errores": 0.05,
+        "min_fitness": 0.5
+      }
+    },
+    "crypto_trading": {
+      "enabled": true,
+      "path": "plugins/crypto_trading/config.json",
+      "bloque": {
+        "bloque_id": "trading_block",
+        "canal": 3,
+        "entidades": 2000,
+        "max_size_mb": 5,
+        "max_errores": 0.1,
+        "min_fitness": 0.3
+      }
+    },
+    "panel_control": {
+      "enabled": true,
+      "path": "plugins/panel_control/config.json",
+      "bloque": {
+        "bloque_id": "panel_block",
+        "canal": 8,
+        "entidades": 100,
+        "max_size_mb": 0.15,
+        "max_errores": 0.05,
+        "min_fitness": 0.5
+      }
+    }
   }
 }
