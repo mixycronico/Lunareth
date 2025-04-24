@@ -73,7 +73,6 @@ class CoreCNucleus:
             for block_config in self.config.get("bloques", []):
                 try:
                     if block_config["id"] == "ia_analisis":
-                        # Entidades para ia_analisis usan ModuloIA
                         async def ia_procesar(carga: float, modulo_ia=self.modules["ia"]) -> Dict[str, Any]:
                             datos = await self.get_datos_from_redis(block_config["id"])
                             result = await modulo_ia.procesar_bloque(None, datos)
@@ -119,7 +118,7 @@ class CoreCNucleus:
             for bloque in self.bloques:
                 self.scheduler.schedule_periodic(
                     func=self.process_bloque,
-                    seconds=5,  # Ajustado para optimización
+                    seconds=5,
                     job_id=f"process_{bloque.id}",
                     args=[bloque]
                 )
@@ -151,7 +150,7 @@ class CoreCNucleus:
     async def get_datos_from_redis(self, bloque_id: str) -> Dict[str, Any]:
         """Obtiene datos reales desde Redis para un bloque."""
         try:
-            messages = await self.redis_client.xI xread({"alertas:datos": "$"}, block=1000, count=10)
+            messages = await self.redis_client.xread({"alertas:datos": "$"}, block=1000, count=10)
             valores = []
             bloque_origen = "unknown"
             for stream, msgs in messages:
@@ -173,7 +172,6 @@ class CoreCNucleus:
     async def process_bloque(self, bloque: BloqueSimbiotico):
         """Procesa un bloque simbiótico y escribe los resultados en PostgreSQL."""
         try:
-            # Procesar con IA si es ia_analisis
             if bloque.id == "ia_analisis" and "ia" in self.modules:
                 datos = await self.get_datos_from_redis(bloque.id)
                 result = await self.modules["ia"].procesar_bloque(bloque, datos)
@@ -262,15 +260,10 @@ class CoreCNucleus:
             self.logger.error(f"[Alerta] Error publicando alerta: {e}")
 
     async def ejecutar(self):
-        """
-        Ejecuta el procesamiento continuo de bloques y plugins.
-        Las tareas se programan con APScheduler en inicializar().
-        Este método mantiene el sistema en ejecución hasta que se detenga.
-        """
         try:
             self.logger.info("[Núcleo] Iniciando ejecución continua...")
             while True:
-                await asyncio.sleep(3600)  # Mantener el núcleo en ejecución
+                await asyncio.sleep(3600)
         except asyncio.CancelledError:
             self.logger.info("[Núcleo] Ejecución cancelada.")
             raise
@@ -326,12 +319,8 @@ async def init_postgresql(config: Dict[str, Any]):
                     timestamp FLOAT
                 );
             """)
-            await self.publicar_alerta({
-                "tipo": "db_inicializada",
-                "mensaje": "Tablas bloques y mensajes creadas",
-                "timestamp": random.random()
-            })
+            logging.getLogger("CoreCDB").info("[DB] Tablas 'bloques' y 'mensajes' inicializadas")
         return pool
     except Exception as e:
-        logging.error(f"Error creando pool de PostgreSQL: {e}")
+        logging.getLogger("CoreCDB").error(f"[DB] Error inicializando PostgreSQL: {e}")
         raise
