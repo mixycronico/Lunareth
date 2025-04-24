@@ -1,3 +1,4 @@
+# corec/blocks.py
 import logging
 import time
 from typing import List, Dict, Any
@@ -5,6 +6,15 @@ from corec.entities import Entidad
 
 class BloqueSimbiotico:
     def __init__(self, id: str, canal: int, entidades: List[Entidad], max_size_mb: float, nucleus):
+        """Un bloque simbiótico que procesa entidades y gestiona datos.
+
+        Args:
+            id (str): Identificador único del bloque.
+            canal (int): Canal de comunicación del bloque.
+            entidades (List[Entidad]): Lista de entidades que procesan datos.
+            max_size_mb (float): Tamaño máximo del bloque en MB.
+            nucleus: Instancia de CoreCNucleus para alertas y coordinación.
+        """
         self.logger = logging.getLogger("BloqueSimbiotico")
         self.id = id
         self.canal = canal
@@ -14,6 +24,7 @@ class BloqueSimbiotico:
         self.mensajes: List[Dict[str, Any]] = []
         self.fitness: float = 0.0
         self.fallos = 0
+        self.ia_timeout_seconds = None  # Nuevo atributo
 
     async def procesar(self, carga: float) -> Dict[str, Any]:
         """Procesa las entidades del bloque con una carga dada."""
@@ -57,7 +68,7 @@ class BloqueSimbiotico:
         }
 
     async def reparar(self):
-        """Repara el bloque simbiótico reactivando entidades inactivas."""
+        """Repara el bloque reactivando entidades inactivas."""
         for entidad in self.entidades:
             if getattr(entidad, "estado", None) == "inactiva":
                 try:
