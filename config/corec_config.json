@@ -16,7 +16,9 @@
   "ia_config": {
     "enabled": true,
     "model_path": "corec/models/mobilev3/model.pth",
-    "max_size_mb": 300
+    "max_size_mb": 50,
+    "pretrained": true,
+    "n_classes": 3
   },
   "bloques": [
     {
@@ -45,7 +47,7 @@
       "id": "ia_analisis",
       "canal": 3,
       "entidades": 20000,
-      "max_size_mb": 300,
+      "max_size_mb": 50,
       "entidades_por_bloque": 2000,
       "plugin": "procesador_inteligente"
     }
