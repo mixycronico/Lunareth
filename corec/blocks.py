@@ -24,10 +24,17 @@ class BloqueSimbiotico:
         self.mensajes: List[Dict[str, Any]] = []
         self.fitness: float = 0.0
         self.fallos = 0
-        self.ia_timeout_seconds = None  # Nuevo atributo
+        self.ia_timeout_seconds = None  # Tiempo de espera para IA por bloque
 
     async def procesar(self, carga: float) -> Dict[str, Any]:
-        """Procesa las entidades del bloque con una carga dada."""
+        """Procesa las entidades del bloque con una carga dada.
+
+        Args:
+            carga (float): Valor de carga para el procesamiento (entre 0 y 1).
+
+        Returns:
+            Dict[str, Any]: Diccionario con el ID del bloque, mensajes generados y fitness.
+        """
         self.mensajes = []
         fitness_total = 0.0
         num_mensajes = 0
@@ -92,7 +99,11 @@ class BloqueSimbiotico:
                     raise
 
     async def escribir_postgresql(self, conn):
-        """Escribe los mensajes del bloque en PostgreSQL."""
+        """Escribe los mensajes del bloque en PostgreSQL.
+
+        Args:
+            conn: Conexión a PostgreSQL.
+        """
         cur = None
         try:
             cur = conn.cursor()
