@@ -1,13 +1,14 @@
 # tests/test_integration.py
 import pytest
 import asyncio
+import time
 from unittest.mock import AsyncMock, patch
 from plugins import PluginCommand
 from corec.modules.ia import ModuloIA
 from corec.modules.analisis_datos import ModuloAnalisisDatos
 from corec.nucleus import CoreCNucleus
 import pandas as pd
-from typing import Dict
+from typing import Dict, Any
 
 @pytest.fixture
 async def nucleus(mock_redis, mock_db_pool, test_config):
@@ -15,8 +16,10 @@ async def nucleus(mock_redis, mock_db_pool, test_config):
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
-         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule:
+         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
+         patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
         mock_schedule.return_value = None
+        mock_model.return_value = MagicMock()
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
         yield nucleus
@@ -79,7 +82,7 @@ async def test_integration_analisis_datos(nucleus):
         assert "estadisticas" in result
         assert "num_anomalías" in result
         assert "correlaciones" in result
-        assert mock_alerta.called
+        assert mock_alerta.call_count == 3  # Estadísticas, anomalías, correlaciones
 
 @pytest.mark.asyncio
 async def test_integration_alert_archiving(nucleus, mock_redis, mock_db_pool):
