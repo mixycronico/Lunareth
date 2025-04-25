@@ -23,6 +23,9 @@ class ModuloIA(ComponenteBase):
         try:
             self.nucleus = nucleus
             cfg = config or {}
+            if not cfg.get("enabled", False):
+                self.logger.info("[IA] Módulo IA deshabilitado")
+                return
             model_path = cfg.get("model_path", "")
             pretrained = cfg.get("pretrained", False)
             n_classes = cfg.get("n_classes", 3)
@@ -55,6 +58,7 @@ class ModuloIA(ComponenteBase):
         max_cpu = 90.0
         max_mem = 1000
         if cpu_percent > max_cpu or mem_before > max_mem:
+            self.logger.warning(f"[IA] Recursos excedidos: CPU={cpu_percent}%, Mem={mem_before}MB")
             await self.nucleus.publicar_alerta({
                 "tipo": "alerta_recursos",
                 "bloque_id": bloque.id,
@@ -73,8 +77,18 @@ class ModuloIA(ComponenteBase):
             } for i in range(len(datos_list))]
 
         timeout = bloque.ia_timeout_seconds if hasattr(bloque, 'ia_timeout_seconds') and bloque.ia_timeout_seconds else self.timeout
-        tensors = [preprocess_data(datos, self.device) for datos in datos_list]
-        batch_input = torch.cat(tensors, dim=0)
+        try:
+            tensors = [preprocess_data(datos, self.device) for datos in datos_list]
+            batch_input = torch.cat(tensors, dim=0)
+        except Exception as e:
+            self.logger.error(f"[IA] Error preprocessing data: {e}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "error_preprocesamiento_ia",
+                "bloque_id": bloque.id,
+                "mensaje": str(e),
+                "timestamp": time.time()
+            })
+            return []
 
         for attempt in range(3):
             try:
@@ -85,6 +99,7 @@ class ModuloIA(ComponenteBase):
                 )
                 break
             except asyncio.TimeoutError:
+                self.logger.warning(f"[IA] Timeout en intento {attempt + 1}/{3}, timeout={timeout}s")
                 await self.nucleus.publicar_alerta({
                     "tipo": "timeout_ia",
                     "bloque_id": bloque.id,
@@ -104,7 +119,18 @@ class ModuloIA(ComponenteBase):
         else:
             return []
 
-        resultados = postprocess_logits(logits, bloque.id)
+        try:
+            resultados = postprocess_logits(logits, bloque.id)
+        except Exception as e:
+            self.logger.error(f"[IA] Error postprocessing logits: {e}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "error_postprocesamiento_ia",
+                "bloque_id": bloque.id,
+                "mensaje": str(e),
+                "timestamp": time.time()
+            })
+            return []
+
         t1 = time.monotonic()
         mem_after = process.memory_info().rss / 1024**2
 
