@@ -32,3 +32,4 @@ pydantic
 apscheduler
 plotly
 pandas
+torchvision
