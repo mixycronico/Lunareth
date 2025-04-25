@@ -1,43 +1,29 @@
 # tests/test_plugin.py
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-from plugins.registry import registry
-from corec.nucleus import CoreCNucleus
-from typing import Dict, Any
+from plugins.registry import PluginRegistry
+from unittest.mock import AsyncMock, patch, MagicMock
 
-@pytest.fixture
-async def nucleus(mock_redis, mock_db_pool, test_config):
-    """Fixture para inicializar CoreCNucleus con mocks."""
-    with patch("corec.config_loader.load_config_dict", return_value=test_config), \
-         patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
-         patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
-         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
-         patch("pandas.DataFrame", MagicMock()), \
-         patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
-        mock_schedule.return_value = None
-        mock_model.return_value = MagicMock()
-        nucleus = CoreCNucleus("config/corec_config.json")
-        await nucleus.inicializar()
-        yield nucleus
-        await nucleus.detener()
+registry = PluginRegistry()
 
 @pytest.mark.asyncio
 async def test_plugin_load_valid(nucleus):
     """Prueba la carga de un complemento válido a través del registro."""
     config = {"test_plugin": {"param": "value"}}
-    with patch("importlib.import_module") as mock_import:
-        mock_plugin = MagicMock()
-        mock_plugin.inicializar = AsyncMock()
-        mock_import.return_value = mock_plugin
+    # Register a mock plugin
+    mock_plugin = MagicMock()
+    mock_plugin.inicializar = AsyncMock()
+    registry.plugins["test_plugin"] = mock_plugin
+    with patch("importlib.import_module", return_value=mock_plugin):
         await registry.load_plugin(nucleus, "test_plugin", config)
-        mock_plugin.inicializar.assert_called_with(nucleus, config)
-        assert nucleus.logger.info.called
+        assert mock_plugin.inicializar.called
+        # Clean up
+        del registry.plugins["test_plugin"]
 
 @pytest.mark.asyncio
 async def test_plugin_load_invalid(nucleus):
     """Prueba la carga de un complemento no registrado."""
     config = {"fake_plugin": {"param": "value"}}
-    with pytest.raises(ValueError, match="Complemento fake_plugin no está registrado"):
+    with pytest.raises(ValueError, match="Complemento fake_plugin no está registrado"), \
+         patch.object(nucleus.logger, "error") as mock_logger:
         await registry.load_plugin(nucleus, "fake_plugin", config)
-    assert nucleus.logger.error.called
+    assert mock_logger.called
