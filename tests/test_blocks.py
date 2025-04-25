@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad, crear_entidad
 from corec.nucleus import CoreCNucleus
+from typing import Dict
 
 class EntidadConError(Entidad):
     def __init__(self, id: str, canal: int, procesar_func):
