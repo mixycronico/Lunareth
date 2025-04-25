@@ -18,12 +18,12 @@ async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
         await nucleus.inicializar()
         messages = [{"bloque_id": "test_block", "mensaje": {"entidad_id": "ent_1", "valor": 0.5}}]
         with patch("json.dump", MagicMock()) as mock_json_dump:
-            await nucleus.save_fallback_messages(messages)
+            await nucleus.save_fallback_messages(mensajes=messages)  # Usar argumento con nombre
             assert mock_json_dump.called
         await nucleus.detener()
 
 @pytest.mark.asyncio
-async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool):
+async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp_path):
     """Prueba el reintento de mensajes desde fallback a PostgreSQL."""
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
@@ -34,7 +34,7 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool):
         mock_model.return_value = MagicMock()
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
-        fallback_file = Path("fallback_messages.json")
+        fallback_file = tmp_path / "fallback_messages.json"  # Usar tmp_path para aislamiento
         messages = [{
             "bloque_id": "enjambre_sensor",
             "mensaje": {
@@ -48,7 +48,7 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool):
         }]
         with open(fallback_file, "w") as f:
             json.dump(messages, f)
-        mock_db_pool.execute = AsyncMock()
+        mock_db_pool.execute = AsyncMock(return_value=None)
         await nucleus.retry_fallback_messages()
         assert not fallback_file.exists()
         assert mock_db_pool.execute.called
