@@ -29,7 +29,7 @@ def test_config():
             "stream_max_length": 5000
         },
         "ia_config": {
-            "enabled": False,  # Disable IA to skip model loading
+            "enabled": False,
             "model_path": None,
             "max_size_mb": 50,
             "pretrained": False,
@@ -123,7 +123,6 @@ def mock_db_pool():
 @pytest.fixture
 async def nucleus(mock_redis, mock_db_pool, test_config, tmp_path):
     """Fixture para inicializar CoreCNucleus con mocks."""
-    # Crear un archivo de configuración temporal con test_config
     config_path = tmp_path / "test_config.json"
     config_path.write_text(json.dumps(test_config))
 
@@ -132,14 +131,13 @@ async def nucleus(mock_redis, mock_db_pool, test_config, tmp_path):
              patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
              patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
              patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
-             patch("pandas.DataFrame", MagicMock()) as mock_df:
+             patch("pandas.DataFrame", MagicMock()) as mock_df, \
+             patch("corec.utils.torch_utils.preprocess_data", MagicMock(return_value=torch.randn(1, 3, 224, 224))), \
+             patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=MagicMock(spec=nn.Module)):
             mock_schedule.return_value = None
-            # Create a mock model to simulate MobileNetV3
-            mock_model = MagicMock(spec=nn.Module)
-            with patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model):
-                nucleus = CoreCNucleus(str(config_path))
-                await nucleus.inicializar()
-                yield nucleus
-                await nucleus.detener()
+            nucleus = CoreCNucleus(str(config_path))
+            await nucleus.inicializar()
+            yield nucleus
+            await nucleus.detener()
     except Exception as e:
         pytest.fail(f"Failed to initialize nucleus fixture: {e}")
