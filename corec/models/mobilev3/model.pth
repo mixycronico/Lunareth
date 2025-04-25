@@ -4,7 +4,7 @@ import torch.nn as nn
 from torchvision.models import mobilenet_v3_small
 
 def create_dummy_model():
-    model = mobilenet_v3_small(pretrained=False)
+    model = mobilenet_v3_small(weights=None)
     model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, 3)
     torch.save(model.state_dict(), "corec/models/mobilev3/model.pth")
 
