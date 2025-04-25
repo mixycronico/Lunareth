@@ -1,7 +1,7 @@
 # corec/config_loader.py
 import json
 from pathlib import Path
-from pydantic import BaseModel, Field, root_validator, ValidationError
+from pydantic import BaseModel, Field, model_validator, ValidationError
 from typing import List, Dict, Optional
 
 class DBConfig(BaseModel):
@@ -55,8 +55,10 @@ class PluginConfig(BaseModel):
     path: str
     bloque: PluginBlockConfig
 
-    @root_validator(pre=True)
+    @model_validator(mode='before')
+    @classmethod
     def check_path_exists(cls, values):
+        """Valida que la ruta del archivo de configuración del plugin exista."""
         path = values.get("path")
         if path and not Path(path).is_file():
             raise ValueError(f"Ruta de configuración del plugin no existe: {path}")
@@ -70,10 +72,12 @@ class CoreCConfig(BaseModel):
     bloques: List[BloqueConfig]
     plugins: Dict[str, PluginConfig]
 
-    @root_validator
+    @model_validator(mode='after')
+    @classmethod
     def check_unique_block_ids(cls, values):
-        bloques = values.get("bloques", [])
-        plugins = values.get("plugins", {})
+        """Valida que los IDs de los bloques sean únicos."""
+        bloques = values.bloques
+        plugins = values.plugins
         block_ids = [b.id for b in bloques]
         plugin_block_ids = [p.bloque.bloque_id for p in plugins.values() if p.bloque]
         all_ids = block_ids + plugin_block_ids
