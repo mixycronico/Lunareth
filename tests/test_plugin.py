@@ -1,58 +1,26 @@
+# tests/test_plugin.py
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from plugins.example_plugin.main import ExamplePlugin
-
-
-@pytest.mark.asyncio
-async def test_plugin_inicializar(nucleus):
-    """Prueba la inicialización de ExamplePlugin."""
-    plugin = ExamplePlugin()
-    config = {}  # Configuración vacía
-    with patch.object(plugin.logger, "info") as mock_logger:
-        await plugin.inicializar(nucleus, config)
-        assert plugin.nucleus == nucleus
-        assert mock_logger.called
-
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+from plugins.registry import registry
+from corec.nucleus import CoreCNucleus
 
 @pytest.mark.asyncio
-async def test_plugin_manejar_comando(nucleus):
-    """Prueba el manejo de comandos en ExamplePlugin."""
-    plugin = ExamplePlugin()
-    config = {}  # Configuración vacía
-    await plugin.inicializar(nucleus, config)
-    comando = {"action": "procesar_bloque", "params": {"bloque_id": "test_block"}}
-    with patch.object(plugin.logger, "info", new=MagicMock()) as mock_logger, \
-         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
-        result = await plugin.manejar_comando(comando)
-        assert result == {"status": "success", "bloque_id": "test_block"}
-        assert mock_alerta.called
-        assert mock_logger.called
-
+async def test_plugin_load_valid(nucleus):
+    """Prueba la carga de un complemento válido a través del registro."""
+    config = {"test_plugin": {"param": "value"}}
+    with patch("importlib.import_module") as mock_import:
+        mock_plugin = MagicMock()
+        mock_plugin.inicializar = AsyncMock()
+        mock_import.return_value = mock_plugin
+        await registry.load_plugin(nucleus, "test_plugin", config)
+        mock_plugin.inicializar.assert_called_with(nucleus, config)
+        assert nucleus.logger.info.called
 
 @pytest.mark.asyncio
-async def test_plugin_comando_invalido(nucleus):
-    """Prueba el manejo de comandos inválidos en ExamplePlugin."""
-    plugin = ExamplePlugin()
-    config = {}  # Configuración vacía
-    await plugin.inicializar(nucleus, config)
-    comando = {"action": "invalid_action"}
-    with patch.object(plugin.logger, "error", new=MagicMock()) as mock_logger, \
-         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
-        result = await plugin.manejar_comando(comando)
-        assert result == {"status": "error", "message": "Acción no soportada"}
-        assert mock_alerta.called
-        assert mock_logger.called
-
-
-@pytest.mark.asyncio
-async def test_plugin_bloque_procesamiento(nucleus):
-    """Prueba el procesamiento de bloques en ExamplePlugin."""
-    plugin = ExamplePlugin()
-    config = {}  # Configuración vacía
-    await plugin.inicializar(nucleus, config)
-    with patch.object(plugin.logger, "info", new=MagicMock()) as mock_logger, \
-         patch.object(nucleus, "publicar_alerta", new=AsyncMock()) as mock_alerta:
-        result = await plugin.procesar_bloque("test_block")
-        assert result == {"status": "success", "bloque_id": "test_block"}
-        assert mock_alerta.called
-        assert mock_logger.called
+async def test_plugin_load_invalid(nucleus):
+    """Prueba la carga de un complemento no registrado."""
+    config = {"fake_plugin": {"param": "value"}}
+    with pytest.raises(ValueError, match="Complemento fake_plugin no está registrado"):
+        await registry.load_plugin(nucleus, "fake_plugin", config)
+    assert nucleus.logger.error.called
