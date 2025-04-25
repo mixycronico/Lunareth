@@ -1,6 +1,8 @@
 # tests/conftest.py
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from corec.nucleus import CoreCNucleus
+from corec.config_loader import load_config_dict
 
 @pytest.fixture
 def test_config():
@@ -125,3 +127,22 @@ def mock_db_pool():
     conn.acquire.return_value.__aenter__.return_value = conn
     conn.acquire.return_value.__aexit__.return_value = None
     yield conn
+
+@pytest.fixture
+async def nucleus(mock_redis, mock_db_pool, test_config):
+    """Fixture para inicializar CoreCNucleus con mocks."""
+    try:
+        with patch("corec.config_loader.load_config_dict", return_value=test_config), \
+             patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
+             patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
+             patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
+             patch("pandas.DataFrame", MagicMock()) as mock_df, \
+             patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
+            mock_schedule.return_value = None
+            mock_model.return_value = MagicMock()
+            nucleus = CoreCNucleus("config/corec_config.json")
+            await nucleus.inicializar()
+            yield nucleus
+            await nucleus.detener()
+    except Exception as e:
+        pytest.fail(f"Failed to initialize nucleus fixture: {e}")
