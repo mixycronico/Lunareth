@@ -1,10 +1,17 @@
-# tests/test_module_ia.py (partial)
 import pytest
 from corec.modules.ia import ModuloIA
 from corec.blocks import BloqueSimbiotico
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 import torch
 import asyncio
+
+@pytest.mark.asyncio
+async def test_modulo_ia_inicializar(nucleus):
+    """Prueba la inicialización de ModuloIA."""
+    ia_module = ModuloIA()
+    with patch.object(ia_module.logger, "info") as mock_logger:
+        await ia_module.inicializar(nucleus, nucleus.config["ia_config"])
+        assert mock_logger.called
 
 @pytest.mark.asyncio
 async def test_modulo_ia_procesar_timeout(nucleus):
@@ -13,7 +20,7 @@ async def test_modulo_ia_procesar_timeout(nucleus):
     await ia_module.inicializar(nucleus, nucleus.config["ia_config"])
     bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
     bloque.ia_timeout_seconds = 0.1
-    datos = {"valores": [0.1, 0.2, 0.3]}  # Matches preprocess_data
+    datos = {"valores": [0.1, 0.2, 0.3]}
     with patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
          patch("torch.cat", side_effect=lambda x, dim: asyncio.sleep(1)):
