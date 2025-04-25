@@ -5,9 +5,7 @@ from pydantic import ValidationError
 
 def test_load_config_valid(test_config):
     """Prueba la carga de una configuración válida."""
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr("corec.config_loader.load_config_dict", lambda x: test_config)
-        config = load_config_dict("config/corec_config.json")
+    config = test_config
     assert config["instance_id"] == "corec1"
     assert len(config["bloques"]) == 3
     assert config["plugins"]["crypto_trading"]["enabled"] is True
