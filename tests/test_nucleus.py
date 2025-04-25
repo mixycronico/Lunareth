@@ -20,6 +20,7 @@ async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
         with patch("json.dump", MagicMock()) as mock_json_dump:
             await nucleus.save_fallback_messages(messages)
             assert mock_json_dump.called
+        await nucleus.detener()
 
 @pytest.mark.asyncio
 async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool):
@@ -51,3 +52,4 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool):
         await nucleus.retry_fallback_messages()
         assert not fallback_file.exists()
         assert mock_db_pool.execute.called
+        await nucleus.detener()
