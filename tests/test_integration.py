@@ -5,13 +5,27 @@ from unittest.mock import AsyncMock, patch
 from plugins import PluginCommand
 from corec.modules.ia import ModuloIA
 from corec.modules.analisis_datos import ModuloAnalisisDatos
+from corec.nucleus import CoreCNucleus
+import pandas as pd
+
+@pytest.fixture
+async def nucleus(mock_redis, mock_db_pool, test_config):
+    """Fixture para inicializar CoreCNucleus con mocks."""
+    with patch("corec.config_loader.load_config_dict", return_value=test_config), \
+         patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
+         patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
+         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule:
+        mock_schedule.return_value = None
+        nucleus = CoreCNucleus("config/corec_config.json")
+        await nucleus.inicializar()
+        yield nucleus
+        await nucleus.detener()
 
 @pytest.mark.asyncio
 async def test_integration_process_and_audit(nucleus):
     """Prueba la integración de procesamiento de bloques y auditoría."""
     with patch("corec.modules.ejecucion.ModuloEjecucion.encolar_bloque", AsyncMock()) as mock_encolar, \
          patch("corec.modules.auditoria.ModuloAuditoria.detectar_anomalias", AsyncMock()) as mock_detectar:
-        await nucleus.inicializar()
         await nucleus.process_bloque(nucleus.bloques[0])
         await nucleus.modules["auditoria"].detectar_anomalias()
         assert mock_encolar.called
@@ -26,7 +40,6 @@ async def test_integration_synchronize_and_plugin_execution(nucleus):
         plugin_mock = AsyncMock()
         plugin_mock.manejar_comando.return_value = {"status": "success"}
         nucleus.plugins[plugin_id] = plugin_mock
-        await nucleus.inicializar()
         if len(nucleus.bloques) >= 2:
             await nucleus.modules["sincronizacion"].redirigir_entidades(
                 nucleus.bloques[0], nucleus.bloques[1], 0.1, nucleus.bloques[1].canal
@@ -70,7 +83,7 @@ async def test_integration_analisis_datos(nucleus):
 @pytest.mark.asyncio
 async def test_integration_alert_archiving(nucleus, mock_redis, mock_db_pool):
     """Prueba la integración de archivado de alertas cuando el flujo de Redis está lleno."""
-    mock_redis.xlen.return_value = 4500  # Simula flujo casi lleno (90% de 5000)
+    mock_redis.xlen.return_value = 4500
     alerta = {
         "tipo": "test_alerta",
         "bloque_id": "test_block",
