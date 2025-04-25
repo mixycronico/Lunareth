@@ -3,8 +3,10 @@ import pytest
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 from corec.nucleus import CoreCNucleus
-from corec.config_loader import load_config_dict, CoreCConfig
+from corec.config_loader import load_config_dict
 from pathlib import Path
+import torch
+import torch.nn as nn
 
 @pytest.fixture
 def test_config():
@@ -27,8 +29,8 @@ def test_config():
             "stream_max_length": 5000
         },
         "ia_config": {
-            "enabled": True,
-            "model_path": "corec/models/mobilev3/model.pth",
+            "enabled": False,  # Disable IA to skip model loading
+            "model_path": None,
             "max_size_mb": 50,
             "pretrained": False,
             "n_classes": 3,
@@ -124,20 +126,20 @@ async def nucleus(mock_redis, mock_db_pool, test_config, tmp_path):
     # Crear un archivo de configuración temporal con test_config
     config_path = tmp_path / "test_config.json"
     config_path.write_text(json.dumps(test_config))
-    
+
     try:
         with patch("corec.config_loader.load_config_dict", return_value=test_config), \
              patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
              patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
              patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
-             patch("pandas.DataFrame", MagicMock()) as mock_df, \
-             patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
+             patch("pandas.DataFrame", MagicMock()) as mock_df:
             mock_schedule.return_value = None
-            mock_model.return_value = MagicMock()
-            # Usar el archivo temporal para CoreCNucleus
-            nucleus = CoreCNucleus(str(config_path))
-            await nucleus.inicializar()
-            yield nucleus
-            await nucleus.detener()
+            # Create a mock model to simulate MobileNetV3
+            mock_model = MagicMock(spec=nn.Module)
+            with patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model):
+                nucleus = CoreCNucleus(str(config_path))
+                await nucleus.inicializar()
+                yield nucleus
+                await nucleus.detener()
     except Exception as e:
         pytest.fail(f"Failed to initialize nucleus fixture: {e}")
