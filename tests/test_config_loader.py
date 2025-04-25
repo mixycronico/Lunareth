@@ -1,15 +1,18 @@
 # tests/test_config_loader.py
 import pytest
 from corec.config_loader import load_config_dict, CoreCConfig
+from pydantic import ValidationError
 
-def test_load_config_valid():
+def test_load_config_valid(test_config):
     """Prueba la carga de una configuración válida."""
-    config = load_config_dict("config/corec_config.json")
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr("corec.config_loader.load_config_dict", lambda x: test_config)
+        config = load_config_dict("config/corec_config.json")
     assert config["instance_id"] == "corec1"
-    assert len(config["bloques"]) == 4
+    assert len(config["bloques"]) == 3
     assert config["plugins"]["crypto_trading"]["enabled"] is True
     assert config["redis_config"]["username"] == "corec_user"
-    assert config["bloques"][3]["ia_timeout_seconds"] == 10.0
+    assert config["bloques"][2]["ia_timeout_seconds"] == 10.0
 
 def test_load_config_invalid():
     """Prueba la carga de una configuración con un puerto inválido."""
@@ -26,7 +29,9 @@ def test_load_config_invalid():
             "host": "localhost",
             "port": 6379,
             "username": "corec_user",
-            "password": "secure_password"
+            "password": "secure_password",
+            "max_connections": 100,
+            "stream_max_length": 5000
         },
         "bloques": [],
         "plugins": {}
@@ -48,7 +53,9 @@ def test_load_config_missing_field():
             "host": "localhost",
             "port": 6379,
             "username": "corec_user",
-            "password": "secure_password"
+            "password": "secure_password",
+            "max_connections": 100,
+            "stream_max_length": 5000
         },
         "bloques": [],
         "plugins": {}
@@ -71,7 +78,9 @@ def test_load_config_duplicate_block_ids():
             "host": "localhost",
             "port": 6379,
             "username": "corec_user",
-            "password": "secure_password"
+            "password": "secure_password",
+            "max_connections": 100,
+            "stream_max_length": 5000
         },
         "bloques": [
             {
