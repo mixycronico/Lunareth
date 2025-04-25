@@ -4,7 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from plugins.registry import registry
 from corec.nucleus import CoreCNucleus
-from typing import Dict
+from typing import Dict, Any
 
 @pytest.fixture
 async def nucleus(mock_redis, mock_db_pool, test_config):
@@ -13,8 +13,10 @@ async def nucleus(mock_redis, mock_db_pool, test_config):
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
-         patch("pandas.DataFrame", MagicMock()):
+         patch("pandas.DataFrame", MagicMock()), \
+         patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
         mock_schedule.return_value = None
+        mock_model.return_value = MagicMock()
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
         yield nucleus
