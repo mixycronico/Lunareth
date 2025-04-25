@@ -1,7 +1,6 @@
 # tests/conftest.py
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from corec.nucleus import CoreCNucleus
 
 @pytest.fixture
 def test_config():
@@ -123,17 +122,6 @@ def mock_db_pool():
     conn.cursor.return_value = cursor
     conn.commit.return_value = None
     conn.close.return_value = None
+    conn.acquire.return_value.__aenter__.return_value = conn
+    conn.acquire.return_value.__aexit__.return_value = None
     yield conn
-
-@pytest.fixture
-async def nucleus(mock_redis, mock_db_pool, test_config):
-    """Fixture para inicializar CoreCNucleus con mocks."""
-    with patch("corec.config_loader.load_config_dict", return_value=test_config), \
-         patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
-         patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
-         patch("corec.scheduler.Scheduler.schedule_periodic", new_callable=AsyncMock) as mock_schedule:
-        mock_schedule.return_value = None
-        nucleus = CoreCNucleus("config/corec_config.json")
-        await nucleus.inicializar()
-        yield nucleus
-        await nucleus.detener()
