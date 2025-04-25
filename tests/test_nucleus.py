@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from corec.nucleus import CoreCNucleus
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
+from typing import Dict
 
 @pytest.fixture
 async def nucleus(mock_redis, mock_db_pool, test_config):
