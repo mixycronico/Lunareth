@@ -13,7 +13,7 @@ def test_config():
     return {
         "instance_id": "corec1",
         "db_config": {
-            "dbname": "corec_db",
+            "database": "corec_db",  # Cambiado de dbname a database
             "user": "postgres",
             "password": "your_password",
             "host": "localhost",
@@ -120,19 +120,15 @@ def mock_redis():
 @pytest.fixture
 def mock_db_pool():
     """Mock de pool de conexiones PostgreSQL con soporte para simular fallos."""
-    conn = MagicMock()
-    cursor = MagicMock()
-    cursor.execute.return_value = None
-    cursor.close.return_value = None
-    conn.cursor.return_value = cursor
-    conn.commit.return_value = None
-    conn.close.return_value = None
-    conn.acquire.return_value.__aenter__.return_value = conn
-    conn.acquire.return_value.__aexit__.return_value = None
+    conn = AsyncMock()
     conn.execute.return_value = None
     conn.fetch.return_value = []
     conn.fetchrow.return_value = None
-    yield conn
+    conn.close.return_value = None
+    pool = AsyncMock()
+    pool.acquire.return_value.__aenter__.return_value = conn
+    pool.acquire.return_value.__aexit__.return_value = None
+    yield pool
 
 @pytest.fixture
 def mock_postgresql():
@@ -173,7 +169,7 @@ def mock_config():
     return {
         "instance_id": "corec1",
         "db_config": {
-            "dbname": "corec_db",
+            "database": "corec_db",  # Cambiado de dbname a database
             "user": "postgres",
             "password": "your_password",
             "host": "localhost",
