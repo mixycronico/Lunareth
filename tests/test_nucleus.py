@@ -3,27 +3,11 @@ import pytest
 import asyncio
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from corec.nucleus import CoreCNucleus
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
 from typing import Dict, Any
-
-@pytest.fixture
-async def nucleus(mock_redis, mock_db_pool, test_config):
-    """Fixture para inicializar CoreCNucleus con mocks."""
-    with patch("corec.config_loader.load_config_dict", return_value=test_config), \
-         patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
-         patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
-         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
-         patch("pandas.DataFrame", MagicMock()), \
-         patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
-        mock_schedule.return_value = None
-        mock_model.return_value = MagicMock()
-        nucleus = CoreCNucleus("config/corec_config.json")
-        await nucleus.inicializar()
-        yield nucleus
-        await nucleus.detener()
 
 @pytest.mark.asyncio
 async def test_nucleus_fallback_storage(test_config, mock_redis):
