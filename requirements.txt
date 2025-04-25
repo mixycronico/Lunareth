@@ -31,3 +31,4 @@ psutil
 pydantic
 apscheduler
 plotly
+pandas
