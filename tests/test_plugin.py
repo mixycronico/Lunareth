@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from plugins.registry import registry
 from corec.nucleus import CoreCNucleus
+from typing import Dict
 
 @pytest.fixture
 async def nucleus(mock_redis, mock_db_pool, test_config):
