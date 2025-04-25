@@ -30,7 +30,7 @@ def test_config():
         },
         "ia_config": {
             "enabled": False,  # Disable IA to skip model loading
-            "model_path": None,
+            "model_path": "",  # Valid string to satisfy CoreCConfig
             "max_size_mb": 50,
             "pretrained": False,
             "n_classes": 3,
@@ -118,6 +118,9 @@ def mock_db_pool():
     conn.close.return_value = None
     conn.acquire.return_value.__aenter__.return_value = conn
     conn.acquire.return_value.__aexit__.return_value = None
+    conn.execute.return_value = None
+    conn.fetch.return_value = []
+    conn.fetchrow.return_value = None
     yield conn
 
 @pytest.fixture
@@ -132,8 +135,6 @@ async def nucleus(mock_redis, mock_db_pool, test_config, tmp_path):
              patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
              patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
              patch("pandas.DataFrame", MagicMock()) as mock_df, \
-             patch("corec.utils.torch_utils.preprocess_data", MagicMock(return_value=torch.randn(1, 3, 224, 224))), \
-             patch("corec.utils.torch_utils.postprocess_logits", MagicMock(return_value=[{"probabilidad": 0.9, "etiqueta": "class_0", "bloque_id": "test"}])), \
              patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=MagicMock(spec=nn.Module)):
             mock_schedule.return_value = None
             nucleus = CoreCNucleus(str(config_path))
