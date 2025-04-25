@@ -8,13 +8,28 @@ from corec.nucleus import CoreCNucleus
 from corec.blocks import BloqueSimbiotico
 from corec.entities import crear_entidad
 
+@pytest.fixture
+async def nucleus(mock_redis, mock_db_pool, test_config):
+    """Fixture para inicializar CoreCNucleus con mocks."""
+    with patch("corec.config_loader.load_config_dict", return_value=test_config), \
+         patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
+         patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
+         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
+         patch("pandas.DataFrame", MagicMock()):
+        mock_schedule.return_value = None
+        nucleus = CoreCNucleus("config/corec_config.json")
+        await nucleus.inicializar()
+        yield nucleus
+        await nucleus.detener()
+
 @pytest.mark.asyncio
 async def test_nucleus_fallback_storage(test_config, mock_redis):
     """Prueba el almacenamiento en fallback cuando PostgreSQL falla."""
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", side_effect=Exception("DB Error")), \
-         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule:
+         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
+         patch("pandas.DataFrame", MagicMock()):
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
         bloque = BloqueSimbiotico("enjambre_sensor", 1, [
@@ -44,7 +59,8 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool):
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
-         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()):
+         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
+         patch("pandas.DataFrame", MagicMock()):
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
         fallback_file = Path("fallback_messages.json")
