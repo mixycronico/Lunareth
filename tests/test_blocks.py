@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad, crear_entidad
 from corec.nucleus import CoreCNucleus
-from typing import Dict
+from typing import Dict, Any
 
 class EntidadConError(Entidad):
     def __init__(self, id: str, canal: int, procesar_func):
@@ -33,8 +33,10 @@ async def nucleus(mock_redis, mock_db_pool, test_config):
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
-         patch("pandas.DataFrame", MagicMock()):  # Mock pandas para pruebas rápidas
+         patch("pandas.DataFrame", MagicMock()), \
+         patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
         mock_schedule.return_value = None
+        mock_model.return_value = MagicMock()
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
         yield nucleus
@@ -55,6 +57,7 @@ async def test_bloque_procesar_exitoso(nucleus, monkeypatch):
         assert result["bloque_id"] == "test_block"
         assert result["fitness"] == 0.5
         assert len(result["mensajes"]) == 1
+        assert result["mensajes"][0]["clasificacion"] == "test"
         assert mock_alerta.called
         assert not mock_logger.called
 
@@ -177,4 +180,6 @@ async def test_bloque_timeout_config(nucleus):
     with patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
         result = await bloque.procesar(0.5)
         assert result["bloque_id"] == "ia_analisis"
+        assert result["fitness"] == 0.5
+        assert len(result["mensajes"]) == 1
         assert mock_alerta.called
