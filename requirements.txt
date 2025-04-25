@@ -33,3 +33,4 @@ apscheduler
 plotly
 pandas
 torchvision
+tenacity
