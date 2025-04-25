@@ -2,6 +2,9 @@
 import torch
 import torch.nn as nn
 from torchvision.models import mobilenet_v3_small
+from torchvision import transforms
+from PIL import Image
+import numpy as np
 
 def load_mobilenet_v3_small(
     model_path: str = None,
@@ -27,3 +30,17 @@ def load_mobilenet_v3_small(
         return model.to(device)
     except Exception as e:
         raise RuntimeError(f"Error cargando MobileNetV3 Small: {e}")
+
+def preprocess_data(image: Image.Image) -> torch.Tensor:
+    """Preprocesa una imagen para MobileNetV3."""
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    return transform(image).unsqueeze(0)
+
+def postprocess_logits(logits: torch.Tensor) -> np.ndarray:
+    """Postprocesa logits para obtener probabilidades."""
+    probabilities = torch.softmax(logits, dim=1).detach().cpu().numpy()
+    return probabilities
