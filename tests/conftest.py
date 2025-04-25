@@ -1,8 +1,10 @@
 # tests/conftest.py
 import pytest
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 from corec.nucleus import CoreCNucleus
-from corec.config_loader import load_config_dict
+from corec.config_loader import load_config_dict, CoreCConfig
+from pathlib import Path
 
 @pytest.fixture
 def test_config():
@@ -86,18 +88,6 @@ def test_config():
                     "max_errores": 0.1,
                     "min_fitness": 0.3
                 }
-            },
-            "test_plugin": {
-                "enabled": True,
-                "path": "plugins/test_plugin/config.json",
-                "bloque": {
-                    "bloque_id": "test_block",
-                    "canal": 4,
-                    "entidades": 500,
-                    "max_size_mb": 1,
-                    "max_errores": 0.05,
-                    "min_fitness": 0.5
-                }
             }
         }
     }
@@ -129,8 +119,12 @@ def mock_db_pool():
     yield conn
 
 @pytest.fixture
-async def nucleus(mock_redis, mock_db_pool, test_config):
+async def nucleus(mock_redis, mock_db_pool, test_config, tmp_path):
     """Fixture para inicializar CoreCNucleus con mocks."""
+    # Crear un archivo de configuración temporal con test_config
+    config_path = tmp_path / "test_config.json"
+    config_path.write_text(json.dumps(test_config))
+    
     try:
         with patch("corec.config_loader.load_config_dict", return_value=test_config), \
              patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
@@ -140,7 +134,8 @@ async def nucleus(mock_redis, mock_db_pool, test_config):
              patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
             mock_schedule.return_value = None
             mock_model.return_value = MagicMock()
-            nucleus = CoreCNucleus("config/corec_config.json")
+            # Usar el archivo temporal para CoreCNucleus
+            nucleus = CoreCNucleus(str(config_path))
             await nucleus.inicializar()
             yield nucleus
             await nucleus.detener()
