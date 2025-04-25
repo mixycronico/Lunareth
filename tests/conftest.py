@@ -1,6 +1,6 @@
 # tests/conftest.py
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from corec.nucleus import CoreCNucleus
 from corec.config_loader import load_config_dict
 
