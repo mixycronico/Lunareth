@@ -7,6 +7,7 @@ from corec.modules.ia import ModuloIA
 from corec.modules.analisis_datos import ModuloAnalisisDatos
 from corec.nucleus import CoreCNucleus
 import pandas as pd
+from typing import Dict
 
 @pytest.fixture
 async def nucleus(mock_redis, mock_db_pool, test_config):
