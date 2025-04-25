@@ -92,7 +92,15 @@ def test_config():
             },
             "test_plugin": {
                 "enabled": True,
-                "bloque": {"id": "test_plugin", "canal": 4, "entidades": 500}
+                "path": "plugins/test_plugin/config.json",
+                "bloque": {
+                    "bloque_id": "test_plugin",
+                    "canal": 4,
+                    "entidades": 500,
+                    "max_size_mb": 5,
+                    "max_errores": 0.1,
+                    "min_fitness": 0.3
+                }
             }
         }
     }
