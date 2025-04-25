@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from corec.modules.ia import ModuloIA
 from corec.blocks import BloqueSimbiotico
 from corec.nucleus import CoreCNucleus
+from typing import Dict
 
 @pytest.fixture
 async def nucleus(mock_redis, mock_db_pool, test_config):
