@@ -5,6 +5,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from plugins.registry import registry
 from corec.nucleus import CoreCNucleus
 
+@pytest.fixture
+async def nucleus(mock_redis, mock_db_pool, test_config):
+    """Fixture para inicializar CoreCNucleus con mocks."""
+    with patch("corec.config_loader.load_config_dict", return_value=test_config), \
+         patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
+         patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
+         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
+         patch("pandas.DataFrame", MagicMock()):
+        mock_schedule.return_value = None
+        nucleus = CoreCNucleus("config/corec_config.json")
+        await nucleus.inicializar()
+        yield nucleus
+        await nucleus.detener()
+
 @pytest.mark.asyncio
 async def test_plugin_load_valid(nucleus):
     """Prueba la carga de un complemento válido a través del registro."""
