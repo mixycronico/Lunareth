@@ -52,9 +52,10 @@ class ModuloAnalisisDatos(ComponenteBase):
 
             # Detección de anomalías
             try:
+                max_samples = min(len(df), self.config.get("max_samples", 1000))
                 iso = IsolationForest(
                     n_estimators=self.config.get("n_estimators", 100),
-                    max_samples=self.config.get("max_samples", min(len(df), 1000)),
+                    max_samples=max_samples,
                     contamination=0.1,
                     random_state=42
                 )
