@@ -21,11 +21,7 @@ async def test_modulo_ia_procesar_timeout(nucleus):
     ia_module = ModuloIA()
     config = nucleus.config["ia_config"].copy()
     config["enabled"] = True
-    config["model_path"] = "corec/models/mobilev3/model.pth"  # Configurar model_path
-    await ia_module.inicializar(nucleus, config)
-    bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
-    bloque.ia_timeout_seconds = 0.1
-    datos = {"valores": [0.1, 0.2, 0.3]}
+    config["model_path"] = "corec/models/mobilev3/model.pth"
     mock_model = MagicMock()
     def delayed_execution(x):
         time.sleep(1)  # Simular retraso síncrono
@@ -33,6 +29,10 @@ async def test_modulo_ia_procesar_timeout(nucleus):
     mock_model.side_effect = delayed_execution
     with patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model), \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
+        await ia_module.inicializar(nucleus, config)
+        bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
+        bloque.ia_timeout_seconds = 0.1
+        datos = {"valores": [0.1, 0.2, 0.3]}
         result = await ia_module.procesar_bloque(bloque, datos)
         assert len(result["mensajes"]) == 1
         assert result["mensajes"][0]["clasificacion"] == "fallback"
@@ -45,15 +45,15 @@ async def test_modulo_ia_recursos_excedidos(nucleus):
     ia_module = ModuloIA()
     config = nucleus.config["ia_config"].copy()
     config["enabled"] = True
-    config["model_path"] = "corec/models/mobilev3/model.pth"  # Configurar model_path
-    await ia_module.inicializar(nucleus, config)
-    bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
-    datos = {"valores": [0.1, 0.2, 0.3]}
+    config["model_path"] = "corec/models/mobilev3/model.pth"
     mock_model = MagicMock()
     mock_model.return_value = torch.zeros(1, 3)
     with patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model), \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
          patch("psutil.cpu_percent", return_value=95.0):
+        await ia_module.inicializar(nucleus, config)
+        bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
+        datos = {"valores": [0.1, 0.2, 0.3]}
         result = await ia_module.procesar_bloque(bloque, datos)
         assert len(result["mensajes"]) == 1
         assert result["mensajes"][0]["clasificacion"] == "fallback_recursos"
