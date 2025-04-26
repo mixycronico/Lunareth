@@ -1,4 +1,3 @@
-# corec/blocks.py
 import logging
 import time
 from typing import List, Dict, Any
@@ -102,29 +101,24 @@ class BloqueSimbiotico:
         """Escribe los mensajes del bloque en PostgreSQL.
 
         Args:
-            conn: Conexión a PostgreSQL.
+            conn: Conexión asíncrona a PostgreSQL (asyncpg).
         """
-        cur = None
         try:
-            cur = conn.cursor()
             for mensaje in self.mensajes:
-                cur.execute(
+                await conn.execute(
                     """
                     INSERT INTO mensajes (
                         bloque_id, entidad_id, canal, valor, clasificacion, probabilidad, timestamp
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                     """,
-                    (
-                        self.id,
-                        mensaje["entidad_id"],
-                        mensaje["canal"],
-                        mensaje["valor"],
-                        mensaje.get("clasificacion", ""),
-                        mensaje.get("probabilidad", 0.0),
-                        mensaje["timestamp"]
-                    )
+                    self.id,
+                    mensaje["entidad_id"],
+                    mensaje["canal"],
+                    mensaje["valor"],
+                    mensaje.get("clasificacion", ""),
+                    mensaje.get("probabilidad", 0.0),
+                    mensaje["timestamp"]
                 )
-            conn.commit()
             self.mensajes = []
             self.logger.info(f"[Bloque {self.id}] Mensajes escritos en PostgreSQL")
             await self.nucleus.publicar_alerta({
@@ -141,6 +135,3 @@ class BloqueSimbiotico:
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
-        finally:
-            if cur is not None:
-                cur.close()
