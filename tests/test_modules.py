@@ -64,7 +64,7 @@ async def test_modulo_sincronizacion_redirigir_entidades(nucleus):
     await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
     nucleus.modules["registro"] = registro
-    async def test_func(carga): return {"valor": 0.7}
+    def test_func(carga): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(1000)]
     bloque1 = BloqueSimbiotico("block1", 1, entidades[:500], 10.0, nucleus)
     bloque2 = BloqueSimbiotico("block2", 2, entidades[500:], 10.0, nucleus)
@@ -81,7 +81,7 @@ async def test_modulo_sincronizacion_redirigir_entidades_error(nucleus):
     await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
     nucleus.modules["registro"] = registro
-    async def test_func(carga): return {"valor": 0.7}
+    def test_func(carga): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(1000)]
     bloque1 = BloqueSimbiotico("block1", 1, entidades[:500], 10.0, nucleus)
     bloque2 = BloqueSimbiotico("block2", 2, entidades[500:], 10.0, nucleus)
@@ -98,7 +98,7 @@ async def test_modulo_sincronizacion_adaptar_bloque_fusionar(nucleus):
     await asyncio.wait_for(sincronizacion.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
     nucleus.modules["registro"] = registro
-    async def test_func(carga): return {"valor": 0.7}
+    def test_func(carga): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(1000)]
     bloque1 = BloqueSimbiotico("block1", 1, entidades[:500], 10.0, nucleus)
     bloque2 = BloqueSimbiotico("block2", 2, entidades[500:], 10.0, nucleus)
@@ -132,7 +132,7 @@ async def test_modulo_ejecucion_encolar_tareas(nucleus):
     await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
     nucleus.modules["registro"] = registro
-    async def test_func(carga): return {"valor": 0.7}
+    def test_func(carga): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     with patch.object(ejecucion.logger, "info") as mock_logger, \
@@ -149,7 +149,7 @@ async def test_modulo_ejecucion_encolar_tareas_error(nucleus):
     await asyncio.wait_for(ejecucion.inicializar(nucleus), timeout=5)
     registro = ModuloRegistro()
     nucleus.modules["registro"] = registro
-    async def test_func(carga): return {"valor": 0.7}
+    def test_func(carga): return {"valor": 0.7}
     entidades = [crear_entidad(f"m{i}", 1, test_func) for i in range(100)]
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     with patch.object(ejecucion.logger, "error") as mock_logger, \
