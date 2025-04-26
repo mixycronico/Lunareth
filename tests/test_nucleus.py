@@ -3,6 +3,7 @@ from corec.nucleus import CoreCNucleus
 from unittest.mock import AsyncMock, patch, MagicMock
 import json
 from pathlib import Path
+import pandas as pd
 
 @pytest.mark.asyncio
 async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
