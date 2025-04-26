@@ -13,7 +13,7 @@ logger = logging.getLogger("CoreCDB")
 )
 async def init_postgresql(config: dict) -> asyncpg.Pool:
     """Inicializa el pool de conexiones a PostgreSQL y crea tablas necesarias."""
-    # Renombrar dbname a database si está presente
+    # Mapear dbname a database para asyncpg
     config = config.copy()
     if "dbname" in config:
         config["database"] = config.pop("dbname")
