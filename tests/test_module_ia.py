@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 import torch
 import asyncio
 import numpy as np
+import time
 
 @pytest.mark.asyncio
 async def test_modulo_ia_inicializar(nucleus):
@@ -20,6 +21,7 @@ async def test_modulo_ia_procesar_timeout(nucleus):
     ia_module = ModuloIA()
     config = nucleus.config["ia_config"].copy()
     config["enabled"] = True
+    config["model_path"] = "corec/models/mobilev3/model.pth"  # Configurar model_path
     await ia_module.inicializar(nucleus, config)
     bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
     bloque.ia_timeout_seconds = 0.1
@@ -43,6 +45,7 @@ async def test_modulo_ia_recursos_excedidos(nucleus):
     ia_module = ModuloIA()
     config = nucleus.config["ia_config"].copy()
     config["enabled"] = True
+    config["model_path"] = "corec/models/mobilev3/model.pth"  # Configurar model_path
     await ia_module.inicializar(nucleus, config)
     bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
     datos = {"valores": [0.1, 0.2, 0.3]}
