@@ -1,4 +1,3 @@
-# corec/utils/db_utils.py
 import logging
 import asyncpg
 import aioredis
@@ -14,6 +13,10 @@ logger = logging.getLogger("CoreCDB")
 )
 async def init_postgresql(config: dict) -> asyncpg.Pool:
     """Inicializa el pool de conexiones a PostgreSQL y crea tablas necesarias."""
+    # Renombrar dbname a database si está presente
+    config = config.copy()
+    if "dbname" in config:
+        config["database"] = config.pop("dbname")
     pool = await asyncpg.create_pool(**config)
     async with pool.acquire() as conn:
         await conn.execute("""
