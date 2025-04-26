@@ -1,4 +1,3 @@
-# corec/modules/ia.py
 import logging
 import random
 import time
@@ -76,7 +75,6 @@ class ModuloIA(ComponenteBase):
                 "timestamp": time.time()
             } for i in range(len(datos_list))]
 
-        timeout = bloque.ia_timeout_seconds if hasattr(bloque, 'ia_timeout_seconds') and bloque.ia_timeout_seconds else self.timeout
         try:
             tensors = [preprocess_data(datos, self.device) for datos in datos_list]
             batch_input = torch.cat(tensors, dim=0)
@@ -88,22 +86,29 @@ class ModuloIA(ComponenteBase):
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
-            return []
+            return [{
+                "entidad_id": f"{bloque.id}_ia_fallback_{i}",
+                "canal": bloque.canal,
+                "valor": 0.0,
+                "clasificacion": "fallback_preprocesamiento",
+                "probabilidad": 0.0,
+                "timestamp": time.time()
+            } for i in range(len(datos_list))]
 
         for attempt in range(3):
             try:
                 loop = asyncio.get_event_loop()
                 logits = await asyncio.wait_for(
                     loop.run_in_executor(None, lambda: self.model(batch_input)),
-                    timeout=timeout
+                    timeout=self.timeout
                 )
                 break
             except asyncio.TimeoutError:
-                self.logger.warning(f"[IA] Timeout en intento {attempt + 1}/{3}, timeout={timeout}s")
+                self.logger.warning(f"[IA] Timeout en intento {attempt + 1}/{3}, timeout={self.timeout}s")
                 await self.nucleus.publicar_alerta({
                     "tipo": "timeout_ia",
                     "bloque_id": bloque.id,
-                    "timeout": timeout,
+                    "timeout": self.timeout,
                     "attempt": attempt + 1,
                     "timestamp": time.time()
                 })
