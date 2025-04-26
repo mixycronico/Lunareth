@@ -77,6 +77,11 @@ def load_config_dict(config_path: str) -> dict:
         with config_file.open("r") as f:
             config_dict = json.load(f)
 
+        # Validar IDs de bloques únicos
+        block_ids = [block["id"] for block in config_dict.get("bloques", [])]
+        if len(block_ids) != len(set(block_ids)):
+            raise ValueError("Duplicate block IDs found in configuration")
+
         config = ConfigSchema(**config_dict)
         return config.model_dump()
     except ValidationError as e:
