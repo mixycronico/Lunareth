@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import pandas as pd
+import asyncio
 
 @pytest.fixture
 def test_config():
@@ -107,33 +108,33 @@ def test_config():
     }
 
 @pytest.fixture
-def mock_redis():
+async def mock_redis():
     """Mock de cliente Redis con soporte para simular fallos."""
     redis = AsyncMock()
-    redis.get.return_value = None
-    redis.set.return_value = None
-    redis.ping.return_value = True
-    redis.xadd.return_value = None
-    redis.xlen.return_value = 0
-    redis.close.return_value = None
-    redis.xread.return_value = []
+    redis.get = AsyncMock(return_value=None)
+    redis.set = AsyncMock(return_value=None)
+    redis.ping = AsyncMock(return_value=True)
+    redis.xadd = AsyncMock(return_value=None)
+    redis.xlen = AsyncMock(return_value=0)
+    redis.close = AsyncMock(return_value=None)
+    redis.xread = AsyncMock(return_value=[])
     yield redis
 
 @pytest.fixture
-def mock_db_pool():
+async def mock_db_pool():
     """Mock de pool de conexiones PostgreSQL con soporte para simular fallos."""
     conn = AsyncMock()
-    conn.execute.return_value = None
-    conn.fetch.return_value = []
-    conn.fetchrow.return_value = None
-    conn.close.return_value = None
+    conn.execute = AsyncMock(return_value=None)
+    conn.fetch = AsyncMock(return_value=[])
+    conn.fetchrow = AsyncMock(return_value=None)
+    conn.close = AsyncMock(return_value=None)
     pool = AsyncMock()
-    pool.acquire.return_value.__aenter__.return_value = conn
-    pool.acquire.return_value.__aexit__.return_value = None
+    pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
+    pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
     yield pool
 
 @pytest.fixture
-def mock_postgresql():
+async def mock_postgresql():
     """Mock de conexión síncrona compatible con psycopg2."""
     conn = MagicMock()
     cursor = MagicMock()
