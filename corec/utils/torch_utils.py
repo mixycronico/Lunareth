@@ -9,11 +9,10 @@ logger = logging.getLogger("TorchUtils")
 def load_mobilenet_v3_small(model_path: str = "", pretrained: bool = False, n_classes: int = 3, device: torch.device = None):
     """Carga un modelo MobileNetV3 Small."""
     try:
-        model = models.mobilenet_v3_small(pretrained=pretrained)
-        if not pretrained:
-            model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, n_classes)
-            if model_path:
-                model.load_state_dict(torch.load(model_path, map_location=device))
+        model = models.mobilenet_v3_small(weights=None)
+        model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, n_classes)
+        if model_path:
+            model.load_state_dict(torch.load(model_path, map_location=device))
         model.eval()
         return model.to(device)
     except Exception as e:
