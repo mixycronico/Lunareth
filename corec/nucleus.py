@@ -1,4 +1,3 @@
-# corec/nucleus.py
 import asyncio
 import logging
 import time
@@ -38,7 +37,11 @@ class CoreCNucleus:
         try:
             self.config = load_config_dict(self.config_path)
             try:
-                self.db_pool = await init_postgresql(self.config.get("db_config", {}))
+                # Renombrar dbname a database para compatibilidad con asyncpg
+                db_config = self.config.get("db_config", {})
+                if "dbname" in db_config:
+                    db_config["database"] = db_config.pop("dbname")
+                self.db_pool = await init_postgresql(db_config)
             except Exception as e:
                 self.logger.error(f"[Núcleo] Fallo en conexión a PostgreSQL tras reintentos: {e}")
                 self.db_pool = None
@@ -150,7 +153,8 @@ class CoreCNucleus:
             if bloque.id != "ia_analisis":
                 await self.modules["ejecucion"].encolar_bloque(bloque)
             if self.db_pool:
-                await bloque.escribir_postgresql(self.db_pool)
+                async with self.db_pool.acquire() as conn:
+                    await bloque.escribir_postgresql(conn)
             else:
                 self.logger.warning(f"[Núcleo] PostgreSQL no disponible, usando almacenamiento fallback para {bloque.id}")
                 await self.save_fallback_messages(bloque.id, bloque.mensajes)
@@ -199,17 +203,15 @@ class CoreCNucleus:
                         """
                         INSERT INTO mensajes (
                             bloque_id, entidad_id, canal, valor, clasificacion, probabilidad, timestamp
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                         """,
-                        (
-                            bloque_id,
-                            m["entidad_id"],
-                            m["canal"],
-                            m["valor"],
-                            m.get("clasificacion", ""),
-                            m.get("probabilidad", 0.0),
-                            m["timestamp"]
-                        )
+                        bloque_id,
+                        m["entidad_id"],
+                        m["canal"],
+                        m["valor"],
+                        m.get("clasificacion", ""),
+                        m.get("probabilidad", 0.0),
+                        m["timestamp"]
                     )
             self.fallback_storage.unlink()
             self.logger.info("[Núcleo] Mensajes de fallback escritos en PostgreSQL")
@@ -292,15 +294,13 @@ class CoreCNucleus:
                 await conn.execute(
                     """
                     INSERT INTO alertas (tipo, bloque_id, mensaje, timestamp, datos)
-                    VALUES (%s, %s, %s, %s, %s)
+                    VALUES ($1, $2, $3, $4, $5)
                     """,
-                    (
-                        alerta.get("tipo", "unknown"),
-                        alerta.get("bloque_id", ""),
-                        alerta.get("mensaje", ""),
-                        alerta.get("timestamp", time.time()),
-                        json.dumps(alerta)
-                    )
+                    alerta.get("tipo", "unknown"),
+                    alerta.get("bloque_id", ""),
+                    alerta.get("mensaje", ""),
+                    alerta.get("timestamp", time.time()),
+                    json.dumps(alerta)
                 )
             self.logger.info(f"[Alerta] Alerta archivada en PostgreSQL: {alerta['tipo']}")
         except Exception as e:
