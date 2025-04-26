@@ -6,6 +6,7 @@ from corec.config_loader import load_config_dict
 from pathlib import Path
 import torch
 import torch.nn as nn
+import pandas as pd
 
 @pytest.fixture
 def test_config():
@@ -13,7 +14,7 @@ def test_config():
     return {
         "instance_id": "corec1",
         "db_config": {
-            "dbname": "corec_db",  # Cambiado de database a dbname
+            "dbname": "corec_db",
             "user": "postgres",
             "password": "your_password",
             "host": "localhost",
@@ -28,8 +29,8 @@ def test_config():
             "stream_max_length": 5000
         },
         "ia_config": {
-            "enabled": False,  # Disable IA to avoid model loading issues
-            "model_path": "",  # Valid string for CoreCConfig
+            "enabled": False,
+            "model_path": "",
             "max_size_mb": 50,
             "pretrained": False,
             "n_classes": 3,
@@ -154,7 +155,7 @@ async def nucleus(mock_redis, mock_db_pool, test_config, tmp_path):
              patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
              patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
              patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()) as mock_schedule, \
-             patch("pandas.DataFrame", MagicMock()) as mock_df, \
+             patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)) as mock_df, \
              patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=MagicMock(spec=nn.Module)):
             mock_schedule.return_value = None
             nucleus = CoreCNucleus(str(config_path))
@@ -170,7 +171,7 @@ def mock_config():
     return {
         "instance_id": "corec1",
         "db_config": {
-            "dbname": "corec_db",  # Cambiado de database a dbname
+            "dbname": "corec_db",
             "user": "postgres",
             "password": "your_password",
             "host": "localhost",
