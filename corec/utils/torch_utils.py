@@ -43,7 +43,11 @@ def preprocess_data(data: dict, device: torch.device):
         else:
             # Manejar valores numéricos
             values = np.array(data["valores"], dtype=np.float32)
-            tensor = torch.from_numpy(values).reshape(1, -1).to(device)
+            # Crear un tensor de imagen dummy (1, 3, 224, 224)
+            tensor = torch.zeros(1, 3, 224, 224, dtype=torch.float32, device=device)
+            # Rellenar el canal 0 con los valores escalados
+            scale = values / (np.max(np.abs(values)) + 1e-8)  # Escalar para evitar valores extremos
+            tensor[:, 0, :len(values), 0] = torch.from_numpy(scale).to(device)
             return tensor
     except Exception as e:
         logger.error(f"Error preprocessing data: {e}")
