@@ -60,7 +60,7 @@ async def test_integration_analisis_datos(nucleus):
         "max_samples": 1000
     })
     await analisis.inicializar(nucleus, config)
-    datos = pd.DataFrame({"valores": [0.1, 0.2, 0.3]})
+    datos = pd.DataFrame({"valores": [0.1, 0.2, 0.3], "valores2": [0.4, 0.5, 0.6]})
     with patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
         result = await analisis.analizar(datos, "test_datos")
         assert "estadisticas" in result
