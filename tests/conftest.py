@@ -115,6 +115,7 @@ def mock_redis():
     redis.xadd.return_value = None
     redis.xlen.return_value = 0
     redis.close.return_value = None
+    redis.xread.return_value = []
     yield redis
 
 @pytest.fixture
