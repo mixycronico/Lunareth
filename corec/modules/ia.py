@@ -31,17 +31,18 @@ class ModuloIA(ComponenteBase):
             pretrained = cfg.get("pretrained", False)
             n_classes = cfg.get("n_classes", 3)
 
-            if model_path or pretrained:
-                self.model = load_mobilenet_v3_small(
-                    model_path=model_path,
-                    pretrained=pretrained,
-                    n_classes=n_classes,
-                    device=self.device
-                )
-                self.logger.info(f"[IA] Modelo cargado ({'pretrained' if pretrained else model_path}), "
-                                 f"timeout={self.timeout}s")
-            else:
-                self.logger.warning("[IA] No se especificó model_path ni pretrained, modelo no cargado")
+            if not (model_path or pretrained):
+                self.logger.error("[IA] Se requiere model_path o pretrained cuando enabled es True")
+                raise ValueError("Se requiere model_path o pretrained cuando enabled es True")
+
+            self.model = load_mobilenet_v3_small(
+                model_path=model_path,
+                pretrained=pretrained,
+                n_classes=n_classes,
+                device=self.device
+            )
+            self.logger.info(f"[IA] Modelo cargado ({'pretrained' if pretrained else model_path}), "
+                             f"timeout={self.timeout}s")
         except Exception as e:
             self.logger.error(f"[IA] Error inicializando: {e}")
             await self.nucleus.publicar_alerta({
