@@ -1,7 +1,7 @@
 {
     "instance_id": "corec1",
     "db_config": {
-        "dbname": "corec_db",
+        "database": "corec_db",
         "user": "postgres",
         "password": "your_password",
         "host": "localhost",
