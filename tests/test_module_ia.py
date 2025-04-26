@@ -24,7 +24,7 @@ async def test_modulo_ia_procesar_timeout(nucleus):
     datos = {"valores": [0.1, 0.2, 0.3]}
     with patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
-         patch("torch.cat", return_value=torch.randn(1, 3, 224, 224)):
+         patch("corec.utils.torch_utils.preprocess_data", return_value=torch.randn(1, 3, 224, 224)):
         result = await ia_module.procesar_bloque(bloque, datos)
         assert len(result["mensajes"]) == 1
         assert result["mensajes"][0]["clasificacion"] == "fallback"
