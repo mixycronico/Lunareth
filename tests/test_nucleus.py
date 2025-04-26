@@ -9,7 +9,8 @@ import warnings
 @pytest.mark.asyncio
 async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
     """Prueba el almacenamiento en fallback cuando PostgreSQL falla."""
-    test_config["ia_config"]["enabled"] = False  # Forzar IA deshabilitada
+    test_config["ia_config"]["enabled"] = False
+    test_config["ia_config"]["model_path"] = ""  # Asegurar que model_path esté vacío
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
@@ -35,7 +36,8 @@ async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
 @pytest.mark.asyncio
 async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp_path):
     """Prueba el reintento de mensajes desde fallback a PostgreSQL."""
-    test_config["ia_config"]["enabled"] = False  # Forzar IA deshabilitada
+    test_config["ia_config"]["enabled"] = False
+    test_config["ia_config"]["model_path"] = ""  # Asegurar que model_path esté vacío
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
