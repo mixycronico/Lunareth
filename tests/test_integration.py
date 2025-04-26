@@ -21,7 +21,7 @@ async def test_integration_process_and_audit(nucleus):
 @pytest.mark.asyncio
 async def test_integration_synchronize_and_plugin_execution(nucleus):
     """Prueba la integración de sincronización y ejecución de plugins."""
-    with patch("corec.modules.sincronizacion.ModuloSincronizacion.synchronize_bloques", AsyncMock()) as mock_synchronize:
+    with patch("corec.modules.sincronizacion.ModuloSincronizacion.redirigir_entidades", AsyncMock()) as mock_synchronize:
         plugin_id = "crypto_trading"
         comando = {"action": "ejecutar_operacion", "params": {"exchange": "binance", "pair": "BTC/USDT", "side": "buy"}}
         plugin_mock = AsyncMock()
@@ -29,7 +29,7 @@ async def test_integration_synchronize_and_plugin_execution(nucleus):
         nucleus.plugins[plugin_id] = plugin_mock
         await nucleus.inicializar()
         if len(nucleus.bloques) >= 2:
-            await nucleus.modules["sincronizacion"].synchronize_bloques(
+            await nucleus.modules["sincronizacion"].redirigir_entidades(
                 nucleus.bloques[0], nucleus.bloques[1], 0.1, nucleus.bloques[1].canal
             )
         assert mock_synchronize.called
@@ -53,7 +53,12 @@ async def test_integration_ia_processing(nucleus):
 async def test_integration_analisis_datos(nucleus):
     """Prueba la integración de análisis de datos."""
     analisis = ModuloAnalisisDatos()
-    await analisis.inicializar(nucleus, nucleus.config["analisis_datos_config"])
+    config = nucleus.config.get("analisis_datos_config", {
+        "correlation_threshold": 0.8,
+        "n_estimators": 100,
+        "max_samples": 1000
+    })
+    await analisis.inicializar(nucleus, config)
     datos = {"valores": [0.1, 0.2, 0.3]}
     with patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
         result = await analisis.analizar_datos(datos)
