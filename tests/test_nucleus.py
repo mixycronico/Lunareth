@@ -55,10 +55,11 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
         }]
         with open(fallback_file, "w") as f:
             json.dump(messages, f)
-        mock_db_pool.execute = AsyncMock(return_value=None)
+        conn = AsyncMock()
+        conn.execute = AsyncMock(return_value=None)
+        mock_db_pool.acquire.return_value.__aenter__.return_value = conn
         nucleus.fallback_storage = fallback_file  # Ajustar path para pruebas
-        async with mock_db_pool.acquire.return_value:
-            await nucleus.retry_fallback_messages()
+        await nucleus.retry_fallback_messages()
         assert not fallback_file.exists()
-        assert mock_db_pool.execute.called
+        assert conn.execute.called
         await nucleus.detener()
