@@ -214,8 +214,11 @@ class CoreCNucleus:
                         m["timestamp"]
                     )
             self.logger.info(f"[Núcleo] Eliminando archivo de fallback {self.fallback_storage}")
-            self.fallback_storage.unlink()
-            self.logger.info("[Núcleo] Mensajes de fallback escritos en PostgreSQL")
+            try:
+                self.fallback_storage.unlink()
+                self.logger.info("[Núcleo] Mensajes de fallback escritos en PostgreSQL")
+            except Exception as e:
+                self.logger.error(f"[Núcleo] Error eliminando archivo de fallback: {e}")
         except Exception as e:
             self.logger.error(f"[Núcleo] Error reintentando mensajes de fallback: {e}")
 
