@@ -195,6 +195,7 @@ class CoreCNucleus:
                 messages = json.load(f)
             self.logger.info(f"[Núcleo] Encontrados {len(messages)} mensajes para reintentar")
             async with self.db_pool.acquire() as conn:
+                self.logger.debug("[Núcleo] Adquirida conexión al pool de PostgreSQL")
                 for msg in messages:
                     bloque_id = msg["bloque_id"]
                     m = msg["mensaje"]
