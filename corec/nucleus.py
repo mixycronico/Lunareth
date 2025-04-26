@@ -187,14 +187,18 @@ class CoreCNucleus:
     async def retry_fallback_messages(self):
         """Reintenta escribir mensajes guardados en fallback a PostgreSQL."""
         if not self.db_pool or not self.fallback_storage.exists():
+            self.logger.info(f"[Núcleo] No hay mensajes de fallback o db_pool no disponible")
             return
         try:
+            self.logger.info(f"[Núcleo] Leyendo mensajes de {self.fallback_storage}")
             with open(self.fallback_storage, "r") as f:
                 messages = json.load(f)
+            self.logger.info(f"[Núcleo] Encontrados {len(messages)} mensajes para reintentar")
             async with self.db_pool.acquire() as conn:
                 for msg in messages:
                     bloque_id = msg["bloque_id"]
                     m = msg["mensaje"]
+                    self.logger.debug(f"[Núcleo] Insertando mensaje para bloque {bloque_id}, entidad {m['entidad_id']}")
                     await conn.execute(
                         """
                         INSERT INTO mensajes (
@@ -209,6 +213,7 @@ class CoreCNucleus:
                         m.get("probabilidad", 0.0),
                         m["timestamp"]
                     )
+            self.logger.info(f"[Núcleo] Eliminando archivo de fallback {self.fallback_storage}")
             self.fallback_storage.unlink()
             self.logger.info("[Núcleo] Mensajes de fallback escritos en PostgreSQL")
         except Exception as e:
