@@ -31,14 +31,17 @@ class ModuloIA(ComponenteBase):
             pretrained = cfg.get("pretrained", False)
             n_classes = cfg.get("n_classes", 3)
 
-            self.model = load_mobilenet_v3_small(
-                model_path=model_path,
-                pretrained=pretrained,
-                n_classes=n_classes,
-                device=self.device
-            )
-            self.logger.info(f"[IA] Modelo cargado ({'pretrained' if pretrained else model_path}), "
-                             f"timeout={self.timeout}s")
+            if model_path or pretrained:
+                self.model = load_mobilenet_v3_small(
+                    model_path=model_path,
+                    pretrained=pretrained,
+                    n_classes=n_classes,
+                    device=self.device
+                )
+                self.logger.info(f"[IA] Modelo cargado ({'pretrained' if pretrained else model_path}), "
+                                 f"timeout={self.timeout}s")
+            else:
+                self.logger.warning("[IA] No se especificó model_path ni pretrained, modelo no cargado")
         except Exception as e:
             self.logger.error(f"[IA] Error inicializando: {e}")
             await self.nucleus.publicar_alerta({
@@ -76,6 +79,17 @@ class ModuloIA(ComponenteBase):
                 "timestamp": time.time()
             } for i in range(len(datos_list))]
 
+        if self.model is None:
+            self.logger.error("[IA] Modelo no inicializado")
+            return [{
+                "entidad_id": f"{bloque.id}_ia_fallback_{i}",
+                "canal": bloque.canal,
+                "valor": 0.0,
+                "clasificacion": "fallback",
+                "probabilidad": 0.0,
+                "timestamp": time.time()
+            } for i in range(len(datos_list))]
+
         timeout = bloque.ia_timeout_seconds if hasattr(bloque, 'ia_timeout_seconds') and bloque.ia_timeout_seconds else self.timeout
         try:
             tensors = [preprocess_data(datos, self.device) for datos in datos_list]
@@ -97,33 +111,35 @@ class ModuloIA(ComponenteBase):
                 "timestamp": time.time()
             } for i in range(len(datos_list))]
 
-        for attempt in range(3):
-            try:
-                loop = asyncio.get_event_loop()
-                logits = await asyncio.wait_for(
-                    loop.run_in_executor(None, lambda: self.model(batch_input)),
-                    timeout=timeout
-                )
-                break
-            except asyncio.TimeoutError:
-                self.logger.warning(f"[IA] Timeout en intento {attempt + 1}/{3}, timeout={timeout}s")
-                await self.nucleus.publicar_alerta({
-                    "tipo": "timeout_ia",
-                    "bloque_id": bloque.id,
-                    "timeout": timeout,
-                    "attempt": attempt + 1,
-                    "timestamp": time.time()
-                })
-                if attempt == 2:
-                    return [{
-                        "entidad_id": f"{bloque.id}_ia_fallback_{i}",
-                        "canal": bloque.canal,
-                        "valor": 0.0,
-                        "clasificacion": "fallback",
-                        "probabilidad": 0.0,
-                        "timestamp": time.time()
-                    } for i in range(len(datos_list))]
-        else:
+        try:
+            async def run_model():
+                return await asyncio.to_thread(self.model, batch_input)
+
+            logits = await asyncio.wait_for(run_model(), timeout=timeout)
+        except asyncio.TimeoutError:
+            self.logger.warning(f"[IA] Timeout procesando bloque {bloque.id}, timeout={timeout}s")
+            await self.nucleus.publicar_alerta({
+                "tipo": "timeout_ia",
+                "bloque_id": bloque.id,
+                "timeout": timeout,
+                "timestamp": time.time()
+            })
+            return [{
+                "entidad_id": f"{bloque.id}_ia_fallback_{i}",
+                "canal": bloque.canal,
+                "valor": 0.0,
+                "clasificacion": "fallback",
+                "probabilidad": 0.0,
+                "timestamp": time.time()
+            } for i in range(len(datos_list))]
+        except Exception as e:
+            self.logger.error(f"[IA] Error procesando bloque {bloque.id}: {e}")
+            await self.nucleus.publicar_alerta({
+                "tipo": "error_procesamiento_ia",
+                "bloque_id": bloque.id,
+                "mensaje": str(e),
+                "timestamp": time.time()
+            })
             return []
 
         try:
