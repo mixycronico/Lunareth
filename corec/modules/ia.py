@@ -22,13 +22,14 @@ class ModuloIA(ComponenteBase):
         try:
             self.nucleus = nucleus
             cfg = config or {}
+            self.timeout = cfg.get("timeout_seconds", 2.0)
             if not cfg.get("enabled", False):
                 self.logger.info("[IA] Módulo IA deshabilitado")
                 return
+
             model_path = cfg.get("model_path", "")
             pretrained = cfg.get("pretrained", False)
             n_classes = cfg.get("n_classes", 3)
-            self.timeout = cfg.get("timeout_seconds", 2.0)
 
             self.model = load_mobilenet_v3_small(
                 model_path=model_path,
