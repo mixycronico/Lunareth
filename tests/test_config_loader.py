@@ -161,5 +161,5 @@ def test_load_config_duplicate_block_ids(tmp_path):
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps(config_data))
     
-    with pytest.raises(ValueError, match="Invalid config format"):
+    with pytest.raises(ValueError, match="Error loading config: Duplicate block IDs found in configuration"):
         load_config_dict(str(config_path))
