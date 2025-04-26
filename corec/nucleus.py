@@ -220,8 +220,10 @@ class CoreCNucleus:
                 self.logger.info("[Núcleo] Mensajes de fallback escritos en PostgreSQL")
             except Exception as e:
                 self.logger.error(f"[Núcleo] Error eliminando archivo de fallback: {e}")
+                self.logger.debug(f"[Núcleo] Permisos del archivo: {self.fallback_storage.stat()}")
         except Exception as e:
             self.logger.error(f"[Núcleo] Error reintentando mensajes de fallback: {e}")
+            self.logger.debug(f"[Núcleo] Detalles del error: {repr(e)}")
 
     async def ejecutar_analisis(self):
         """Extrae mensajes de PostgreSQL, crea un DataFrame y ejecuta análisis."""
