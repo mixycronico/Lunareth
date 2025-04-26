@@ -18,7 +18,9 @@ async def test_modulo_ia_inicializar(nucleus):
 async def test_modulo_ia_procesar_timeout(nucleus):
     """Prueba el manejo de timeout en ModuloIA."""
     ia_module = ModuloIA()
-    await ia_module.inicializar(nucleus, nucleus.config["ia_config"])
+    config = nucleus.config["ia_config"].copy()
+    config["enabled"] = True
+    await ia_module.inicializar(nucleus, config)
     bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
     bloque.ia_timeout_seconds = 0.1
     datos = {"valores": [0.1, 0.2, 0.3]}
@@ -36,7 +38,9 @@ async def test_modulo_ia_procesar_timeout(nucleus):
 async def test_modulo_ia_recursos_excedidos(nucleus):
     """Prueba el manejo de recursos excedidos en ModuloIA."""
     ia_module = ModuloIA()
-    await ia_module.inicializar(nucleus, nucleus.config["ia_config"])
+    config = nucleus.config["ia_config"].copy()
+    config["enabled"] = True
+    await ia_module.inicializar(nucleus, config)
     bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
     datos = {"valores": [0.1, 0.2, 0.3]}
     with patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()), \
