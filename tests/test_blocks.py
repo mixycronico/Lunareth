@@ -106,7 +106,7 @@ async def test_bloque_reparar_error(nucleus):
         assert entidades[0].estado == "inactiva"
 
 @pytest.mark.asyncio
-async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_postgresql, monkeypatch):
+async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_db_pool, monkeypatch):
     """Prueba la escritura exitosa en PostgreSQL."""
     async def mock_publicar_alerta(alerta):
         pass
@@ -115,15 +115,9 @@ async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_postgresql, monk
     bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
     bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
-    conn = MagicMock()
-    cursor = MagicMock()
-    cursor.execute.return_value = None
-    cursor.close.return_value = None
-    conn.cursor.return_value = cursor
-    conn.commit.return_value = None
-
+    
     with patch.object(bloque.logger, "info") as mock_logger:
-        await bloque.escribir_postgresql(conn)
+        await bloque.escribir_postgresql(mock_db_pool)
         assert len(bloque.mensajes) == 0
         assert mock_logger.called
 
@@ -140,7 +134,7 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_db_pool):
         "probabilidad": 0.9,
         "timestamp": 12345
     }]
-    mock_db_pool.cursor.side_effect = Exception("DB Error")
+    mock_db_pool.execute.side_effect = Exception("DB Error")
     with patch.object(nucleus.logger, "warning") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
          patch.object(nucleus, "save_fallback_messages", AsyncMock()) as mock_fallback:
