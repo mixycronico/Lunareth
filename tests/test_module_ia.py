@@ -24,7 +24,8 @@ async def test_modulo_ia_procesar_timeout(nucleus):
     datos = {"valores": [0.1, 0.2, 0.3]}
     with patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
-         patch("corec.utils.torch_utils.preprocess_data", return_value=torch.randn(1, 3, 224, 224)):
+         patch("corec.utils.torch_utils.preprocess_data", return_value=torch.randn(1, 3, 224, 224)), \
+         patch("torch.nn.Module.__call__", side_effect=lambda x: asyncio.sleep(1)):
         result = await ia_module.procesar_bloque(bloque, datos)
         assert len(result["mensajes"]) == 1
         assert result["mensajes"][0]["clasificacion"] == "fallback"
@@ -40,7 +41,8 @@ async def test_modulo_ia_recursos_excedidos(nucleus):
     datos = {"valores": [0.1, 0.2, 0.3]}
     with patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
-         patch("psutil.cpu_percent", return_value=95.0):
+         patch("psutil.cpu_percent", return_value=95.0), \
+         patch("corec.utils.torch_utils.preprocess_data", return_value=torch.randn(1, 3, 224, 224)):
         result = await ia_module.procesar_bloque(bloque, datos)
         assert len(result["mensajes"]) == 1
         assert result["mensajes"][0]["clasificacion"] == "fallback_recursos"
