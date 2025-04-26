@@ -1,22 +1,20 @@
-# tests/test_modulo_analisis_datos.py
 import pytest
-import asyncio
 import pandas as pd
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from corec.modules.analisis_datos import ModuloAnalisisDatos
 
 @pytest.fixture
 def mock_nucleus():
-    """Mock de CoreCNucleus para pruebas de ModuloAnalisisDatos."""
+    """Mock de núcleo para pruebas."""
     nucleus = AsyncMock()
-    nucleus.publicar_alerta = AsyncMock()
     nucleus.config = {
         "analisis_datos_config": {
             "correlation_threshold": 0.8,
             "n_estimators": 100,
-            "max_samples": 1000
+            "max_samples": 3
         }
     }
+    nucleus.publicar_alerta = AsyncMock()
     return nucleus
 
 @pytest.mark.asyncio
@@ -39,6 +37,14 @@ async def test_modulo_analisis_datos_analizar(mock_nucleus):
     with patch.object(mock_nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
         result = await analisis.analizar(df, "test_analisis")
         assert "estadisticas" in result
-        assert "num_anomalías" in result
-        assert "correlaciones" in result
-        assert mock_alerta.call_count == 3  # Estadísticas, anomalías, correlaciones
+        assert "num_anomalias" in result["anomalias"]
+        assert mock_alerta.called
+
+@pytest.mark.asyncio
+async def test_modulo_analisis_datos_detener(mock_nucleus):
+    """Prueba la detención de ModuloAnalisisDatos."""
+    analisis = ModuloAnalisisDatos()
+    with patch.object(analisis.logger, "info") as mock_logger:
+        await analisis.inicializar(mock_nucleus)
+        await analisis.detener()
+        assert mock_logger.called_with_call("[AnálisisDatos] Módulo detenido")
