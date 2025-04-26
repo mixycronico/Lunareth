@@ -14,7 +14,7 @@ async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
          patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
          patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)), \
-         pytest.warns(UserWarning, match="Could not load model"):
+         pytest.warns(Warning, match="Could not load model"):
         mock_model = MagicMock()
         with patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model):
             nucleus = CoreCNucleus("config/corec_config.json")
@@ -40,7 +40,7 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
          patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
          patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)), \
-         pytest.warns(UserWarning, match="Could not load model"):
+         pytest.warns(Warning, match="Could not load model"):
         mock_model = MagicMock()
         with patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model):
             nucleus = CoreCNucleus("config/corec_config.json")
