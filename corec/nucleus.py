@@ -37,11 +37,7 @@ class CoreCNucleus:
         try:
             self.config = load_config_dict(self.config_path)
             try:
-                # Renombrar dbname a database para compatibilidad con asyncpg
-                db_config = self.config.get("db_config", {})
-                if "dbname" in db_config:
-                    db_config["database"] = db_config.pop("dbname")
-                self.db_pool = await init_postgresql(db_config)
+                self.db_pool = await init_postgresql(self.config.get("db_config", {}))
             except Exception as e:
                 self.logger.error(f"[Núcleo] Fallo en conexión a PostgreSQL tras reintentos: {e}")
                 self.db_pool = None
@@ -344,3 +340,10 @@ class CoreCNucleus:
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
+
+    async def ejecutar_plugin(self, plugin_id: str, comando: dict):
+        """Ejecuta un comando en un plugin."""
+        plugin = self.plugins.get(plugin_id)
+        if not plugin:
+            raise ValueError(f"Plugin {plugin_id} no encontrado")
+        return await plugin.manejar_comando(comando)
