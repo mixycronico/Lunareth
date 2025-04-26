@@ -25,9 +25,9 @@ async def test_modulo_ia_procesar_timeout(nucleus):
     bloque.ia_timeout_seconds = 0.1
     datos = {"valores": [0.1, 0.2, 0.3]}
     mock_model = MagicMock()
-    async def delayed_execution(x):
-        await asyncio.sleep(1)
-        return torch.zeros(1, 3)  # Simular logits válidos si no hay timeout
+    def delayed_execution(x):
+        time.sleep(1)  # Simular retraso síncrono
+        return torch.zeros(1, 3)
     mock_model.side_effect = delayed_execution
     with patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model), \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
@@ -47,6 +47,7 @@ async def test_modulo_ia_recursos_excedidos(nucleus):
     bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
     datos = {"valores": [0.1, 0.2, 0.3]}
     mock_model = MagicMock()
+    mock_model.return_value = torch.zeros(1, 3)
     with patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model), \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
          patch("psutil.cpu_percent", return_value=95.0):
