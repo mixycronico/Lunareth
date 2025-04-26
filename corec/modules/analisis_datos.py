@@ -30,43 +30,55 @@ class ModuloAnalisisDatos(ComponenteBase):
                 return result
 
             # Estadísticas descriptivas
-            stats = df[num_cols].describe().to_dict()
-            result["estadisticas"] = stats
+            try:
+                stats = df[num_cols].describe().to_dict()
+                result["estadisticas"] = stats
+            except Exception as e:
+                self.logger.error(f"[AnálisisDatos] Error calculando estadísticas: {e}")
+                result["estadisticas"] = {}
 
             # Correlaciones (si hay más de una columna numérica)
             if len(num_cols) > 1:
-                corr = df[num_cols].corr().to_dict()
-                threshold = self.config.get("correlation_threshold", 0.8)
-                result["correlaciones"] = {
-                    k: {k2: v2 for k2, v2 in v.items() if abs(v2) > threshold and k2 != k}
-                    for k, v in corr.items()
-                }
+                try:
+                    corr = df[num_cols].corr().to_dict()
+                    threshold = self.config.get("correlation_threshold", 0.8)
+                    result["correlaciones"] = {
+                        k: {k2: v2 for k2, v2 in v.items() if abs(v2) > threshold and k2 != k}
+                        for k, v in corr.items()
+                    }
+                except Exception as e:
+                    self.logger.error(f"[AnálisisDatos] Error calculando correlaciones: {e}")
+                    result["correlaciones"] = {}
 
             # Detección de anomalías
-            iso = IsolationForest(
-                n_estimators=self.config.get("n_estimators", 100),
-                max_samples=self.config.get("max_samples", 1000),
-                contamination=0.1,
-                random_state=42
-            )
-            mask_inliers = iso.fit_predict(df[num_cols]) == 1
-            result["anomalias"] = {
-                "num_anomalias": len(df) - sum(mask_inliers),
-                "indices_anomalias": df.index[~mask_inliers].tolist()
-            }
+            try:
+                iso = IsolationForest(
+                    n_estimators=self.config.get("n_estimators", 100),
+                    max_samples=self.config.get("max_samples", min(len(df), 1000)),
+                    contamination=0.1,
+                    random_state=42
+                )
+                mask_inliers = iso.fit_predict(df[num_cols]) == 1
+                result["anomalias"] = {
+                    "num_anomalias": len(df) - sum(mask_inliers),
+                    "indices_anomalias": df.index[~mask_inliers].tolist()
+                }
+            except Exception as e:
+                self.logger.error(f"[AnálisisDatos] Error detectando anomalías: {e}")
+                result["anomalias"] = {"num_anomalias": 0, "indices_anomalias": []}
 
             t1 = time.monotonic()
             await self.nucleus.publicar_alerta({
                 "tipo": "analisis_datos",
                 "dataset": nombre_dataset,
                 "num_filas": len(df),
-                "num_anomalias": result["anomalias"]["num_anomalias"],
+                "num_anomalias": result["anomalias"].get("num_anomalias", 0),
                 "latencia_ms": (t1 - t0) * 1000,
                 "timestamp": time.time()
             })
 
             self.logger.info(f"[AnálisisDatos] Dataset {nombre_dataset} analizado: "
-                             f"{len(df)} filas, {result['anomalias']['num_anomalias']} anomalías")
+                             f"{len(df)} filas, {result['anomalias'].get('num_anomalias', 0)} anomalías")
             return result
 
         except Exception as e:
