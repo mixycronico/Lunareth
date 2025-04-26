@@ -11,7 +11,7 @@ async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
          patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
-         patch("pandas.DataFrame", MagicMock()), \
+         patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)), \
          patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
         mock_model.return_value = MagicMock()
         nucleus = CoreCNucleus("config/corec_config.json")
@@ -36,7 +36,7 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
          patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
-         patch("pandas.DataFrame", MagicMock()), \
+         patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)), \
          patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()) as mock_model:
         mock_model.return_value = MagicMock()
         nucleus = CoreCNucleus("config/corec_config.json")
@@ -57,7 +57,8 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
             json.dump(messages, f)
         conn = AsyncMock()
         conn.execute = AsyncMock(return_value=None)
-        mock_db_pool.acquire.return_value.__aenter__.return_value = conn
+        mock_db_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
+        mock_db_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
         nucleus.fallback_storage = fallback_file  # Ajustar path para pruebas
         await nucleus.retry_fallback_messages()
         assert not fallback_file.exists()
