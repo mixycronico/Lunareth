@@ -43,7 +43,9 @@ async def test_modulo_ia_recursos_excedidos(nucleus):
     await ia_module.inicializar(nucleus, config)
     bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
     datos = {"valores": [0.1, 0.2, 0.3]}
-    with patch("corec.utils.torch_utils.load_mobilenet_v3_small", MagicMock()), \
+    mock_model = MagicMock()
+    mock_model.return_value = torch.zeros(1, 3)  # Simular logits válidos
+    with patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model), \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
          patch("psutil.cpu_percent", return_value=95.0):
         result = await ia_module.procesar_bloque(bloque, datos)
