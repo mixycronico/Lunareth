@@ -13,7 +13,7 @@ def test_config():
     return {
         "instance_id": "corec1",
         "db_config": {
-            "database": "corec_db",  # Cambiado de dbname a database
+            "dbname": "corec_db",  # Cambiado de database a dbname
             "user": "postgres",
             "password": "your_password",
             "host": "localhost",
@@ -170,7 +170,7 @@ def mock_config():
     return {
         "instance_id": "corec1",
         "db_config": {
-            "database": "corec_db",  # Cambiado de dbname a database
+            "dbname": "corec_db",  # Cambiado de database a dbname
             "user": "postgres",
             "password": "your_password",
             "host": "localhost",
