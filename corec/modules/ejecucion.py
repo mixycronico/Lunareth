@@ -3,7 +3,6 @@ import random
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 
-
 class ModuloEjecucion(ComponenteBase):
     def __init__(self):
         self.logger = logging.getLogger("ModuloEjecucion")
