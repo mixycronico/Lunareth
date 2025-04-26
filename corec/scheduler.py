@@ -3,11 +3,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta
 
-
 class Scheduler:
-    def __init__(self):
+    def __init__(self, nucleus=None):
         self._sched = AsyncIOScheduler()
         self.logger = logging.getLogger("CoreCScheduler")
+        self.nucleus = nucleus
 
     def start(self):
         """Inicia el scheduler; debe llamarse una sola vez al arrancar CoreC."""
