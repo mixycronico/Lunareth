@@ -10,7 +10,8 @@ async def test_scheduler_process_bloques(nucleus, test_config):
     """Prueba el procesamiento de bloques programado."""
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=None), \
-         patch("corec.utils.db_utils.init_postgresql", return_value=None):
+         patch("corec.utils.db_utils.init_postgresql", return_value=None), \
+         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()):
         await nucleus.inicializar()
         scheduler = nucleus.scheduler
         with patch.object(nucleus, "process_bloque", AsyncMock()) as mock_process:
@@ -21,7 +22,6 @@ async def test_scheduler_process_bloques(nucleus, test_config):
                 args=[nucleus.bloques[0]]
             )
             assert mock_process.called is False  # No se ejecuta inmediatamente
-            # Simular ejecución
             await nucleus.process_bloque(nucleus.bloques[0])
             assert mock_process.called
 
@@ -30,7 +30,8 @@ async def test_scheduler_audit_anomalies(nucleus, test_config):
     """Prueba la auditoría de anomalías programada."""
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=None), \
-         patch("corec.utils.db_utils.init_postgresql", return_value=None):
+         patch("corec.utils.db_utils.init_postgresql", return_value=None), \
+         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()):
         await nucleus.inicializar()
         scheduler = nucleus.scheduler
         with patch.object(nucleus.modules["auditoria"], "detectar_anomalias", AsyncMock()) as mock_detect:
@@ -48,7 +49,8 @@ async def test_scheduler_synchronize_bloques(nucleus, test_config):
     """Prueba la sincronización de bloques programada."""
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=None), \
-         patch("corec.utils.db_utils.init_postgresql", return_value=None):
+         patch("corec.utils.db_utils.init_postgresql", return_value=None), \
+         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()):
         await nucleus.inicializar()
         scheduler = nucleus.scheduler
         with patch.object(nucleus.modules["sincronizacion"], "redirigir_entidades", AsyncMock()) as mock_sync:
