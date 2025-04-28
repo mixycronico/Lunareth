@@ -42,6 +42,7 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
          patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)):
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
+        nucleus.db_pool = mock_db_pool  # Asegurar que db_pool esté configurado
         fallback_file = tmp_path / "fallback_messages.json"
         messages = [{
             "bloque_id": "enjambre_sensor",
