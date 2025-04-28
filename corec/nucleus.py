@@ -84,7 +84,7 @@ class CoreCNucleus:
 
             for block_conf in self.config.get("bloques", []):
                 entidades = []
-                if block_conf["id"] == "ia_analisis":
+                if block_conf["id"] == "ia_analisis" and self.modules["ia"].enabled:
                     async def ia_fn(carga, mod_ia=self.modules["ia"], bconf=block_conf):
                         datos = await self.get_datos_from_redis(bconf["id"])
                         res = await mod_ia.procesar_bloque(None, datos)
@@ -207,12 +207,18 @@ class CoreCNucleus:
             self.logger.info(f"[Núcleo] Leyendo mensajes de {self.fallback_storage}")
             with open(self.fallback_storage, "r") as f:
                 messages = json.load(f)
+            if not isinstance(messages, list):
+                self.logger.error(f"[Núcleo] Formato inválido en {self.fallback_storage}, esperado lista")
+                return
             self.logger.info(f"[Núcleo] Encontrados {len(messages)} mensajes para reintentar")
             async with self.db_pool.acquire() as conn:
                 self.logger.debug("[Núcleo] Adquirida conexión al pool de PostgreSQL")
                 for msg in messages:
-                    bloque_id = msg["bloque_id"]
-                    m = msg["mensaje"]
+                    bloque_id = msg.get("bloque_id")
+                    m = msg.get("mensaje")
+                    if not (bloque_id and m):
+                        self.logger.warning(f"[Núcleo] Mensaje inválido: {msg}")
+                        continue
                     self.logger.debug(f"[Núcleo] Insertando mensaje para bloque {bloque_id}, entidad {m['entidad_id']}")
                     await conn.execute(
                         """
@@ -235,6 +241,8 @@ class CoreCNucleus:
             except Exception as e:
                 self.logger.error(f"[Núcleo] Error eliminando archivo de fallback: {e}")
                 self.logger.debug(f"[Núcleo] Permisos del archivo: {self.fallback_storage.stat()}")
+        except json.JSONDecodeError as e:
+            self.logger.error(f"[Núcleo] Error decodificando JSON en {self.fallback_storage}: {e}")
         except Exception as e:
             self.logger.error(f"[Núcleo] Error reintentando mensajes de fallback: {e}")
             self.logger.debug(f"[Núcleo] Detalles del error: {repr(e)}")
