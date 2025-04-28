@@ -69,3 +69,4 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
         assert conn.execute.called
         assert conn.execute.call_args[0][0].startswith("INSERT INTO mensajes")
         assert conn.execute.call_args[1]["bloque_id"] == "enjambre_sensor"
+        assert conn.execute.call_args[1]["entidad_id"] == "ent_1"
