@@ -1,217 +1,125 @@
 import logging
-import random
-import time
 import asyncio
-import psutil
+import numpy as np
 import torch
-from typing import Dict, Any, List
-from corec.core import ComponenteBase
+import psutil
+from corec.utils.torch_utils import load_mobilenet_v3_small
 from corec.blocks import BloqueSimbiotico
-from corec.utils.torch_utils import load_mobilenet_v3_small, preprocess_data, postprocess_logits
 
-class ModuloIA(ComponenteBase):
+class ModuloIA:
     def __init__(self):
         self.logger = logging.getLogger("ModuloIA")
-        self.nucleus = None
         self.model = None
-        self.device = torch.device("cpu")
-        self.timeout = 2.0
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.enabled = False
+        self.config = None
+        self.nucleus = None
 
-    async def inicializar(self, nucleus, config: Dict[str, Any] = None):
-        """Inicializa el módulo IA con MobileNetV3 y parámetros de tiempo."""
+    async def inicializar(self, nucleus, config):
+        """Inicializa el módulo IA."""
+        self.nucleus = nucleus
+        self.config = config
+        self.enabled = config.get("enabled", False)
+        if not self.enabled:
+            self.logger.info("[IA] Módulo deshabilitado")
+            return
         try:
-            self.nucleus = nucleus
-            cfg = config or {}
-            self.timeout = cfg.get("timeout_seconds", 2.0)
-            if not cfg.get("enabled", False):
-                self.logger.info("[IA] Módulo IA deshabilitado")
-                return
-
-            model_path = cfg.get("model_path", "")
-            pretrained = cfg.get("pretrained", False)
-            n_classes = cfg.get("n_classes", 3)
-
-            if not (model_path or pretrained):
-                self.logger.error("[IA] Se requiere model_path o pretrained cuando enabled es True")
-                raise ValueError("Se requiere model_path o pretrained cuando enabled es True")
-
-            self.model = load_mobilenet_v3_small(
-                model_path=model_path,
-                pretrained=pretrained,
-                n_classes=n_classes,
-                device=self.device
-            )
-            self.logger.info(f"[IA] Modelo cargado ({'pretrained' if pretrained else model_path}), "
-                             f"timeout={self.timeout}s")
+            model_path = config.get("model_path")
+            self.model = load_mobilenet_v3_small(model_path, self.device)
+            self.logger.info("[IA] Modelo inicializado")
         except Exception as e:
             self.logger.error(f"[IA] Error inicializando: {e}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_inicializacion_ia",
                 "mensaje": str(e),
-                "timestamp": time.time()
+                "timestamp": asyncio.get_event_loop().time()
             })
-            raise
 
-    async def procesar_batch(self, bloque: BloqueSimbiotico, datos_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Realiza una única llamada al modelo para un lote de entradas."""
-        process = psutil.Process()
-        cpu_percent = psutil.cpu_percent()
-        mem_before = process.memory_info().rss / 1024**2
-        t0 = time.monotonic()
-
-        max_cpu = 90.0
-        max_mem = 1000
-        if cpu_percent > max_cpu or mem_before > max_mem:
-            self.logger.warning(f"[IA] Recursos excedidos: CPU={cpu_percent}%, Mem={mem_before}MB")
-            await self.nucleus.publicar_alerta({
-                "tipo": "alerta_recursos",
-                "bloque_id": bloque.id,
-                "cpu_percent": cpu_percent,
-                "mem_mb": mem_before,
-                "mensaje": "Uso de recursos excedido",
-                "timestamp": time.time()
-            })
-            return [{
-                "entidad_id": f"{bloque.id}_ia_fallback_{i}",
-                "canal": bloque.canal,
-                "valor": 0.0,
-                "clasificacion": "fallback_recursos",
-                "probabilidad": 0.0,
-                "timestamp": time.time()
-            } for i in range(len(datos_list))]
-
-        if self.model is None:
-            self.logger.error("[IA] Modelo no inicializado")
-            return [{
-                "entidad_id": f"{bloque.id}_ia_fallback_{i}",
-                "canal": bloque.canal,
-                "valor": 0.0,
-                "clasificacion": "fallback",
-                "probabilidad": 0.0,
-                "timestamp": time.time()
-            } for i in range(len(datos_list))]
-
-        timeout = bloque.ia_timeout_seconds if hasattr(bloque, 'ia_timeout_seconds') and bloque.ia_timeout_seconds else self.timeout
+    async def procesar_bloque(self, bloque: BloqueSimbiotico, datos: dict):
+        """Procesa un bloque con el modelo IA."""
+        if not self.enabled or not self.model:
+            return {"mensajes": []}
+        
+        mensajes = []
         try:
-            tensors = [preprocess_data(datos, self.device) for datos in datos_list]
-            batch_input = torch.cat(tensors, dim=0)
-        except Exception as e:
-            self.logger.error(f"[IA] Error preprocessing data: {e}")
-            await self.nucleus.publicar_alerta({
-                "tipo": "error_preprocesamiento_ia",
-                "bloque_id": bloque.id,
-                "mensaje": str(e),
-                "timestamp": time.time()
-            })
-            return [{
-                "entidad_id": f"{bloque.id}_ia_fallback_{i}",
-                "canal": bloque.canal,
-                "valor": 0.0,
-                "clasificacion": "fallback",
-                "probabilidad": 0.0,
-                "timestamp": time.time()
-            } for i in range(len(datos_list))]
+            # Verificar recursos
+            cpu_percent = psutil.cpu_percent()
+            mem_usage_mb = psutil.virtual_memory().used / (1024 * 1024)
+            max_size_mb = self.config.get("max_size_mb", 50)
+            if cpu_percent > 90 or mem_usage_mb > max_size_mb:
+                self.logger.warning(f"[IA] Recursos excedidos: CPU={cpu_percent}%, Mem={mem_usage_mb}MB")
+                await self.nucleus.publicar_alerta({
+                    "tipo": "alerta_recursos",
+                    "mensaje": f"Recursos excedidos: CPU={cpu_percent}%, Mem={mem_usage_mb}MB",
+                    "timestamp": asyncio.get_event_loop().time()
+                })
+                return {
+                    "mensajes": [{
+                        "clasificacion": "fallback_recursos",
+                        "probabilidad": 0.0,
+                        "timestamp": asyncio.get_event_loop().time()
+                    }]
+                }
 
-        try:
-            async def run_model():
-                return await asyncio.to_thread(self.model, batch_input)
+            # Procesar datos
+            valores = datos.get("valores", [])
+            if not valores:
+                return {"mensajes": []}
 
-            logits = await asyncio.wait_for(run_model(), timeout=timeout)
-        except asyncio.TimeoutError:
-            self.logger.warning(f"[IA] Timeout procesando bloque {bloque.id}, timeout={timeout}s")
-            await self.nucleus.publicar_alerta({
-                "tipo": "timeout_ia",
-                "bloque_id": bloque.id,
-                "timeout": timeout,
-                "timestamp": time.time()
-            })
-            return [{
-                "entidad_id": f"{bloque.id}_ia_fallback_{i}",
-                "canal": bloque.canal,
-                "valor": 0.0,
-                "clasificacion": "fallback",
-                "probabilidad": 0.0,
-                "timestamp": time.time()
-            } for i in range(len(datos_list))]
-        except Exception as e:
-            self.logger.error(f"[IA] Error procesando bloque {bloque.id}: {e}")
-            await self.nucleus.publicar_alerta({
-                "tipo": "error_procesamiento_ia",
-                "bloque_id": bloque.id,
-                "mensaje": str(e),
-                "timestamp": time.time()
-            })
-            return []
+            input_tensor = torch.tensor(valores, dtype=torch.float32).to(self.device)
+            timeout_seconds = bloque.ia_timeout_seconds if bloque else self.config.get("timeout_seconds", 5.0)
 
-        try:
-            resultados = postprocess_logits(logits, bloque.id)
-        except Exception as e:
-            self.logger.error(f"[IA] Error postprocessing logits: {e}")
-            await self.nucleus.publicar_alerta({
-                "tipo": "error_postprocesamiento_ia",
-                "bloque_id": bloque.id,
-                "mensaje": str(e),
-                "timestamp": time.time()
-            })
-            return []
+            try:
+                # Ejecutar con timeout
+                async with asyncio.timeout(timeout_seconds):
+                    with torch.no_grad():
+                        output = await asyncio.to_thread(self.model, input_tensor)
+                        probs = torch.softmax(output, dim=-1)
+                        clase_idx = torch.argmax(probs).item()
+                        probabilidad = probs[clase_idx].item()
+                        clasificacion = f"clase_{clase_idx}"
+            except asyncio.TimeoutError:
+                self.logger.warning("[IA] Timeout procesando bloque")
+                await self.nucleus.publicar_alerta({
+                    "tipo": "timeout_ia",
+                    "mensaje": "Timeout procesando bloque",
+                    "timestamp": asyncio.get_event_loop().time()
+                })
+                return {
+                    "mensajes": [{
+                        "clasificacion": "fallback",
+                        "probabilidad": 0.0,
+                        "timestamp": asyncio.get_event_loop().time()
+                    }]
+                }
 
-        t1 = time.monotonic()
-        mem_after = process.memory_info().rss / 1024**2
-
-        await self.nucleus.publicar_alerta({
-            "tipo": "ia_metrics",
-            "bloque_id": bloque.id,
-            "latencia_ms": (t1 - t0) * 1000,
-            "cpu_percent": cpu_percent,
-            "mem_before_mb": mem_before,
-            "mem_after_mb": mem_after,
-            "timestamp": time.time()
-        })
-
-        mensajes: List[Dict[str, Any]] = []
-        for idx, res in enumerate(resultados):
             mensajes.append({
-                "entidad_id": f"{bloque.id}_ia_{random.randint(0,9999)}",
-                "canal": bloque.canal,
-                "valor": res["probabilidad"],
-                "clasificacion": res["etiqueta"],
-                "probabilidad": res["probabilidad"],
-                "timestamp": time.time()
+                "clasificacion": clasificacion,
+                "probabilidad": probabilidad,
+                "timestamp": asyncio.get_event_loop().time()
             })
-        return mensajes
-
-    async def procesar_bloque(self, bloque: BloqueSimbiotico, datos: Dict[str, Any]) -> Dict[str, Any]:
-        """Procesa un bloque con MobileNetV3 Small."""
-        try:
-            mensajes = await self.procesar_batch(bloque, [datos])
             await self.nucleus.publicar_alerta({
                 "tipo": "ia_procesado",
-                "bloque_id": bloque.id,
-                "num_mensajes": len(mensajes),
-                "timestamp": time.time()
+                "mensaje": f"Procesado exitoso: {clasificacion}",
+                "timestamp": asyncio.get_event_loop().time()
             })
-            self.logger.info(f"[IA] Bloque {bloque.id} procesado, {len(mensajes)} mensajes generados")
-            return {"mensajes": mensajes}
+
         except Exception as e:
-            self.logger.error(f"[IA] Error procesando bloque {bloque.id}: {e}")
+            self.logger.error(f"[IA] Error procesando bloque: {e}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_procesamiento_ia",
-                "bloque_id": bloque.id,
                 "mensaje": str(e),
-                "timestamp": time.time()
+                "timestamp": asyncio.get_event_loop().time()
             })
-            return {"mensajes": []}
+            mensajes.append({
+                "clasificacion": "error",
+                "probabilidad": 0.0,
+                "timestamp": asyncio.get_event_loop().time()
+            })
+
+        return {"mensajes": mensajes}
 
     async def detener(self):
-        """Limpia el modelo y libera caché de GPU."""
-        try:
-            self.model = None
-            torch.cuda.empty_cache()
-            self.logger.info("[IA] Módulo detenido")
-        except Exception as e:
-            self.logger.error(f"[IA] Error deteniendo IA: {e}")
-            await self.nucleus.publicar_alerta({
-                "tipo": "error_detencion_ia",
-                "mensaje": str(e),
-                "timestamp": time.time()
-            })
+        """Detiene el módulo IA."""
+        self.model = None
+        self.logger.info("[IA] Módulo detenido")
