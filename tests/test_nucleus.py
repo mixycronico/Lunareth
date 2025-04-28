@@ -4,8 +4,6 @@ from unittest.mock import AsyncMock, patch, MagicMock
 import json
 from pathlib import Path
 import pandas as pd
-import torch
-from torchvision.models import mobilenet_v3_small
 
 @pytest.mark.asyncio
 async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
