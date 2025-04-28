@@ -138,6 +138,7 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_db_pool):
     conn_mock.execute.side_effect = Exception("DB Error")
     mock_db_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn_mock)
     mock_db_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+    nucleus.db_pool = None  # Forzar el uso de fallback
     with patch.object(nucleus.logger, "warning") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
          patch.object(nucleus, "save_fallback_messages", AsyncMock()) as mock_fallback, \
