@@ -140,7 +140,9 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_db_pool):
     mock_db_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
     with patch.object(nucleus.logger, "warning") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta, \
-         patch.object(nucleus, "save_fallback_messages", AsyncMock()) as mock_fallback:
+         patch.object(nucleus, "save_fallback_messages", AsyncMock()) as mock_fallback, \
+         patch("corec.modules.ejecucion.ModuloEjecucion.encolar_bloque", AsyncMock()) as mock_encolar:
         await nucleus.process_bloque(bloque)
         assert mock_logger.called
         assert mock_fallback.called
+        assert mock_alerta.called
