@@ -39,10 +39,10 @@ async def test_integration_synchronize_and_plugin_execution(nucleus):
         plugin_mock.manejar_comando.assert_called_once_with(comando)
 
 @pytest.mark.asyncio
-async def test_integration_ia_processing(nucleus):
+async def test_integration_ia_processing(nucleus, test_config):
     """Prueba la integración de procesamiento de IA."""
     ia_module = ModuloIA()
-    await ia_module.inicializar(nucleus, nucleus.config["ia_config"])
+    await ia_module.inicializar(nucleus, test_config["ia_config"])
     bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
     datos = {"valores": [0.1, 0.2, 0.3]}
     with patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
@@ -51,14 +51,10 @@ async def test_integration_ia_processing(nucleus):
         assert mock_alerta.called
 
 @pytest.mark.asyncio
-async def test_integration_analisis_datos(nucleus):
+async def test_integration_analisis_datos(nucleus, test_config):
     """Prueba la integración de análisis de datos."""
     analisis = ModuloAnalisisDatos()
-    config = nucleus.config.get("analisis_datos_config", {
-        "correlation_threshold": 0.8,
-        "n_estimators": 100,
-        "max_samples": 3
-    })
+    config = test_config["analisis_datos_config"]
     await analisis.inicializar(nucleus, config)
     datos = pd.DataFrame({
         "valores": [0.1, 0.2, 0.3],
@@ -81,4 +77,4 @@ async def test_integration_alert_archiving(nucleus, mock_redis, mock_db_pool):
     }
     with patch.object(nucleus, "archive_alert", AsyncMock()) as mock_archive:
         await nucleus.publicar_alerta(alerta)
-        assert mock_archive.called  # Check local archiving when Redis is unavailable
+        assert mock_archive.called
