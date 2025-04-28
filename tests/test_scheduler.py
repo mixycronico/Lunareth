@@ -1,6 +1,8 @@
 import pytest
 from corec.nucleus import CoreCNucleus
 from corec.scheduler import Scheduler
+from corec.modules.auditoria import ModuloAuditoria
+from corec.modules.sincronizacion import ModuloSincronizacion
 from unittest.mock import AsyncMock, patch
 
 @pytest.mark.asyncio
@@ -9,7 +11,7 @@ async def test_scheduler_process_bloques(nucleus, test_config):
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=None), \
          patch("corec.utils.db_utils.init_postgresql", return_value=None):
-        nucleus.scheduler = Scheduler()
+        await nucleus.inicializar()
         scheduler = nucleus.scheduler
         with patch.object(nucleus, "process_bloque", AsyncMock()) as mock_process:
             scheduler.schedule_periodic(
@@ -29,7 +31,7 @@ async def test_scheduler_audit_anomalies(nucleus, test_config):
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=None), \
          patch("corec.utils.db_utils.init_postgresql", return_value=None):
-        nucleus.scheduler = Scheduler()
+        await nucleus.inicializar()
         scheduler = nucleus.scheduler
         with patch.object(nucleus.modules["auditoria"], "detectar_anomalias", AsyncMock()) as mock_detect:
             scheduler.schedule_periodic(
@@ -47,7 +49,7 @@ async def test_scheduler_synchronize_bloques(nucleus, test_config):
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=None), \
          patch("corec.utils.db_utils.init_postgresql", return_value=None):
-        nucleus.scheduler = Scheduler()
+        await nucleus.inicializar()
         scheduler = nucleus.scheduler
         with patch.object(nucleus.modules["sincronizacion"], "redirigir_entidades", AsyncMock()) as mock_sync:
             scheduler.schedule_periodic(
