@@ -31,6 +31,8 @@ jobs:
         image: redis:latest
         ports:
           - 6379:6379
+        volumes:
+          - ./redis.conf:/etc/redis/redis.conf
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -38,8 +40,6 @@ jobs:
           --health-retries 5
           --entrypoint redis-server
           -- /etc/redis/redis.conf
-        volumes:
-          - ./redis.conf:/etc/redis/redis.conf
 
     steps:
     - uses: actions/checkout@v4
@@ -48,6 +48,7 @@ jobs:
       run: |
         echo "requirepass secure_password" > redis.conf
         echo "acl setuser corec_user on >secure_password" >> redis.conf
+        cat redis.conf  # Depurar el contenido del archivo
 
     - name: Set up Python
       uses: actions/setup-python@v5
