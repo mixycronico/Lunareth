@@ -6,7 +6,7 @@ import torch
 import asyncio
 import numpy as np
 import time
-from collections import OrderedDict
+from torchvision.models import mobilenet_v3_small
 
 @pytest.mark.asyncio
 async def test_modulo_ia_inicializar(nucleus):
@@ -28,16 +28,10 @@ async def test_modulo_ia_procesar_timeout(nucleus):
         time.sleep(1)  # Simular retraso síncrono
         return torch.zeros(1, 3)
     mock_model.side_effect = delayed_execution
-    # Crear un state_dict simulado con algunas claves esperadas
-    dummy_state_dict = OrderedDict([
-        ("features.0.0.weight", torch.randn(16, 3, 3, 3)),
-        ("features.0.1.weight", torch.randn(16)),
-        ("features.0.1.bias", torch.randn(16)),
-        ("features.0.1.running_mean", torch.randn(16)),
-        ("features.0.1.running_var", torch.randn(16)),
-        ("classifier.3.weight", torch.randn(3, 1024)),
-        ("classifier.3.bias", torch.randn(3)),
-    ])
+    # Generar un state_dict completo desde MobileNetV3
+    model = mobilenet_v3_small(weights=None)
+    model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, 3)
+    dummy_state_dict = model.state_dict()
     with patch("torch.load", return_value=dummy_state_dict), \
          patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model), \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
@@ -60,16 +54,10 @@ async def test_modulo_ia_recursos_excedidos(nucleus):
     config["model_path"] = "corec/models/mobilev3/model.pth"
     mock_model = MagicMock()
     mock_model.return_value = torch.zeros(1, 3)
-    # Crear un state_dict simulado con algunas claves esperadas
-    dummy_state_dict = OrderedDict([
-        ("features.0.0.weight", torch.randn(16, 3, 3, 3)),
-        ("features.0.1.weight", torch.randn(16)),
-        ("features.0.1.bias", torch.randn(16)),
-        ("features.0.1.running_mean", torch.randn(16)),
-        ("features.0.1.running_var", torch.randn(16)),
-        ("classifier.3.weight", torch.randn(3, 1024)),
-        ("classifier.3.bias", torch.randn(3)),
-    ])
+    # Generar un state_dict completo desde MobileNetV3
+    model = mobilenet_v3_small(weights=None)
+    model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, 3)
+    dummy_state_dict = model.state_dict()
     with patch("torch.load", return_value=dummy_state_dict), \
          patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model), \
          patch("psutil.cpu_percent", return_value=95.0), \
