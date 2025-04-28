@@ -67,4 +67,4 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
         nucleus.logger.info(f"[Debug] File exists after retry: {fallback_file.exists()}")
         assert not fallback_file.exists()
         assert conn.execute.called
-        await nucleus.detener()
+        assert conn.execute.call_args[0][0].startswith("INSERT INTO mensajes")
