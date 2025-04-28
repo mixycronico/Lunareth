@@ -13,7 +13,7 @@ async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
-         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
+         patch("apscheduler.schedulers.base.BaseScheduler.add_job", AsyncMock()), \
          patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)):
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
@@ -38,7 +38,7 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
-         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
+         patch("apscheduler.schedulers.base.BaseScheduler.add_job", AsyncMock()), \
          patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)):
         nucleus = CoreCNucleus("config/corec_config.json")
         await nucleus.inicializar()
@@ -52,7 +52,7 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
                 "valor": 0.5,
                 "clasificacion": "test",
                 "probabilidad": 0.9,
-                "timestamp": 12345
+                "timestamp": 12345.0
             }
         }]
         with open(fallback_file, "w") as f:
@@ -68,3 +68,4 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
         assert not fallback_file.exists()
         assert conn.execute.called
         assert conn.execute.call_args[0][0].startswith("INSERT INTO mensajes")
+        assert conn.execute.call_args[1]["bloque_id"] == "enjambre_sensor"
