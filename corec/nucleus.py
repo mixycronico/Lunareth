@@ -66,7 +66,21 @@ class CoreCNucleus:
             self.modules["analisis_datos"] = ModuloAnalisisDatos()
 
             for name, module in self.modules.items():
-                await module.inicializar(self, self.config.get(f"{name}_config"))
+                module_config = self.config.get(f"{name}_config", {})
+                # Respetar enabled: False para el módulo IA
+                if name == "ia" and not module_config.get("enabled", True):
+                    self.logger.info(f"[Núcleo] Módulo {name} deshabilitado")
+                    continue
+                try:
+                    self.logger.debug(f"[Núcleo] Inicializando módulo {name}")
+                    await module.inicializar(self, module_config)
+                except Exception as e:
+                    self.logger.error(f"[Núcleo] Error inicializando módulo {name}: {e}")
+                    await self.publicar_alerta({
+                        "tipo": f"error_inicializacion_{name}",
+                        "mensaje": str(e),
+                        "timestamp": time.time()
+                    })
 
             for block_conf in self.config.get("bloques", []):
                 entidades = []
