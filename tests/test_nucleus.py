@@ -4,30 +4,17 @@ from unittest.mock import AsyncMock, patch, MagicMock
 import json
 from pathlib import Path
 import pandas as pd
-import warnings
-from collections import OrderedDict
 import torch
+from torchvision.models import mobilenet_v3_small
 
 @pytest.mark.asyncio
 async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
     """Prueba el almacenamiento en fallback cuando PostgreSQL falla."""
     test_config["ia_config"]["enabled"] = False
     test_config["ia_config"]["model_path"] = ""
-    # Crear un state_dict simulado con algunas claves esperadas
-    dummy_state_dict = OrderedDict([
-        ("features.0.0.weight", torch.randn(16, 3, 3, 3)),
-        ("features.0.1.weight", torch.randn(16)),
-        ("features.0.1.bias", torch.randn(16)),
-        ("features.0.1.running_mean", torch.randn(16)),
-        ("features.0.1.running_var", torch.randn(16)),
-        ("classifier.3.weight", torch.randn(3, 1024)),
-        ("classifier.3.bias", torch.randn(3)),
-    ])
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
-         patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=MagicMock()), \
-         patch("torch.load", return_value=dummy_state_dict), \
          patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
          patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)):
         nucleus = CoreCNucleus("config/corec_config.json")
@@ -50,21 +37,9 @@ async def test_nucleus_retry_fallback(test_config, mock_redis, mock_db_pool, tmp
     """Prueba el reintento de mensajes desde fallback a PostgreSQL."""
     test_config["ia_config"]["enabled"] = False
     test_config["ia_config"]["model_path"] = ""
-    # Crear un state_dict simulado con algunas claves esperadas
-    dummy_state_dict = OrderedDict([
-        ("features.0.0.weight", torch.randn(16, 3, 3, 3)),
-        ("features.0.1.weight", torch.randn(16)),
-        ("features.0.1.bias", torch.randn(16)),
-        ("features.0.1.running_mean", torch.randn(16)),
-        ("features.0.1.running_var", torch.randn(16)),
-        ("classifier.3.weight", torch.randn(3, 1024)),
-        ("classifier.3.bias", torch.randn(3)),
-    ])
     with patch("corec.config_loader.load_config_dict", return_value=test_config), \
          patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
          patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
-         patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=MagicMock()), \
-         patch("torch.load", return_value=dummy_state_dict), \
          patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()), \
          patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)):
         nucleus = CoreCNucleus("config/corec_config.json")
