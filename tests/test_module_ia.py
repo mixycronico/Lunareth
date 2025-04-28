@@ -24,8 +24,8 @@ async def test_modulo_ia_procesar_timeout(nucleus, test_config):
     config["enabled"] = True
     config["model_path"] = "corec/models/mobilev3/model.pth"
     mock_model = MagicMock()
-    async def delayed_execution(x):
-        await asyncio.sleep(1)  # Simular retraso asíncrono
+    def delayed_execution(x):
+        time.sleep(1)  # Simular retraso síncrono
         return torch.zeros(1, 3)
     mock_model.side_effect = delayed_execution
     # Generar un state_dict completo desde MobileNetV3
@@ -37,7 +37,7 @@ async def test_modulo_ia_procesar_timeout(nucleus, test_config):
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
         await ia_module.inicializar(nucleus, config)
         bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
-        bloque.ia_timeout_seconds = 0.1
+        bloque.ia_timeout_seconds = 0.01  # Timeout muy corto para forzar fallo
         datos = {"valores": [0.1, 0.2, 0.3]}
         result = await ia_module.procesar_bloque(bloque, datos)
         assert len(result["mensajes"]) == 1
@@ -52,6 +52,7 @@ async def test_modulo_ia_recursos_excedidos(nucleus, test_config):
     config = test_config["ia_config"].copy()
     config["enabled"] = True
     config["model_path"] = "corec/models/mobilev3/model.pth"
+    config["max_size_mb"] = 50
     mock_model = MagicMock()
     mock_model.return_value = torch.zeros(1, 3)
     # Generar un state_dict completo desde MobileNetV3
@@ -61,7 +62,7 @@ async def test_modulo_ia_recursos_excedidos(nucleus, test_config):
     with patch("torch.load", return_value=dummy_state_dict), \
          patch("corec.utils.torch_utils.load_mobilenet_v3_small", return_value=mock_model), \
          patch("psutil.cpu_percent", return_value=95.0), \
-         patch("psutil.virtual_memory", return_value=MagicMock(used=600*1024*1024)), \
+         patch("psutil.virtual_memory", return_value=MagicMock(used=100*1024*1024)), \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
         await ia_module.inicializar(nucleus, config)
         bloque = BloqueSimbiotico("ia_analisis", 4, [], 50.0, nucleus)
