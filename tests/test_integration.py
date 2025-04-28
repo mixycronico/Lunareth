@@ -13,7 +13,7 @@ async def test_integration_process_and_audit(nucleus):
     """Prueba la integración de procesamiento y auditoría."""
     with patch("corec.modules.ejecucion.ModuloEjecucion.encolar_bloque", AsyncMock()) as mock_encolar, \
          patch("corec.modules.auditoria.ModuloAuditoria.detectar_anomalias", AsyncMock()) as mock_detectar, \
-         patch("corec.scheduler.Scheduler.schedule_periodic", AsyncMock()):
+         patch("apscheduler.schedulers.base.BaseScheduler.add_job", AsyncMock()):
         await nucleus.inicializar()
         await nucleus.process_bloque(nucleus.bloques[0])
         await nucleus.modules["auditoria"].detectar_anomalias()
