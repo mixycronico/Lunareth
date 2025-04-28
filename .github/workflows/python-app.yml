@@ -37,11 +37,17 @@ jobs:
           --health-timeout 5s
           --health-retries 5
           --entrypoint redis-server
-          -- --requirepass secure_password
-          --user corec_user on >secure_password
+          -- /etc/redis/redis.conf
+        volumes:
+          - ./redis.conf:/etc/redis/redis.conf
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Create Redis configuration
+      run: |
+        echo "requirepass secure_password" > redis.conf
+        echo "acl setuser corec_user on >secure_password" >> redis.conf
 
     - name: Set up Python
       uses: actions/setup-python@v5
