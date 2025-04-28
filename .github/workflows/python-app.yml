@@ -29,17 +29,15 @@ jobs:
           --health-retries 5
       redis:
         image: redis:latest
-        env:
-          REDIS_USER: corec_user
-          REDIS_PASSWORD: secure_password
         ports:
           - 6379:6379
         options: >-
-          --health-cmd "redis-cli -u redis://corec_user:secure_password@localhost:6379 ping"
+          --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          --requirepass secure_password
+          --entrypoint redis-server
+          -- --requirepass secure_password
           --user corec_user on >secure_password
 
     steps:
