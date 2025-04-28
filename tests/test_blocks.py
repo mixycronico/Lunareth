@@ -147,3 +147,4 @@ async def test_bloque_escribir_postgresql_error(nucleus, mock_db_pool):
         assert mock_logger.called
         assert mock_fallback.called
         assert mock_alerta.called
+        assert mock_alerta.call_args[0][0]["tipo"] == "error_db_pool"
