@@ -71,13 +71,15 @@ class ModuloIA:
 
             try:
                 # Ejecutar con timeout
-                async with asyncio.timeout(timeout_seconds):
-                    with torch.no_grad():
-                        output = await asyncio.to_thread(self.model, input_tensor)
-                        probs = torch.softmax(output, dim=-1)
-                        clase_idx = torch.argmax(probs).item()
-                        probabilidad = probs[clase_idx].item()
-                        clasificacion = f"clase_{clase_idx}"
+                with torch.no_grad():
+                    output = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(None, self.model, input_tensor),
+                        timeout=timeout_seconds
+                    )
+                    probs = torch.softmax(output, dim=-1)
+                    clase_idx = torch.argmax(probs).item()
+                    probabilidad = probs[clase_idx].item()
+                    clasificacion = f"clase_{clase_idx}"
             except asyncio.TimeoutError:
                 self.logger.warning("[IA] Timeout procesando bloque")
                 await self.nucleus.publicar_alerta({
