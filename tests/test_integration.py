@@ -11,8 +11,13 @@ import pandas as pd
 @pytest.mark.asyncio
 async def test_integration_process_and_audit(nucleus):
     """Prueba la integración de procesamiento y auditoría."""
+    # Wrapper para preservar la firma de process_bloque
+    async def process_bloque_wrapper(bloque):
+        return await nucleus.process_bloque(bloque)
+
     with patch("corec.modules.ejecucion.ModuloEjecucion.encolar_bloque", AsyncMock()) as mock_encolar, \
-         patch("corec.modules.auditoria.ModuloAuditoria.detectar_anomalias", AsyncMock()) as mock_detectar:
+         patch("corec.modules.auditoria.ModuloAuditoria.detectar_anomalias", AsyncMock()) as mock_detectar, \
+         patch.object(nucleus, "process_bloque", process_bloque_wrapper):
         await nucleus.inicializar()
         await nucleus.process_bloque(nucleus.bloques[0])
         await nucleus.modules["auditoria"].detectar_anomalias()
