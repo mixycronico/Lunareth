@@ -84,7 +84,9 @@ class CoreCNucleus:
 
             for block_conf in self.config.get("bloques", []):
                 entidades = []
-                if block_conf["id"] == "ia_analisis" and self.modules["ia"].enabled:
+                ia_config = self.config.get("ia_config", {})
+                # Usar ia_fn solo si el módulo IA está habilitado
+                if block_conf["id"] == "ia_analisis" and ia_config.get("enabled", True):
                     async def ia_fn(carga, mod_ia=self.modules["ia"], bconf=block_conf):
                         datos = await self.get_datos_from_redis(bconf["id"])
                         res = await mod_ia.procesar_bloque(None, datos)
@@ -364,7 +366,7 @@ class CoreCNucleus:
             if self.redis_client:
                 await self.redis_client.close()
             if self.db_pool:
-                await self.db_pool.close()
+                self.db_pool.close()
             self.logger.info("[Núcleo] Detención completa")
         except Exception as e:
             self.logger.error(f"[Núcleo] Error durante la detención: {e}")
