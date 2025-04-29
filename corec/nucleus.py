@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import time
 from pathlib import Path
 import asyncpg
@@ -22,11 +21,12 @@ from corec.entities import Entidad
 from corec.entities_superpuestas import EntidadSuperpuesta
 from corec.entrelazador import Entrelazador
 from corec.utils.db_utils import init_postgresql, init_redis
+from corec.utils.logging import setup_logging
 
 
 class CoreCNucleus:
     def __init__(self, config_path: str = "config/corec_config.json"):
-        self.logger = logging.getLogger("CoreCNucleus")
+        self.logger = setup_logging({"log_level": "INFO", "log_file": "corec.log"})
         self.config_path = str(Path(config_path).resolve())
         self.config: CoreCConfig = None
         self.db_pool: asyncpg.Pool = None
@@ -82,7 +82,34 @@ class CoreCNucleus:
                     async def ia_fn(carga, mod_ia=self.modules["ia"], bconf=block_conf):
                         datos = await self.get_datos_from_redis(bconf.id)
                         res = await mod_ia.procesar_bloque(None, datos)
-                        return res["mensajes"][0] if res["mensajes"] else {"valor": 0.0}
+                        return res["#pragma once
+#include <Arduino.h>
+
+class Sensor {
+public:
+    Sensor(int pin, int calibrationValue = 0);
+    int read();
+    void calibrate(int value);
+
+private:
+    int _pin;
+    int _calibrationValue;
+};
+
+Sensor::Sensor(int pin, int calibrationValue) {
+    _pin = pin;
+    _calibrationValue = calibrationValue;
+    pinMode(_pin, INPUT);
+}
+
+int Sensor::read() {
+    int rawValue = analogRead(_pin);
+    return rawValue - _calibrationValue;
+}
+
+void Sensor::calibrate(int value) {
+    _calibrationValue = value;
+}mensajes"][0] if res["mensajes"] else {"valor": 0.0}
                     entidades = [
                         Entidad(f"ent_{i}", block_conf.canal, ia_fn, block_conf.quantization_step)
                         for i in range(block_conf.entidades)
