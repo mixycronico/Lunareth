@@ -27,7 +27,6 @@ from corec.config import QUANTIZATION_STEP_DEFAULT
 
 class CoreCNucleus:
     def __init__(self, config_path: str):
-        """Inicializa el núcleo de CoreC."""
         self.logger = logging.getLogger("CoreCNucleus")
         self.config_path = config_path
         self.config = None
@@ -41,7 +40,6 @@ class CoreCNucleus:
         self.fallback_storage = Path("fallback_messages.json")
 
     async def inicializar(self):
-        """Configura conexiones, módulos, bloques, entrelazador y tareas."""
         try:
             self.config = load_config_dict(self.config_path)
             try:
@@ -66,11 +64,9 @@ class CoreCNucleus:
                     "timestamp": time.time()
                 })
 
-            # Inicializar Entrelazador
             self.entrelazador = Entrelazador(self.redis_client)
             self.logger.info("[Núcleo] Entrelazador inicializado")
 
-            # Inicializar módulos
             self.modules["registro"] = ModuloRegistro()
             self.modules["sincronizacion"] = ModuloSincronizacion()
             self.modules["ejecucion"] = ModuloEjecucion()
@@ -97,7 +93,6 @@ class CoreCNucleus:
                         "timestamp": time.time()
                     })
 
-            # Inicializar bloques
             for block_conf in self.config.get("bloques", []):
                 quantization_step = block_conf.get("quantization_step", QUANTIZATION_STEP_DEFAULT)
                 max_errores = block_conf.get("autoreparacion", {}).get("max_errores", 0.1)
@@ -115,15 +110,33 @@ class CoreCNucleus:
                         for i in range(block_conf["entidades"])
                     ]
                 else:
-                    entidades = [
-                        EntidadSuperpuesta(
-                            f"ent_{i}",
-                            {"rol1": 0.5, "rol2": 0.5},  # Roles iniciales
-                            quantization_step,
-                            min_fitness=block_conf.get("autoreparacion", {}).get("min_fitness", 0.3)
-                        )
-                        for i in range(block_conf["entidades"])
-                    ]
+                    entidades = []
+                    if self.db_pool:
+                        async with self.db_pool.acquire() as conn:
+                            rows = await conn.fetch(
+                                "SELECT entidad_id, roles, quantization_step, min_fitness, mutation_rate FROM entidades WHERE bloque_id = $1",
+                                block_conf["id"]
+                            )
+                            for row in rows:
+                                entidades.append(
+                                    EntidadSuperpuesta(
+                                        row["entidad_id"],
+                                        row["roles"],
+                                        row["quantization_step"],
+                                        row["min_fitness"],
+                                        row["mutation_rate"]
+                                    )
+                                )
+                    if not entidades:
+                        entidades = [
+                            EntidadSuperpuesta(
+                                f"ent_{i}",
+                                {"rol1": 0.5, "rol2": 0.5},
+                                quantization_step,
+                                min_fitness=block_conf.get("autoreparacion", {}).get("min_fitness", 0.3)
+                            )
+                            for i in range(block_conf["entidades"])
+                        ]
                 bloque = BloqueSimbiotico(
                     block_conf["id"],
                     block_conf["canal"],
@@ -142,7 +155,6 @@ class CoreCNucleus:
                     bloque.id, bloque.canal, len(entidades), bloque.max_size_mb
                 )
 
-            # Configurar enlaces
             for bloque in self.bloques:
                 entidades = bloque.entidades
                 for i in range(0, len(entidades), 2):
@@ -152,7 +164,6 @@ class CoreCNucleus:
                         except ValueError as e:
                             self.logger.warning(f"[Núcleo] Error enlazando entidades en {bloque.id}: {e}")
 
-            # Configurar scheduler
             self.scheduler = Scheduler()
             self.scheduler.start()
             for b in self.bloques:
@@ -216,7 +227,6 @@ class CoreCNucleus:
             raise
 
     async def procesar_entrelazador(self):
-        """Procesa cambios periódicos en el Entrelazador."""
         try:
             for bloque in self.bloques:
                 cambio = {"fitness": bloque.fitness}
@@ -232,7 +242,6 @@ class CoreCNucleus:
             })
 
     async def process_bloque(self, bloque: BloqueSimbiotico):
-        """Procesa un bloque y escribe sus mensajes."""
         try:
             if bloque.id != "ia_analisis":
                 await self.modules["ejecucion"].encolar_bloque(bloque)
@@ -248,7 +257,6 @@ class CoreCNucleus:
                     "mensaje": "db_pool no inicializado, usando fallback",
                     "timestamp": time.time()
                 })
-            # Entrenar modelo ML para entidades
             ml_module = self.modules.get("ml")
             if ml_module:
                 for entidad in bloque.entidades:
@@ -264,7 +272,6 @@ class CoreCNucleus:
             })
 
     async def save_fallback_messages(self, bloque_id: str, mensajes: list):
-        """Guarda mensajes en archivo local si PostgreSQL no está disponible."""
         try:
             if self.fallback_storage.exists():
                 with open(self.fallback_storage, "r") as f:
@@ -279,7 +286,6 @@ class CoreCNucleus:
             self.logger.error(f"[Núcleo] Error guardando mensajes en fallback: {e}")
 
     async def retry_fallback_messages(self):
-        """Reintenta escribir mensajes guardados en fallback a PostgreSQL."""
         if not self.db_pool or not self.fallback_storage.exists():
             self.logger.info(f"[Núcleo] No hay mensajes de fallback o db_pool no disponible")
             return
@@ -328,7 +334,6 @@ class CoreCNucleus:
             self.logger.debug(f"[Núcleo] Detalles del error: {repr(e)}")
 
     async def ejecutar_analisis(self):
-        """Extrae mensajes de PostgreSQL, crea un DataFrame y ejecuta análisis."""
         try:
             if not self.db_pool:
                 self.logger.warning("[Núcleo] No se puede ejecutar análisis, db_pool no inicializado")
@@ -350,7 +355,6 @@ class CoreCNucleus:
             })
 
     async def get_datos_from_redis(self, bloque_id: str) -> dict:
-        """Lee mensajes de Redis para alimentar al módulo IA."""
         try:
             if not self.redis_client:
                 self.logger.warning(f"[Núcleo] Redis no inicializado para {bloque_id}")
@@ -376,7 +380,6 @@ class CoreCNucleus:
             return {"valores": []}
 
     async def publicar_alerta(self, alerta: dict):
-        """Publica una alerta en Redis y la archiva en PostgreSQL si es necesario."""
         try:
             if not self.redis_client:
                 self.logger.warning("[Alerta] Redis no inicializado, archivando localmente")
@@ -394,7 +397,6 @@ class CoreCNucleus:
             await self.archive_alert(alerta)
 
     async def archive_alert(self, alerta: dict):
-        """Archiva una alerta en PostgreSQL."""
         if not self.db_pool:
             self.logger.warning("[Alerta] PostgreSQL no disponible, no se puede archivar")
             return
@@ -416,7 +418,6 @@ class CoreCNucleus:
             self.logger.error(f"[Alerta] Error archivando alerta: {e}")
 
     async def publicar_aprendizaje(self, aprendizaje: dict):
-        """Publica un aprendizaje en Redis para compartir con otros núcleos."""
         try:
             if not self.redis_client:
                 self.logger.warning("[Aprendizaje] Redis no inicializado")
@@ -425,24 +426,23 @@ class CoreCNucleus:
             aprendizaje["timestamp"] = time.time()
             await self.redis_client.xadd("corec:aprendizajes", aprendizaje, maxlen=1000)
             self.logger.info(f"[Aprendizaje] Publicado: {aprendizaje}")
-            # Archivar en PostgreSQL
-            async with self.db_pool.acquire() as conn:
-                await conn.execute(
-                    """
-                    INSERT INTO aprendizajes (instancia_id, bloque_id, estrategia, fitness, timestamp)
-                    VALUES ($1, $2, $3, $4, $5)
-                    """,
-                    aprendizaje["instancia_id"],
-                    aprendizaje.get("bloque_id", ""),
-                    json.dumps(aprendizaje["estrategia"]),
-                    aprendizaje["fitness"],
-                    aprendizaje["timestamp"]
-                )
+            if self.db_pool:
+                async with self.db_pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO aprendizajes (instancia_id, bloque_id, estrategia, fitness, timestamp)
+                        VALUES ($1, $2, $3, $4, $5)
+                        """,
+                        aprendizaje["instancia_id"],
+                        aprendizaje.get("bloque_id", ""),
+                        json.dumps(aprendizaje["estrategia"]),
+                        aprendizaje["fitness"],
+                        aprendizaje["timestamp"]
+                    )
         except Exception as e:
             self.logger.error(f"[Aprendizaje] Error publicando aprendizaje: {e}")
 
     async def consumir_aprendizajes(self):
-        """Consume aprendizajes de otros núcleos y los aplica si son mejores."""
         try:
             if not self.redis_client:
                 self.logger.warning("[Aprendizaje] Redis no inicializado")
@@ -451,7 +451,7 @@ class CoreCNucleus:
             for _, batch in msgs:
                 for _, msg in batch:
                     if msg["instancia_id"] == self.config["instance_id"]:
-                        continue  # Ignorar propios aprendizajes
+                        continue
                     for bloque in self.bloques:
                         if msg["bloque_id"] == bloque.id and msg["fitness"] > bloque.fitness:
                             bloque.quantization_step = msg["estrategia"]["quantization_step"]
@@ -462,7 +462,6 @@ class CoreCNucleus:
             self.logger.error(f"[Aprendizaje] Error consumiendo aprendizajes: {e}")
 
     async def evaluar_estrategias(self):
-        """Evalúa estrategias de todos los bloques."""
         try:
             for bloque in self.bloques:
                 await self.modules["evolucion"].evaluar_estrategia(bloque)
@@ -476,7 +475,6 @@ class CoreCNucleus:
             })
 
     async def ejecutar(self):
-        """Mantiene vivo el núcleo; el scheduler gestiona las tareas."""
         try:
             self.logger.info("[Núcleo] Ejecutando ciclo principal (scheduler)...")
             while True:
@@ -494,7 +492,6 @@ class CoreCNucleus:
             raise
 
     async def detener(self):
-        """Apaga scheduler, módulos y cierra conexiones."""
         try:
             if self.scheduler:
                 self.scheduler.shutdown()
@@ -515,7 +512,6 @@ class CoreCNucleus:
             })
 
     async def ejecutar_plugin(self, plugin_id: str, comando: dict):
-        """Ejecuta un comando en un plugin."""
         plugin = self.plugins.get(plugin_id)
         if not plugin:
             raise ValueError(f"Plugin {plugin_id} no encontrado")
