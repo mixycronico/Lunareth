@@ -6,6 +6,7 @@ from typing import List, Dict, Any
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from corec.entities import EntidadBase
+from corec.entities_superpuestas import EntidadSuperpuesta
 from corec.utils.quantization import escalar
 from corec.config import (
     QUANTIZATION_STEP_DEFAULT,
@@ -243,6 +244,11 @@ class BloqueSimbiotico:
         self.fitness = escalar(raw_fit, self.quantization_step)
         processing_time = time.time() - start_time
         self._adjust_increment_factor(processing_time)
+
+        # Mutar roles de EntidadSuperpuesta si fitness es bajo
+        for entidad in self.entidades:
+            if isinstance(entidad, EntidadSuperpuesta):
+                entidad.mutar_roles(self.fitness)
 
         # Verificar fallos críticos
         if total_entidades > 0 and (self.fallos / total_entidades) > self.max_errores:
