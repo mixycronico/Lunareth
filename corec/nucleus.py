@@ -15,6 +15,7 @@ from corec.modules.ejecucion import ModuloEjecucion
 from corec.modules.auditoria import ModuloAuditoria
 from corec.modules.ia import ModuloIA
 from corec.modules.analisis_datos import ModuloAnalisisDatos
+from corec.modules.evolucion import ModuloEvolucion
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad
 from corec.entities_superpuestas import EntidadSuperpuesta
@@ -74,6 +75,7 @@ class CoreCNucleus:
             self.modules["auditoria"] = ModuloAuditoria()
             self.modules["ia"] = ModuloIA()
             self.modules["analisis_datos"] = ModuloAnalisisDatos()
+            self.modules["evolucion"] = ModuloEvolucion()
 
             for name, module in self.modules.items():
                 module_config = self.config.get(f"{name}_config", {})
@@ -110,11 +112,11 @@ class CoreCNucleus:
                     ]
                 else:
                     entidades = [
-                        Entidad(
+                        EntidadSuperpuesta(
                             f"ent_{i}",
-                            block_conf["canal"],
-                            lambda carga: {"valor": 0.5},
-                            quantization_step
+                            {"rol1": 0.5, "rol2": 0.5},  # Roles iniciales
+                            quantization_step,
+                            min_fitness=block_conf.get("autoreparacion", {}).get("min_fitness", 0.3)
                         )
                         for i in range(block_conf["entidades"])
                     ]
@@ -175,6 +177,16 @@ class CoreCNucleus:
                 func=self.procesar_entrelazador,
                 seconds=30,
                 job_id="entrelazador_periodico"
+            )
+            self.scheduler.schedule_periodic(
+                func=self.evaluar_estrategias,
+                seconds=300,
+                job_id="evolucion_periodica"
+            )
+            self.scheduler.schedule_periodic(
+                func=self.consumir_aprendizajes,
+                seconds=600,
+                job_id="aprendizajes_periodica"
             )
 
             self.logger.info("[Núcleo] Inicialización completa")
@@ -387,6 +399,66 @@ class CoreCNucleus:
             self.logger.info(f"[Alerta] Alerta archivada en PostgreSQL: {alerta['tipo']}")
         except Exception as e:
             self.logger.error(f"[Alerta] Error archivando alerta: {e}")
+
+    async def publicar_aprendizaje(self, aprendizaje: dict):
+        """Publica un aprendizaje en Redis para compartir con otros núcleos."""
+        try:
+            if not self.redis_client:
+                self.logger.warning("[Aprendizaje] Redis no inicializado")
+                return
+            aprendizaje["instancia_id"] = self.config["instance_id"]
+            aprendizaje["timestamp"] = time.time()
+            await self.redis_client.xadd("corec:aprendizajes", aprendizaje, maxlen=1000)
+            self.logger.info(f"[Aprendizaje] Publicado: {aprendizaje}")
+            # Archivar en PostgreSQL
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO aprendizajes (instancia_id, bloque_id, estrategia, fitness, timestamp)
+                    VALUES ($1, $2, $3, $4, $5)
+                    """,
+                    aprendizaje["instancia_id"],
+                    aprendizaje.get("bloque_id", ""),
+                    json.dumps(aprendizaje["estrategia"]),
+                    aprendizaje["fitness"],
+                    aprendizaje["timestamp"]
+                )
+        except Exception as e:
+            self.logger.error(f"[Aprendizaje] Error publicando aprendizaje: {e}")
+
+    async def consumir_aprendizajes(self):
+        """Consume aprendizajes de otros núcleos y los aplica si son mejores."""
+        try:
+            if not self.redis_client:
+                self.logger.warning("[Aprendizaje] Redis no inicializado")
+                return
+            msgs = await self.redis_client.xread({"corec:aprendizajes": "$"}, block=1000, count=10)
+            for _, batch in msgs:
+                for _, msg in batch:
+                    if msg["instancia_id"] == self.config["instance_id"]:
+                        continue  # Ignorar propios aprendizajes
+                    for bloque in self.bloques:
+                        if msg["bloque_id"] == bloque.id and msg["fitness"] > bloque.fitness:
+                            bloque.quantization_step = msg["estrategia"]["quantization_step"]
+                            bloque.max_concurrent_tasks = msg["estrategia"]["max_concurrent_tasks"]
+                            bloque.increment_factor = msg["estrategia"]["increment_factor"]
+                            self.logger.info(f"[Aprendizaje] Aplicado aprendizaje de {msg['instancia_id']} a {bloque.id}")
+        except Exception as e:
+            self.logger.error(f"[Aprendizaje] Error consumiendo aprendizajes: {e}")
+
+    async def evaluar_estrategias(self):
+        """Evalúa estrategias de todos los bloques."""
+        try:
+            for bloque in self.bloques:
+                await self.modules["evolucion"].evaluar_estrategia(bloque)
+            self.logger.debug("[Núcleo] Estrategias evaluadas")
+        except Exception as e:
+            self.logger.error(f"[Núcleo] Error evaluando estrategias: {e}")
+            await self.publicar_alerta({
+                "tipo": "error_evolucion",
+                "mensaje": str(e),
+                "timestamp": time.time()
+            })
 
     async def ejecutar(self):
         """Mantiene vivo el núcleo; el scheduler gestiona las tareas."""
