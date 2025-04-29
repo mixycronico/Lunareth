@@ -16,6 +16,8 @@ from corec.modules.auditoria import ModuloAuditoria
 from corec.modules.ia import ModuloIA
 from corec.modules.analisis_datos import ModuloAnalisisDatos
 from corec.modules.evolucion import ModuloEvolucion
+from corec.modules.ml import ModuloML
+from corec.modules.autosanacion import ModuloAutosanacion
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad
 from corec.entities_superpuestas import EntidadSuperpuesta
@@ -76,6 +78,8 @@ class CoreCNucleus:
             self.modules["ia"] = ModuloIA()
             self.modules["analisis_datos"] = ModuloAnalisisDatos()
             self.modules["evolucion"] = ModuloEvolucion()
+            self.modules["ml"] = ModuloML()
+            self.modules["autosanacion"] = ModuloAutosanacion()
 
             for name, module in self.modules.items():
                 module_config = self.config.get(f"{name}_config", {})
@@ -188,6 +192,11 @@ class CoreCNucleus:
                 seconds=600,
                 job_id="aprendizajes_periodica"
             )
+            self.scheduler.schedule_periodic(
+                func=self.modules["autosanacion"].verificar_estado,
+                seconds=120,
+                job_id="autosanacion_periodica"
+            )
 
             self.logger.info("[Núcleo] Inicialización completa")
 
@@ -239,6 +248,12 @@ class CoreCNucleus:
                     "mensaje": "db_pool no inicializado, usando fallback",
                     "timestamp": time.time()
                 })
+            # Entrenar modelo ML para entidades
+            ml_module = self.modules.get("ml")
+            if ml_module:
+                for entidad in bloque.entidades:
+                    if isinstance(entidad, EntidadSuperpuesta):
+                        await ml_module.entrenar_modelo(entidad, bloque.fitness)
         except Exception as e:
             self.logger.error(f"[Núcleo] Error procesando bloque {bloque.id}: {e}")
             await self.publicar_alerta({
