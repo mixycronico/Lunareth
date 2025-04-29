@@ -102,7 +102,6 @@ class BloqueSimbiotico:
 
         avg_processing_time = sum(self.performance_history) / len(self.performance_history)
         if avg_processing_time > PERFORMANCE_THRESHOLD:
-            # Rendimiento lento: reducir factor de incremento
             self.increment_factor = max(
                 INCREMENT_FACTOR_MIN,
                 self.increment_factor * 0.95
@@ -112,7 +111,6 @@ class BloqueSimbiotico:
                 f"reduciendo increment_factor a {self.increment_factor:.3f}"
             )
         else:
-            # Rendimiento bueno: aumentar factor de incremento
             self.increment_factor = min(
                 INCREMENT_FACTOR_MAX,
                 self.increment_factor * 1.05
@@ -245,10 +243,17 @@ class BloqueSimbiotico:
         processing_time = time.time() - start_time
         self._adjust_increment_factor(processing_time)
 
-        # Mutar roles de EntidadSuperpuesta si fitness es bajo
+        # Mutar roles y crear nuevas entidades si fitness es bajo
+        ml_module = self.nucleus.modules.get("ml")
         for entidad in self.entidades:
             if isinstance(entidad, EntidadSuperpuesta):
-                entidad.mutar_roles(self.fitness)
+                entidad.mutar_roles(self.fitness, ml_module)
+                # Crear nueva entidad si fitness es muy bajo
+                if self.fitness < self.max_errores * 0.5 and len(self.entidades) < 10000:  # Límite de entidades
+                    nueva_entidad = entidad.crear_entidad(self.id, self.canal)
+                    self.entidades.append(nueva_entidad)
+                    self.nucleus.entrelazador.registrar_entidad(nueva_entidad)
+                    self.logger.info(f"[Bloque {self.id}] Nueva entidad creada: {nueva_entidad.id}")
 
         # Verificar fallos críticos
         if total_entidades > 0 and (self.fallos / total_entidades) > self.max_errores:
