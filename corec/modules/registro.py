@@ -1,4 +1,3 @@
-import logging
 import time
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
@@ -7,7 +6,6 @@ from corec.entities_superpuestas import EntidadSuperpuesta
 
 class ModuloRegistro(ComponenteBase):
     def __init__(self):
-        self.logger = logging.getLogger("ModuloRegistro")
         self.nucleus = None
         self.bloques = {}
 
@@ -20,6 +18,7 @@ class ModuloRegistro(ComponenteBase):
         """
         try:
             self.nucleus = nucleus
+            self.logger = nucleus.logger
             self.logger.info("Módulo Registro inicializado")
         except Exception as e:
             self.logger.error(f"Error inicializando Módulo Registro: {e}")
