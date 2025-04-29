@@ -1,4 +1,3 @@
-import logging
 import time
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
@@ -6,7 +5,6 @@ from corec.blocks import BloqueSimbiotico
 
 class ModuloSincronizacion(ComponenteBase):
     def __init__(self):
-        self.logger = logging.getLogger("ModuloSincronizacion")
         self.nucleus = None
 
     async def inicializar(self, nucleus, config=None):
@@ -18,6 +16,7 @@ class ModuloSincronizacion(ComponenteBase):
         """
         try:
             self.nucleus = nucleus
+            self.logger = nucleus.logger
             self.logger.info("Módulo Sincronización inicializado")
         except Exception as e:
             self.logger.error(f"Error inicializando Módulo Sincronización: {e}")
