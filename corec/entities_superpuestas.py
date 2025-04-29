@@ -1,6 +1,7 @@
 # corec/entities_superpuestas.py
 import random
 import logging
+import json
 from typing import Dict
 from corec.utils.quantization import escalar
 from corec.entities import EntidadBase
@@ -75,25 +76,24 @@ class EntidadSuperpuesta(EntidadBase):
         else:
             self.roles = {k: escalar(v / total, self.quantization_step) for k, v in self.roles}
 
-    def mutar_roles(self, fitness: float, ml_module=None):
+    async def mutar_roles(self, fitness: float, ml_module=None):
         """Mutar roles si el fitness es bajo, usando ML si está disponible."""
         if fitness < self.min_fitness and random.random() < self.mutation_rate:
             if ml_module:
-                ajuste = asyncio.run(ml_module.predecir_ajuste_roles(self))
+                ajuste = await ml_module.predecir_ajuste_roles(self)
                 if ajuste:
                     self.roles = {k: escalar(v, self.quantization_step) for k, v in ajuste.items()}
                     self.normalizar_roles()
                     self.logger.info(f"[Entidad {self.id}] Roles ajustados por ML: {self.roles}")
                     return
-            # Mutación aleatoria si no hay ML
             for rol in self.roles:
                 delta = random.uniform(-0.1, 0.1)
                 self.roles[rol] = escalar(self.roles[rol] + delta, self.quantization_step)
             self.normalizar_roles()
             self.logger.info(f"[Entidad {self.id}] Roles mutados aleatoriamente debido a fitness bajo: {fitness}")
 
-    def crear_entidad(self, bloque_id: str, canal: int) -> 'EntidadSuperpuesta':
-        """Crea una nueva entidad con roles derivados."""
+    async def crear_entidad(self, bloque_id: str, canal: int, db_pool=None) -> 'EntidadSuperpuesta':
+        """Crea una nueva entidad con roles derivados y la persiste en PostgreSQL."""
         nuevos_roles = {k: escalar(v + random.uniform(-0.05, 0.05), self.quantization_step) for k, v in self.roles.items()}
         nueva_entidad = EntidadSuperpuesta(
             f"{self.id}_child_{random.randint(0, 1000)}",
@@ -103,4 +103,26 @@ class EntidadSuperpuesta(EntidadBase):
             self.mutation_rate
         )
         self.logger.info(f"[Entidad {self.id}] Creó nueva entidad: {nueva_entidad.id}")
+        
+        if db_pool:
+            try:
+                async with db_pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO entidades (
+                            entidad_id, bloque_id, roles, quantization_step, min_fitness, mutation_rate, timestamp
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        """,
+                        nueva_entidad.id,
+                        bloque_id,
+                        json.dumps(nueva_entidad.roles),
+                        nueva_entidad.quantization_step,
+                        nueva_entidad.min_fitness,
+                        nueva_entidad.mutation_rate,
+                        time.time()
+                    )
+                self.logger.info(f"[Entidad {nueva_entidad.id}] Persistida en PostgreSQL")
+            except Exception as e:
+                self.logger.error(f"[Entidad {nueva_entidad.id}] Error persistiendo en PostgreSQL: {e}")
+        
         return nueva_entidad
