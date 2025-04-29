@@ -75,12 +75,32 @@ class EntidadSuperpuesta(EntidadBase):
         else:
             self.roles = {k: escalar(v / total, self.quantization_step) for k, v in self.roles}
 
-    def mutar_roles(self, fitness: float):
-        """Mutar roles si el fitness es bajo."""
+    def mutar_roles(self, fitness: float, ml_module=None):
+        """Mutar roles si el fitness es bajo, usando ML si está disponible."""
         if fitness < self.min_fitness and random.random() < self.mutation_rate:
+            if ml_module:
+                ajuste = asyncio.run(ml_module.predecir_ajuste_roles(self))
+                if ajuste:
+                    self.roles = {k: escalar(v, self.quantization_step) for k, v in ajuste.items()}
+                    self.normalizar_roles()
+                    self.logger.info(f"[Entidad {self.id}] Roles ajustados por ML: {self.roles}")
+                    return
+            # Mutación aleatoria si no hay ML
             for rol in self.roles:
-                # Ajustar peso con una variación aleatoria (-10% a +10%)
                 delta = random.uniform(-0.1, 0.1)
                 self.roles[rol] = escalar(self.roles[rol] + delta, self.quantization_step)
             self.normalizar_roles()
-            self.logger.info(f"[Entidad {self.id}] Roles mutados debido a fitness bajo: {fitness}")
+            self.logger.info(f"[Entidad {self.id}] Roles mutados aleatoriamente debido a fitness bajo: {fitness}")
+
+    def crear_entidad(self, bloque_id: str, canal: int) -> 'EntidadSuperpuesta':
+        """Crea una nueva entidad con roles derivados."""
+        nuevos_roles = {k: escalar(v + random.uniform(-0.05, 0.05), self.quantization_step) for k, v in self.roles.items()}
+        nueva_entidad = EntidadSuperpuesta(
+            f"{self.id}_child_{random.randint(0, 1000)}",
+            nuevos_roles,
+            self.quantization_step,
+            self.min_fitness,
+            self.mutation_rate
+        )
+        self.logger.info(f"[Entidad {self.id}] Creó nueva entidad: {nueva_entidad.id}")
+        return nueva_entidad
