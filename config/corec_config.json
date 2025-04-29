@@ -36,6 +36,9 @@
             "entidades": 100,
             "max_size_mb": 1,
             "entidades_por_bloque": 1000,
+            "quantization_step": 0.1,
+            "max_concurrent_tasks": 100,
+            "cpu_intensive": false,
             "autoreparacion": {
                 "max_errores": 0.05,
                 "min_fitness": 0.2
@@ -47,6 +50,9 @@
             "entidades": 100,
             "max_size_mb": 1,
             "entidades_por_bloque": 1000,
+            "quantization_step": 0.05,
+            "max_concurrent_tasks": 50,
+            "cpu_intensive": false,
             "autoreparacion": {
                 "max_errores": 0.02,
                 "min_fitness": 0.5
@@ -58,6 +64,9 @@
             "entidades": 100,
             "max_size_mb": 50,
             "entidades_por_bloque": 100,
+            "quantization_step": 0.01,
+            "max_concurrent_tasks": 20,
+            "cpu_intensive": true,
             "ia_timeout_seconds": 10.0,
             "autoreparacion": {
                 "max_errores": 0.1,
@@ -74,7 +83,10 @@
                 "canal": 3,
                 "entidades": 2000,
                 "max_size_mb": 5,
+                "quantization_step": 0.05,
                 "max_errores": 0.1,
+                "max_concurrent_tasks": 100,
+                "cpu_intensive": false,
                 "min_fitness": 0.3
             }
         }
