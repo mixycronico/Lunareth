@@ -42,20 +42,6 @@ class BloqueSimbiotico:
         max_concurrent_tasks: int = None,
         cpu_intensive: bool = False
     ):
-        """
-        Bloque simbiótico que procesa entidades y gestiona datos.
-
-        Args:
-            id (str): Identificador único.
-            canal (int): Canal de comunicación.
-            entidades (List[EntidadBase]): Lista de entidades.
-            max_size_mb (float): Tamaño máximo en MB.
-            nucleus: Instancia de CoreCNucleus.
-            quantization_step (float): Paso de cuantización.
-            max_errores (float): Umbral de errores para alertas críticas.
-            max_concurrent_tasks (int, optional): Máximo número de tareas concurrentes.
-            cpu_intensive (bool): Si True, usa ThreadPoolExecutor para procesamiento.
-        """
         self.logger = logging.getLogger("BloqueSimbiotico")
         self.id = id
         self.canal = canal
@@ -71,16 +57,10 @@ class BloqueSimbiotico:
         self.current_concurrent_tasks = self.max_concurrent_tasks
         self.cpu_intensive = cpu_intensive
         self.cpu_low_cycles = deque(maxlen=CPU_STABLE_CYCLES)
-        self.performance_history = deque(maxlen=PERFORMANCE_HISTORY_SIZE)  # Historial de tiempos
+        self.performance_history = deque(maxlen=PERFORMANCE_HISTORY_SIZE)
         self.increment_factor = CONCURRENT_TASKS_INCREMENT_FACTOR_DEFAULT
 
     async def _get_cpu_percent(self) -> float:
-        """
-        Obtiene el promedio de CPU basado en múltiples lecturas.
-
-        Returns:
-            float: Promedio del porcentaje de uso de CPU.
-        """
         readings = []
         for _ in range(CPU_READINGS):
             readings.append(psutil.cpu_percent())
@@ -90,87 +70,36 @@ class BloqueSimbiotico:
         return avg_cpu
 
     def _adjust_increment_factor(self, processing_time: float):
-        """
-        Ajusta CONCURRENT_TASKS_INCREMENT_FACTOR basado en el historial de rendimiento.
-
-        Args:
-            processing_time (float): Tiempo de procesamiento del último ciclo (segundos).
-        """
         self.performance_history.append(processing_time)
         if len(self.performance_history) < PERFORMANCE_HISTORY_SIZE:
-            return  # Esperar a tener suficiente historial
-
+            return
         avg_processing_time = sum(self.performance_history) / len(self.performance_history)
         if avg_processing_time > PERFORMANCE_THRESHOLD:
-            self.increment_factor = max(
-                INCREMENT_FACTOR_MIN,
-                self.increment_factor * 0.95
-            )
-            self.logger.info(
-                f"[Bloque {self.id}] Rendimiento lento (avg={avg_processing_time:.3f}s), "
-                f"reduciendo increment_factor a {self.increment_factor:.3f}"
-            )
+            self.increment_factor = max(INCREMENT_FACTOR_MIN, self.increment_factor * 0.95)
+            self.logger.info(f"[Bloque {self.id}] Rendimiento lento (avg={avg_processing_time:.3f}s), reduciendo increment_factor a {self.increment_factor:.3f}")
         else:
-            self.increment_factor = min(
-                INCREMENT_FACTOR_MAX,
-                self.increment_factor * 1.05
-            )
-            self.logger.info(
-                f"[Bloque {self.id}] Rendimiento bueno (avg={avg_processing_time:.3f}s), "
-                f"aumentando increment_factor a {self.increment_factor:.3f}"
-            )
+            self.increment_factor = min(INCREMENT_FACTOR_MAX, self.increment_factor * 1.05)
+            self.logger.info(f"[Bloque {self.id}] Rendimiento bueno (avg={avg_processing_time:.3f}s), aumentando increment_factor a {self.increment_factor:.3f}")
 
     def _adjust_concurrent_tasks(self, cpu_percent: float, ram_percent: float):
-        """
-        Ajusta dinámicamente max_concurrent_tasks basado en CPU y RAM.
-
-        Args:
-            cpu_percent (float): Porcentaje de uso de CPU (promedio).
-            ram_percent (float): Porcentaje de uso de RAM.
-        """
-        overload = (
-            cpu_percent > CPU_AUTOADJUST_THRESHOLD * 100 or
-            ram_percent > RAM_AUTOADJUST_THRESHOLD * 100
-        )
+        overload = (cpu_percent > CPU_AUTOADJUST_THRESHOLD * 100 or ram_percent > RAM_AUTOADJUST_THRESHOLD * 100)
         if overload:
-            new_tasks = max(
-                CONCURRENT_TASKS_MIN,
-                int(self.current_concurrent_tasks * CONCURRENT_TASKS_REDUCTION_FACTOR)
-            )
+            new_tasks = max(CONCURRENT_TASKS_MIN, int(self.current_concurrent_tasks * CONCURRENT_TASKS_REDUCTION_FACTOR))
             if new_tasks != self.current_concurrent_tasks:
-                self.logger.info(
-                    f"[Bloque {self.id}] Reduciendo tareas concurrentes de {self.current_concurrent_tasks} a {new_tasks} "
-                    f"(CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%)"
-                )
+                self.logger.info(f"[Bloque {self.id}] Reduciendo tareas concurrentes de {self.current_concurrent_tasks} a {new_tasks} (CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%)")
                 self.current_concurrent_tasks = new_tasks
                 self.cpu_low_cycles.clear()
         else:
             is_cpu_low = cpu_percent < CPU_AUTOADJUST_THRESHOLD * 80
             self.cpu_low_cycles.append(is_cpu_low)
             if len(self.cpu_low_cycles) == CPU_STABLE_CYCLES and all(self.cpu_low_cycles):
-                new_tasks = min(
-                    self.max_concurrent_tasks,
-                    int(self.current_concurrent_tasks * self.increment_factor)
-                )
+                new_tasks = min(self.max_concurrent_tasks, int(self.current_concurrent_tasks * self.increment_factor))
                 if new_tasks != self.current_concurrent_tasks:
-                    self.logger.info(
-                        f"[Bloque {self.id}] Incrementando tareas concurrentes de {self.current_concurrent_tasks} a {new_tasks} "
-                        f"(CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%, increment_factor={self.increment_factor:.3f})"
-                    )
+                    self.logger.info(f"[Bloque {self.id}] Incrementando tareas concurrentes de {self.current_concurrent_tasks} a {new_tasks} (CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%, increment_factor={self.increment_factor:.3f})")
                     self.current_concurrent_tasks = new_tasks
                     self.cpu_low_cycles.clear()
 
     async def procesar(self, carga: float) -> Dict[str, Any]:
-        """
-        Procesa entidades en paralelo usando asyncio.gather o ThreadPoolExecutor, cuantiza valores y verifica recursos/fallos.
-
-        Args:
-            carga (float): Factor de carga (0.0 a 1.0).
-
-        Returns:
-            Dict[str, Any]: Resultado con mensajes, fitness y estado del bloque.
-        """
-        # Verificar recursos del sistema
         cpu_percent = await self._get_cpu_percent()
         mem_usage_mb = psutil.virtual_memory().used / (1024 * 1024)
         ram_percent = (mem_usage_mb / (psutil.virtual_memory().total / (1024 * 1024))) * 100
@@ -185,7 +114,6 @@ class BloqueSimbiotico:
             })
             return {"bloque_id": self.id, "mensajes": [], "fitness": 0.0}
 
-        # Ajustar tareas concurrentes
         self._adjust_concurrent_tasks(cpu_percent, ram_percent)
 
         self.mensajes = []
@@ -218,15 +146,11 @@ class BloqueSimbiotico:
                 self.logger.error(f"[Bloque {self.id}] Error en {entidad.id}: {e}")
                 return None
 
-        # Procesar entidades en lotes
         start_time = time.time()
         batch_size = self.current_concurrent_tasks
         for i in range(0, len(self.entidades), batch_size):
             batch = self.entidades[i:i + batch_size]
-            resultados = await asyncio.gather(
-                *(procesar_entidad(entidad) for entidad in batch),
-                return_exceptions=True
-            )
+            resultados = await asyncio.gather(*(procesar_entidad(entidad) for entidad in batch), return_exceptions=True)
             for resultado in resultados:
                 if isinstance(resultado, Exception):
                     self.fallos += 1
@@ -237,25 +161,21 @@ class BloqueSimbiotico:
                     fitness_total += resultado["valor"]
                     num_mensajes += 1
 
-        # Calcular fitness y ajustar increment_factor
         raw_fit = (fitness_total / num_mensajes) if num_mensajes else 0.0
         self.fitness = escalar(raw_fit, self.quantization_step)
         processing_time = time.time() - start_time
         self._adjust_increment_factor(processing_time)
 
-        # Mutar roles y crear nuevas entidades si fitness es bajo
         ml_module = self.nucleus.modules.get("ml")
         for entidad in self.entidades:
             if isinstance(entidad, EntidadSuperpuesta):
-                entidad.mutar_roles(self.fitness, ml_module)
-                # Crear nueva entidad si fitness es muy bajo
-                if self.fitness < self.max_errores * 0.5 and len(self.entidades) < 10000:  # Límite de entidades
-                    nueva_entidad = entidad.crear_entidad(self.id, self.canal)
+                await entidad.mutar_roles(self.fitness, ml_module)
+                if self.fitness < self.max_errores * 0.5 and len(self.entidades) < 10000:
+                    nueva_entidad = await entidad.crear_entidad(self.id, self.canal, self.nucleus.db_pool)
                     self.entidades.append(nueva_entidad)
                     self.nucleus.entrelazador.registrar_entidad(nueva_entidad)
                     self.logger.info(f"[Bloque {self.id}] Nueva entidad creada: {nueva_entidad.id}")
 
-        # Verificar fallos críticos
         if total_entidades > 0 and (self.fallos / total_entidades) > self.max_errores:
             self.logger.error(f"[Bloque {self.id}] Fallos críticos: {self.fallos}/{total_entidades}")
             await self.nucleus.publicar_alerta({
@@ -267,7 +187,6 @@ class BloqueSimbiotico:
             })
             await self.reparar()
 
-        # Publicar alerta de procesamiento
         await self.nucleus.publicar_alerta({
             "tipo": "bloque_procesado",
             "bloque_id": self.id,
@@ -281,6 +200,29 @@ class BloqueSimbiotico:
             "timestamp": time.time()
         })
 
+        if self.nucleus.db_pool:
+            try:
+                async with self.nucleus.db_pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp)
+                        VALUES ($1, $2, $3, $4, $5)
+                        ON CONFLICT (id) DO UPDATE
+                        SET canal = EXCLUDED.canal,
+                            num_entidades = EXCLUDED.num_entidades,
+                            fitness = EXCLUDED.fitness,
+                            timestamp = EXCLUDED.timestamp
+                        """,
+                        self.id,
+                        self.canal,
+                        len(self.entidades),
+                        self.fitness,
+                        time.time()
+                    )
+                self.logger.info(f"[Bloque {self.id}] Estado actualizado en PostgreSQL")
+            except Exception as e:
+                self.logger.error(f"[Bloque {self.id}] Error actualizando estado en PostgreSQL: {e}")
+
         return {
             "bloque_id": self.id,
             "mensajes": self.mensajes,
@@ -288,7 +230,6 @@ class BloqueSimbiotico:
         }
 
     async def reparar(self):
-        """Repara el bloque reactivando entidades inactivas o reiniciando roles."""
         for entidad in self.entidades:
             if getattr(entidad, "estado", None) == "inactiva":
                 try:
@@ -310,7 +251,6 @@ class BloqueSimbiotico:
         })
 
     async def escribir_postgresql(self, conn):
-        """Escribe mensajes en PostgreSQL, incluyendo roles si existen."""
         try:
             for mensaje in self.mensajes:
                 await conn.execute(
