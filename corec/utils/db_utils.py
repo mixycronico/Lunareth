@@ -1,3 +1,4 @@
+# corec/utils/db_utils.py
 import logging
 import asyncpg
 import aioredis
@@ -13,7 +14,6 @@ logger = logging.getLogger("CoreCDB")
 )
 async def init_postgresql(config: dict) -> asyncpg.Pool:
     """Inicializa el pool de conexiones a PostgreSQL y crea tablas necesarias."""
-    # Mapear dbname a database para asyncpg
     config = config.copy()
     if "dbname" in config:
         config["database"] = config.pop("dbname")
@@ -35,7 +35,8 @@ async def init_postgresql(config: dict) -> asyncpg.Pool:
                 valor FLOAT,
                 clasificacion VARCHAR(50),
                 probabilidad FLOAT,
-                timestamp FLOAT
+                timestamp FLOAT,
+                roles JSONB
             );
             CREATE TABLE IF NOT EXISTS alertas (
                 id SERIAL PRIMARY KEY,
@@ -45,8 +46,32 @@ async def init_postgresql(config: dict) -> asyncpg.Pool:
                 timestamp FLOAT,
                 datos JSONB
             );
+            CREATE TABLE IF NOT EXISTS aprendizajes (
+                id SERIAL PRIMARY KEY,
+                instancia_id VARCHAR(50),
+                bloque_id VARCHAR(50),
+                estrategia JSONB,
+                fitness FLOAT,
+                timestamp FLOAT
+            );
+            CREATE TABLE IF NOT EXISTS enlaces (
+                id SERIAL PRIMARY KEY,
+                entidad_a VARCHAR(50),
+                entidad_b VARCHAR(50),
+                timestamp FLOAT
+            );
+            CREATE TABLE IF NOT EXISTS entidades (
+                id SERIAL PRIMARY KEY,
+                entidad_id VARCHAR(50),
+                bloque_id VARCHAR(50),
+                roles JSONB,
+                quantization_step FLOAT,
+                min_fitness FLOAT,
+                mutation_rate FLOAT,
+                timestamp FLOAT
+            );
         """)
-        logger.info("[DB] Tablas 'bloques', 'mensajes' y 'alertas' inicializadas")
+        logger.info("[DB] Tablas 'bloques', 'mensajes', 'alertas', 'aprendizajes', 'enlaces', 'entidades' inicializadas")
     return pool
 
 @retry(
