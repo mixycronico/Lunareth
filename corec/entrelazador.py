@@ -7,13 +7,15 @@ from corec.entities import EntidadBase
 
 
 class Entrelazador:
-    def __init__(self, redis_client=None):
+    def __init__(self, redis_client=None, nucleus=None):
         """Gestiona relaciones entre entidades usando un grafo dirigido.
 
         Args:
             redis_client: Cliente Redis para persistencia (opcional).
+            nucleus: Instancia del núcleo de CoreC (opcional).
         """
-        self.logger = logging.getLogger("Entrelazador")
+        self.nucleus = nucleus
+        self.logger = nucleus.logger if nucleus else logging.getLogger("CoreC")
         self.grafo = nx.DiGraph()
         self.redis_client = redis_client
         self.entidades: Dict[str, EntidadBase] = {}
@@ -39,7 +41,7 @@ class Entrelazador:
         """
         if entidad_a.id not in self.entidades or entidad_b.id not in self.entidades:
             raise ValueError("Ambas entidades deben estar registradas")
-        max_enlaces = self.nucleus.config.max_enlaces_por_entidad if hasattr(self, 'nucleus') else 100
+        max_enlaces = self.nucleus.config.max_enlaces_por_entidad if self.nucleus else 100
         if self.grafo.degree(entidad_a.id) >= max_enlaces or self.grafo.degree(entidad_b.id) >= max_enlaces:
             self.logger.warning(f"Límite de enlaces alcanzado para {entidad_a.id} o {entidad_b.id}")
             raise ValueError("Límite de enlaces alcanzado")
@@ -51,7 +53,7 @@ class Entrelazador:
                     "entidad_b": entidad_b.id,
                     "timestamp": time.time()
                 }
-                redis_stream_key = self.nucleus.config.redis_stream_key if hasattr(self, 'nucleus') else "corec:entrelazador"
+                redis_stream_key = self.nucleus.config.redis_stream_key if self.nucleus else "corec:entrelazador"
                 self.redis_client.xadd(redis_stream_key, enlace)
                 self.logger.info(f"Enlace {entidad_a.id} -> {entidad_b.id} persistido en Redis")
             except Exception as e:
@@ -65,7 +67,7 @@ class Entrelazador:
             cambio (Dict[str, float]): Cambios a propagar.
             max_saltos (int): Máximo número de saltos en el grafo.
         """
-        cambio_escalado = {k: escalar(v) for k, v in cambio.items()}
+        cambio_escalado = {k: escalar(v, self.nucleus.config.quantization_step_default if self.nucleus else 0.05) for k, v in cambio.items()}
         visited: Set[str] = set()
 
         async def propagar(nodo_id: str, saltos: int):
