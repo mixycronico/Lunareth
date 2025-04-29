@@ -1,7 +1,6 @@
 import random
 import time
 import uuid
-import logging
 import json
 from typing import Dict, Optional
 from corec.utils.quantization import escalar
@@ -15,7 +14,8 @@ class EntidadSuperpuesta(EntidadBase):
         roles: Dict[str, float],
         quantization_step: float = 0.05,
         min_fitness: float = 0.3,
-        mutation_rate: float = 0.1
+        mutation_rate: float = 0.1,
+        nucleus=None
     ):
         """Entidad con múltiples roles cuantizados que se normalizan.
 
@@ -25,13 +25,15 @@ class EntidadSuperpuesta(EntidadBase):
             quantization_step (float): Paso de cuantización.
             min_fitness (float): Umbral de fitness para mutaciones.
             mutation_rate (float): Probabilidad de mutar roles si fitness es bajo.
+            nucleus: Instancia del núcleo de CoreC (opcional).
 
         Raises:
             ValueError: Si los roles están vacíos.
         """
         if not roles:
             raise ValueError("Los roles no pueden estar vacíos")
-        self.logger = logging.getLogger("EntidadSuperpuesta")
+        self.nucleus = nucleus
+        self.logger = nucleus.logger if nucleus else logging.getLogger("CoreC")
         self.id = id
         self.quantization_step = quantization_step
         self.min_fitness = min_fitness
@@ -119,7 +121,8 @@ class EntidadSuperpuesta(EntidadBase):
             nuevos_roles,
             self.quantization_step,
             self.min_fitness,
-            self.mutation_rate
+            self.mutation_rate,
+            self.nucleus
         )
         self.logger.info(f"Entidad {self.id} creó nueva entidad: {nueva_entidad.id}")
 
