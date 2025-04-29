@@ -1,5 +1,5 @@
 import logging
-import random
+import time
 from corec.core import ComponenteBase
 from corec.blocks import BloqueSimbiotico
 
@@ -10,15 +10,31 @@ class ModuloSincronizacion(ComponenteBase):
         self.nucleus = None
 
     async def inicializar(self, nucleus, config=None):
-        """Inicializa el módulo de sincronización."""
+        """Inicializa el módulo de sincronización.
+
+        Args:
+            nucleus: Instancia del núcleo de CoreC.
+            config: Configuración del módulo (opcional).
+        """
         try:
             self.nucleus = nucleus
-            self.logger.info("[Sincronización] Módulo inicializado")
+            self.logger.info("Módulo Sincronización inicializado")
         except Exception as e:
-            self.logger.error(f"[Sincronización] Error inesperado al inicializar: {e}")
+            self.logger.error(f"Error inicializando Módulo Sincronización: {e}")
+            raise
 
     async def redirigir_entidades(self, bloque_origen: BloqueSimbiotico, bloque_destino: BloqueSimbiotico, proporcion: float, canal: int):
-        """Redirige entidades entre bloques."""
+        """Redirige entidades entre bloques.
+
+        Args:
+            bloque_origen (BloqueSimbiotico): Bloque de origen.
+            bloque_destino (BloqueSimbiotico): Bloque de destino.
+            proporcion (float): Proporción de entidades a redirigir.
+            canal (int): Nuevo canal para las entidades.
+
+        Raises:
+            ValueError: Si no hay entidades para redirigir.
+        """
         try:
             num_entidades = int(len(bloque_origen.entidades) * proporcion)
             if num_entidades <= 0:
@@ -33,22 +49,29 @@ class ModuloSincronizacion(ComponenteBase):
                 "bloque_origen": bloque_origen.id,
                 "bloque_destino": bloque_destino.id,
                 "num_entidades": num_entidades,
-                "timestamp": random.random()
+                "timestamp": time.time()
             })
-            self.logger.info(f"[Sincronización] {num_entidades} entidades redirigidas de {bloque_origen.id} a {bloque_destino.id}")
+            self.logger.info(
+                f"{num_entidades} entidades redirigidas de {bloque_origen.id} a {bloque_destino.id}"
+            )
         except Exception as e:
-            self.logger.error(f"[Sincronización] Error redirigiendo entidades: {e}")
+            self.logger.error(f"Error redirigiendo entidades: {e}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_redireccion",
                 "bloque_origen": bloque_origen.id if bloque_origen else "unknown",
                 "bloque_destino": bloque_destino.id if bloque_destino else "unknown",
                 "mensaje": str(e),
-                "timestamp": random.random()
+                "timestamp": time.time()
             })
             raise
 
     async def adaptar_bloque(self, bloque_origen: BloqueSimbiotico, bloque_destino: BloqueSimbiotico):
-        """Adapta un bloque fusionándolo con otro."""
+        """Adapta un bloque fusionándolo con otro.
+
+        Args:
+            bloque_origen (BloqueSimbiotico): Bloque de origen.
+            bloque_destino (BloqueSimbiotico): Bloque de destino.
+        """
         try:
             bloque_destino.entidades.extend(bloque_origen.entidades)
             bloque_origen.entidades = []
@@ -56,18 +79,18 @@ class ModuloSincronizacion(ComponenteBase):
                 "tipo": "bloque_adaptado",
                 "bloque_origen": bloque_origen.id,
                 "bloque_destino": bloque_destino.id,
-                "timestamp": random.random()
+                "timestamp": time.time()
             })
-            self.logger.info(f"[Sincronización] Bloque {bloque_origen.id} adaptado a {bloque_destino.id}")
+            self.logger.info(f"Bloque {bloque_origen.id} adaptado a {bloque_destino.id}")
         except Exception as e:
-            self.logger.error(f"[Sincronización] Error adaptando bloque: {e}")
+            self.logger.error(f"Error adaptando bloque: {e}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_adaptacion",
                 "mensaje": str(e),
-                "timestamp": random.random()
+                "timestamp": time.time()
             })
             raise
 
     async def detener(self):
         """Detiene el módulo de sincronización."""
-        self.logger.info("[Sincronización] Módulo detenido")
+        self.logger.info("Módulo Sincronización detenido")
