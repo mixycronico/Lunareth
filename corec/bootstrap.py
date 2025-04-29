@@ -6,31 +6,8 @@ import psutil
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from corec.nucleus import CoreCNucleus
 from corec.utils.db_utils import init_postgresql, init_redis
+from corec.utils.logging import setup_logging
 from plugins.registry import registry
-
-
-def setup_logging(config: dict) -> logging.Logger:
-    """Configura el logging basado en la configuración.
-
-    Args:
-        config (dict): Configuración general del sistema.
-
-    Returns:
-        logging.Logger: Logger configurado para CoreC.
-    """
-    log_level = config.get("log_level", "INFO").upper()
-    log_file = config.get("log_file", "corec.log")
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(log_file)
-        ]
-    )
-    logger = logging.getLogger("CoreCBootstrap")
-    logger.info(f"Logging configurado con nivel {log_level}, archivo: {log_file}")
-    return logger
 
 
 async def log_system_metrics(logger: logging.Logger):
