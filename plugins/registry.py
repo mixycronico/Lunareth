@@ -1,43 +1,37 @@
-# plugins/registry.py
-from typing import Dict, Any
-import logging
 import importlib
+import json
+from pathlib import Path
+from corec.nucleus import CoreCNucleus
 
-logger = logging.getLogger("PluginRegistry")
 
 class PluginRegistry:
-    def __init__(self):
-        self.plugins: Dict[str, Dict[str, Any]] = {}
+    async def load_plugin(self, nucleus: CoreCNucleus, name: str, config: dict):
+        """Carga un plugin desde plugins.<name>.main.
 
-    def register(self, name: str, module_path: str, version: str):
-        """Registra un complemento con su módulo y versión."""
-        self.plugins[name] = {
-            "module_path": module_path,
-            "version": version,
-            "loaded": False
-        }
-        logger.info(f"[Registry] Complemento registrado: {name} (v{version})")
+        Args:
+            nucleus (CoreCNucleus): Instancia del núcleo de CoreC.
+            name (str): Nombre del plugin.
+            config (dict): Configuración del plugin.
 
-    async def load_plugin(self, nucleus: 'CoreCNucleus', name: str, config: Dict[str, Any]):
-        """Carga un complemento registrado."""
-        if name not in self.plugins:
-            raise ValueError(f"Complemento {name} no está registrado")
-        plugin_info = self.plugins[name]
+        Raises:
+            ImportError: Si el módulo del plugin no puede importarse.
+            AttributeError: Si el plugin no tiene una función inicializar.
+            ValueError: Si la configuración del plugin es inválida.
+        """
         try:
-            plugin_mod = importlib.import_module(plugin_info["module_path"])
+            module_path = f"plugins.{name}.main"
+            plugin_mod = importlib.import_module(module_path)
             init_fn = getattr(plugin_mod, "inicializar", None)
             if not callable(init_fn):
-                raise ValueError(f"Complemento {name} no expone inicializar()")
+                raise AttributeError(f"Plugin '{name}' no expone función inicializar")
             await init_fn(nucleus, config)
-            plugin_info["loaded"] = True
-            logger.info(f"[Registry] Complemento {name} cargado correctamente")
-        except Exception as e:
-            logger.error(f"[Registry] Error cargando complemento {name}: {e}")
+            nucleus.logger.info(f"Plugin '{name}' cargado correctamente")
+        except ImportError as e:
+            nucleus.logger.error(f"Error importando plugin '{name}': {e}")
             raise
-
-registry = PluginRegistry()
-
-registry.register("codex", "plugins.codex.main", "1.0.0")
-registry.register("comm_system", "plugins.comm_system.main", "1.0.0")
-registry.register("crypto_trading", "plugins.crypto_trading.main", "1.0.0")
-registry.register("panel_control", "plugins.panel_control.main", "1.0.0")
+        except AttributeError as e:
+            nucleus.logger.error(f"Error en plugin '{name}': {e}")
+            raise
+        except Exception as e:
+            nucleus.logger.error(f"Error inesperado cargando plugin '{name}': {e}")
+            raise
