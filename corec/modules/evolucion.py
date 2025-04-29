@@ -39,7 +39,7 @@ class ModuloEvolucion:
         self.historial[bloque_id] = self.historial[bloque_id][-10:]
 
         # Si el fitness es bajo, probar una nueva estrategia
-        min_fitness = bloque.max_errores  # Usar max_errores como referencia
+        min_fitness = bloque.max_errores
         if fitness < min_fitness:
             nueva_estrategia = random.choice(self.estrategias)
             bloque.quantization_step = nueva_estrategia["quantization_step"]
