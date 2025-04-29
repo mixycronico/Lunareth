@@ -1,4 +1,3 @@
-import logging
 import random
 import time
 from typing import Dict, List
@@ -7,7 +6,6 @@ from corec.blocks import BloqueSimbiotico
 
 class ModuloEvolucion:
     def __init__(self):
-        self.logger = logging.getLogger("ModuloEvolucion")
         self.estrategias = [
             {"quantization_step": 0.1, "max_concurrent_tasks": 100, "increment_factor": 1.05},
             {"quantization_step": 0.05, "max_concurrent_tasks": 50, "increment_factor": 1.03},
@@ -24,6 +22,7 @@ class ModuloEvolucion:
             config: Configuración del módulo (opcional).
         """
         self.nucleus = nucleus
+        self.logger = nucleus.logger
         self.logger.info("Módulo Evolución inicializado")
 
     async def evaluar_estrategia(self, bloque: BloqueSimbiotico):
