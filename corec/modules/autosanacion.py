@@ -1,11 +1,9 @@
-import logging
 import asyncio
 from corec.utils.db_utils import init_postgresql, init_redis
 
 
 class ModuloAutosanacion:
     def __init__(self):
-        self.logger = logging.getLogger("ModuloAutosanacion")
         self.nucleus = None
 
     async def inicializar(self, nucleus, config):
@@ -16,6 +14,7 @@ class ModuloAutosanacion:
             config: Configuración del módulo (opcional).
         """
         self.nucleus = nucleus
+        self.logger = nucleus.logger
         self.logger.info("Módulo Autosanación inicializado")
 
     async def verificar_estado(self):
