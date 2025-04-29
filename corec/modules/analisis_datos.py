@@ -1,21 +1,21 @@
-import logging
 import time
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 from typing import Dict, Any
 from corec.core import ComponenteBase
 
+
 class ModuloAnalisisDatos(ComponenteBase):
     def __init__(self):
-        self.logger = logging.getLogger("ModuloAnalisisDatos")
         self.nucleus = None
         self.config = None
 
     async def inicializar(self, nucleus, config: Dict[str, Any] = None):
         """Inicializa el módulo de análisis de datos."""
         self.nucleus = nucleus
+        self.logger = nucleus.logger
         self.config = config or {}
-        self.logger.info("[AnálisisDatos] Módulo inicializado")
+        self.logger.info("Módulo AnalisisDatos inicializado")
 
     async def analizar(self, df: pd.DataFrame, nombre_dataset: str) -> Dict[str, Any]:
         """Analiza un dataset y calcula estadísticas, correlaciones y anomalías."""
@@ -26,7 +26,7 @@ class ModuloAnalisisDatos(ComponenteBase):
             # Asegurar que df tenga al menos una columna numérica
             num_cols = df.select_dtypes(include=["float64", "int64"]).columns
             if len(num_cols) == 0:
-                self.logger.warning(f"[AnálisisDatos] No hay columnas numéricas en {nombre_dataset}")
+                self.logger.warning(f"No hay columnas numéricas en {nombre_dataset}")
                 return result
 
             # Estadísticas descriptivas
@@ -34,7 +34,7 @@ class ModuloAnalisisDatos(ComponenteBase):
                 stats = df[num_cols].describe().to_dict()
                 result["estadisticas"] = stats
             except Exception as e:
-                self.logger.error(f"[AnálisisDatos] Error calculando estadísticas: {e}")
+                self.logger.error(f"Error calculando estadísticas: {e}")
                 result["estadisticas"] = {}
 
             # Correlaciones (si hay más de una columna numérica)
@@ -47,7 +47,7 @@ class ModuloAnalisisDatos(ComponenteBase):
                         for k, v in corr.items()
                     }
                 except Exception as e:
-                    self.logger.error(f"[AnálisisDatos] Error calculando correlaciones: {e}")
+                    self.logger.error(f"Error calculando correlaciones: {e}")
                     result["correlaciones"] = {}
 
             # Detección de anomalías
@@ -65,7 +65,7 @@ class ModuloAnalisisDatos(ComponenteBase):
                     "indices_anomalias": df.index[~mask_inliers].tolist()
                 }
             except Exception as e:
-                self.logger.error(f"[AnálisisDatos] Error detectando anomalías: {e}")
+                self.logger.error(f"Error detectando anomalías: {e}")
                 result["anomalias"] = {"num_anomalias": 0, "indices_anomalias": []}
 
             t1 = time.monotonic()
@@ -78,12 +78,12 @@ class ModuloAnalisisDatos(ComponenteBase):
                 "timestamp": time.time()
             })
 
-            self.logger.info(f"[AnálisisDatos] Dataset {nombre_dataset} analizado: "
+            self.logger.info(f"Dataset {nombre_dataset} analizado: "
                              f"{len(df)} filas, {result['anomalias'].get('num_anomalias', 0)} anomalías")
             return result
 
         except Exception as e:
-            self.logger.error(f"[AnálisisDatos] Error analizando {nombre_dataset}: {e}")
+            self.logger.error(f"Error analizando {nombre_dataset}: {e}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_analisis_datos",
                 "dataset": nombre_dataset,
@@ -94,4 +94,4 @@ class ModuloAnalisisDatos(ComponenteBase):
 
     async def detener(self):
         """Detiene el módulo de análisis de datos."""
-        self.logger.info("[AnálisisDatos] Módulo detenido")
+        self.logger.info("Módulo AnalisisDatos detenido")
