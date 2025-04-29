@@ -5,15 +5,18 @@
         "user": "postgres",
         "password": "your_password",
         "host": "localhost",
-        "port": 5432
+        "port": 5432,
+        "max_connections": 50,
+        "connection_timeout": 10
     },
     "redis_config": {
         "host": "localhost",
         "port": 6379,
         "username": "corec_user",
         "password": "secure_password",
-        "max_connections": 100,
-        "stream_max_length": 5000
+        "max_connections": 200,
+        "stream_max_length": 10000,
+        "retry_interval": 2
     },
     "ia_config": {
         "enabled": true,
@@ -29,6 +32,19 @@
         "n_estimators": 100,
         "max_samples": 1000
     },
+    "ml_config": {
+        "enabled": true,
+        "model_type": "linear_regression",
+        "historial_size": 50,
+        "min_samples_train": 10
+    },
+    "autosanacion_config": {
+        "enabled": true,
+        "check_interval_seconds": 120,
+        "max_retries": 5,
+        "retry_delay_min": 2,
+        "retry_delay_max": 10
+    },
     "bloques": [
         {
             "id": "enjambre_sensor",
@@ -42,6 +58,16 @@
             "autoreparacion": {
                 "max_errores": 0.05,
                 "min_fitness": 0.2
+            },
+            "mutacion": {
+                "enabled": true,
+                "min_fitness": 0.2,
+                "mutation_rate": 0.1
+            },
+            "autorreplicacion": {
+                "enabled": true,
+                "max_entidades": 5000,
+                "min_fitness_trigger": 0.1
             }
         },
         {
@@ -56,6 +82,16 @@
             "autoreparacion": {
                 "max_errores": 0.02,
                 "min_fitness": 0.5
+            },
+            "mutacion": {
+                "enabled": true,
+                "min_fitness": 0.5,
+                "mutation_rate": 0.05
+            },
+            "autorreplicacion": {
+                "enabled": true,
+                "max_entidades": 2000,
+                "min_fitness_trigger": 0.3
             }
         },
         {
@@ -71,6 +107,16 @@
             "autoreparacion": {
                 "max_errores": 0.1,
                 "min_fitness": 0.3
+            },
+            "mutacion": {
+                "enabled": true,
+                "min_fitness": 0.3,
+                "mutation_rate": 0.2
+            },
+            "autorreplicacion": {
+                "enabled": false,
+                "max_entidades": 100,
+                "min_fitness_trigger": 0.2
             }
         }
     ],
@@ -85,9 +131,20 @@
                 "max_size_mb": 5,
                 "quantization_step": 0.05,
                 "max_errores": 0.1,
-                "max_concurrent_tasks": 100,
-                "cpu_intensive": false,
-                "min_fitness": 0.3
+                "max_concurrent_tasks": 150,
+                "cpu_intensive": true,
+                "min_fitness": 0.3,
+                "mutacion": {
+                    "enabled": true,
+                    "min_fitness": 0.3,
+                    "mutation_rate": 0.15,
+                    "ml_enabled": true
+                },
+                "autorreplicacion": {
+                    "enabled": true,
+                    "max_entidades": 10000,
+                    "min_fitness_trigger": 0.2
+                }
             }
         }
     }
