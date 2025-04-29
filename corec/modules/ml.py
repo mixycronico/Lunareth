@@ -1,5 +1,5 @@
-import logging
 import random
+import time
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from typing import Dict, List, Optional
@@ -8,7 +8,6 @@ from corec.entities_superpuestas import EntidadSuperpuesta
 
 class ModuloML:
     def __init__(self):
-        self.logger = logging.getLogger("ModuloML")
         self.modelos: Dict[str, LinearRegression] = {}  # {entidad_id: modelo}
         self.historial: Dict[str, List[Dict]] = {}  # {entidad_id: [{roles, fitness, timestamp}]}
         self.nucleus = None
@@ -21,6 +20,7 @@ class ModuloML:
             config: Configuración del módulo ML.
         """
         self.nucleus = nucleus
+        self.logger = nucleus.logger
         self.logger.info("Módulo ML inicializado")
 
     async def entrenar_modelo(self, entidad: EntidadSuperpuesta, fitness: float):
