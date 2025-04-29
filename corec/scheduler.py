@@ -12,8 +12,8 @@ class Scheduler:
             nucleus: Instancia del núcleo de CoreC (opcional).
         """
         self._sched = AsyncIOScheduler()
-        self.logger = logging.getLogger("CoreCScheduler")
         self.nucleus = nucleus
+        self.logger = nucleus.logger if nucleus else logging.getLogger("CoreC")
 
     def start(self):
         """Inicia el scheduler."""
