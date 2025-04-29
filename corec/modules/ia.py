@@ -1,4 +1,3 @@
-import logging
 import time
 import asyncio
 import torch
@@ -9,7 +8,6 @@ from corec.blocks import BloqueSimbiotico
 
 class ModuloIA:
     def __init__(self):
-        self.logger = logging.getLogger("ModuloIA")
         self.model = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.enabled = False
@@ -24,6 +22,7 @@ class ModuloIA:
             config: Configuración del módulo IA.
         """
         self.nucleus = nucleus
+        self.logger = nucleus.logger
         self.config = config
         self.enabled = self.nucleus.config.ia_config.enabled
         if not self.enabled:
@@ -159,5 +158,5 @@ class ModuloIA:
 
     async def detener(self):
         """Detiene el módulo de inteligencia artificial."""
-        self.model = None
         self.logger.info("Módulo IA detenido")
+        self.model = None
