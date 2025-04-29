@@ -1,4 +1,6 @@
 # corec/entities_superpuestas.py
+import random
+import logging
 from typing import Dict
 from corec.utils.quantization import escalar
 from corec.entities import EntidadBase
@@ -9,7 +11,9 @@ class EntidadSuperpuesta(EntidadBase):
         self,
         id: str,
         roles: Dict[str, float],
-        quantization_step: float = QUANTIZATION_STEP_DEFAULT
+        quantization_step: float = QUANTIZATION_STEP_DEFAULT,
+        min_fitness: float = 0.3,
+        mutation_rate: float = 0.1
     ):
         """
         Entidad con múltiples roles cuantizados que se normalizan.
@@ -18,14 +22,19 @@ class EntidadSuperpuesta(EntidadBase):
             id (str): Identificador único.
             roles (Dict[str, float]): Roles iniciales y sus pesos.
             quantization_step (float): Paso de cuantización específico.
+            min_fitness (float): Umbral de fitness para desencadenar mutaciones.
+            mutation_rate (float): Probabilidad de mutar roles si fitness es bajo.
 
         Raises:
             ValueError: Si los roles están vacíos.
         """
         if not roles:
             raise ValueError("Los roles no pueden estar vacíos")
+        self.logger = logging.getLogger("EntidadSuperpuesta")
         self.id = id
         self.quantization_step = quantization_step
+        self.min_fitness = min_fitness
+        self.mutation_rate = mutation_rate
         self.roles = {k: escalar(v, quantization_step) for k, v in roles.items()}
         self.normalizar_roles()
 
@@ -65,3 +74,13 @@ class EntidadSuperpuesta(EntidadBase):
             self.roles = {k: escalar(0.0, self.quantization_step) for k in self.roles}
         else:
             self.roles = {k: escalar(v / total, self.quantization_step) for k, v in self.roles}
+
+    def mutar_roles(self, fitness: float):
+        """Mutar roles si el fitness es bajo."""
+        if fitness < self.min_fitness and random.random() < self.mutation_rate:
+            for rol in self.roles:
+                # Ajustar peso con una variación aleatoria (-10% a +10%)
+                delta = random.uniform(-0.1, 0.1)
+                self.roles[rol] = escalar(self.roles[rol] + delta, self.quantization_step)
+            self.normalizar_roles()
+            self.logger.info(f"[Entidad {self.id}] Roles mutados debido a fitness bajo: {fitness}")
