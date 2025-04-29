@@ -1,11 +1,9 @@
-import logging
 import time
 from corec.core import ComponenteBase
 
 
 class ModuloAuditoria(ComponenteBase):
     def __init__(self):
-        self.logger = logging.getLogger("ModuloAuditoria")
         self.nucleus = None
 
     async def inicializar(self, nucleus, config=None):
@@ -17,6 +15,7 @@ class ModuloAuditoria(ComponenteBase):
         """
         try:
             self.nucleus = nucleus
+            self.logger = nucleus.logger
             self.logger.info("Módulo Auditoría inicializado")
         except Exception as e:
             self.logger.error(f"Error inicializando Módulo Auditoría: {e}")
