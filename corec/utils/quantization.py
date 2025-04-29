@@ -1,9 +1,5 @@
-# corec/utils/quantization.py
-from corec.config import QUANTIZATION_STEP_DEFAULT
-
-def escalar(valor: float, paso: float = QUANTIZATION_STEP_DEFAULT) -> float:
-    """
-    Escala un valor al múltiplo más cercano de `paso` entre -1.0 y 1.0.
+def escalar(valor: float, paso: float = 0.05) -> float:
+    """Escala un valor al múltiplo más cercano de `paso` entre -1.0 y 1.0.
 
     Args:
         valor (float): Valor a cuantizar.
