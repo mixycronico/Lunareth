@@ -1,13 +1,12 @@
-# corec/nucleus.py
 import asyncio
+import json
 import logging
 import time
-import json
 from pathlib import Path
 import asyncpg
-import aioredis
+import redis.asyncio as aioredis
 import pandas as pd
-from corec.config_loader import load_config_dict
+from corec.config_loader import load_config, CoreCConfig
 from corec.scheduler import Scheduler
 from corec.modules.registro import ModuloRegistro
 from corec.modules.sincronizacion import ModuloSincronizacion
@@ -23,15 +22,15 @@ from corec.entities import Entidad
 from corec.entities_superpuestas import EntidadSuperpuesta
 from corec.entrelazador import Entrelazador
 from corec.utils.db_utils import init_postgresql, init_redis
-from corec.config import QUANTIZATION_STEP_DEFAULT
+
 
 class CoreCNucleus:
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str = "config/corec_config.json"):
         self.logger = logging.getLogger("CoreCNucleus")
-        self.config_path = config_path
-        self.config = None
-        self.db_pool = None
-        self.redis_client = None
+        self.config_path = str(Path(config_path).resolve())
+        self.config: CoreCConfig = None
+        self.db_pool: asyncpg.Pool = None
+        self.redis_client: aioredis.Redis = None
         self.modules = {}
         self.plugins = {}
         self.bloques = []
@@ -40,32 +39,16 @@ class CoreCNucleus:
         self.fallback_storage = Path("fallback_messages.json")
 
     async def inicializar(self):
+        """Inicializa el núcleo de CoreC, configurando módulos, bloques y conexiones.
+
+        Raises:
+            FileNotFoundError: Si el archivo de configuración no existe.
+            ValueError: Si la configuración es inválida.
+        """
         try:
-            self.config = load_config_dict(self.config_path)
-            try:
-                self.db_pool = await init_postgresql(self.config.get("db_config", {}))
-            except Exception as e:
-                self.logger.error(f"[Núcleo] Fallo en conexión a PostgreSQL tras reintentos: {e}")
-                self.db_pool = None
-                await self.publicar_alerta({
-                    "tipo": "error_conexion_postgresql_critico",
-                    "mensaje": str(e),
-                    "timestamp": time.time()
-                })
-
-            try:
-                self.redis_client = await init_redis(self.config.get("redis_config", {}))
-            except Exception as e:
-                self.logger.error(f"[Núcleo] Fallo en conexión a Redis tras reintentos: {e}")
-                self.redis_client = None
-                await self.publicar_alerta({
-                    "tipo": "error_conexion_redis_critico",
-                    "mensaje": str(e),
-                    "timestamp": time.time()
-                })
-
+            self.config = load_config(self.config_path)
             self.entrelazador = Entrelazador(self.redis_client)
-            self.logger.info("[Núcleo] Entrelazador inicializado")
+            self.logger.info("Entrelazador inicializado")
 
             self.modules["registro"] = ModuloRegistro()
             self.modules["sincronizacion"] = ModuloSincronizacion()
@@ -78,44 +61,39 @@ class CoreCNucleus:
             self.modules["autosanacion"] = ModuloAutosanacion()
 
             for name, module in self.modules.items():
-                module_config = self.config.get(f"{name}_config", {})
-                if name == "ia" and not module_config.get("enabled", True):
-                    self.logger.info(f"[Núcleo] Módulo {name} deshabilitado")
+                module_config = getattr(self.config, f"{name}_config", {}).model_dump()
+                if name == "ia" and not self.config.ia_config.enabled:
+                    self.logger.info(f"Módulo {name} deshabilitado")
                     continue
                 try:
-                    self.logger.debug(f"[Núcleo] Inicializando módulo {name}")
+                    self.logger.debug(f"Inicializando módulo {name}")
                     await module.inicializar(self, module_config)
                 except Exception as e:
-                    self.logger.error(f"[Núcleo] Error inicializando módulo {name}: {e}")
+                    self.logger.error(f"Error inicializando módulo {name}: {e}")
                     await self.publicar_alerta({
                         "tipo": f"error_inicializacion_{name}",
                         "mensaje": str(e),
                         "timestamp": time.time()
                     })
 
-            for block_conf in self.config.get("bloques", []):
-                quantization_step = block_conf.get("quantization_step", QUANTIZATION_STEP_DEFAULT)
-                max_errores = block_conf.get("autoreparacion", {}).get("max_errores", 0.1)
-                max_concurrent_tasks = block_conf.get("max_concurrent_tasks")
-                cpu_intensive = block_conf.get("cpu_intensive", False)
+            for block_conf in self.config.bloques:
                 entidades = []
-                ia_config = self.config.get("ia_config", {})
-                if block_conf["id"] == "ia_analisis" and ia_config.get("enabled", True):
+                if block_conf.id == "ia_analisis" and self.config.ia_config.enabled:
                     async def ia_fn(carga, mod_ia=self.modules["ia"], bconf=block_conf):
-                        datos = await self.get_datos_from_redis(bconf["id"])
+                        datos = await self.get_datos_from_redis(bconf.id)
                         res = await mod_ia.procesar_bloque(None, datos)
                         return res["mensajes"][0] if res["mensajes"] else {"valor": 0.0}
                     entidades = [
-                        Entidad(f"ent_{i}", block_conf["canal"], ia_fn, quantization_step)
-                        for i in range(block_conf["entidades"])
+                        Entidad(f"ent_{i}", block_conf.canal, ia_fn, block_conf.quantization_step)
+                        for i in range(block_conf.entidades)
                     ]
                 else:
-                    entidades = []
                     if self.db_pool:
                         async with self.db_pool.acquire() as conn:
                             rows = await conn.fetch(
-                                "SELECT entidad_id, roles, quantization_step, min_fitness, mutation_rate FROM entidades WHERE bloque_id = $1",
-                                block_conf["id"]
+                                "SELECT entidad_id, roles, quantization_step, min_fitness, mutation_rate "
+                                "FROM entidades WHERE bloque_id = $1",
+                                block_conf.id
                             )
                             for row in rows:
                                 entidades.append(
@@ -132,21 +110,24 @@ class CoreCNucleus:
                             EntidadSuperpuesta(
                                 f"ent_{i}",
                                 {"rol1": 0.5, "rol2": 0.5},
-                                quantization_step,
-                                min_fitness=block_conf.get("autoreparacion", {}).get("min_fitness", 0.3)
+                                block_conf.quantization_step,
+                                min_fitness=block_conf.autoreparacion.min_fitness,
+                                mutation_rate=block_conf.mutacion.mutation_rate
                             )
-                            for i in range(block_conf["entidades"])
+                            for i in range(block_conf.entidades)
                         ]
                 bloque = BloqueSimbiotico(
-                    block_conf["id"],
-                    block_conf["canal"],
+                    block_conf.id,
+                    block_conf.canal,
                     entidades,
-                    block_conf["max_size_mb"],
+                    block_conf.max_size_mb,
                     self,
-                    quantization_step,
-                    max_errores,
-                    max_concurrent_tasks,
-                    cpu_intensive
+                    block_conf.quantization_step,
+                    block_conf.autoreparacion.max_errores,
+                    block_conf.max_concurrent_tasks,
+                    block_conf.cpu_intensive,
+                    block_conf.mutacion.model_dump(),
+                    block_conf.autorreplicacion.model_dump()
                 )
                 self.bloques.append(bloque)
                 for entidad in entidades:
@@ -162,7 +143,7 @@ class CoreCNucleus:
                         try:
                             self.entrelazador.enlazar(entidades[i], entidades[i + 1])
                         except ValueError as e:
-                            self.logger.warning(f"[Núcleo] Error enlazando entidades en {bloque.id}: {e}")
+                            self.logger.warning(f"Error enlazando entidades en {bloque.id}: {e}")
 
             self.scheduler = Scheduler()
             self.scheduler.start()
@@ -209,16 +190,16 @@ class CoreCNucleus:
                 job_id="autosanacion_periodica"
             )
 
-            self.logger.info("[Núcleo] Inicialización completa")
+            self.logger.info("Inicialización completa")
 
         except FileNotFoundError as e:
-            self.logger.error(f"[Núcleo] Configuración no encontrada: {e}")
+            self.logger.error(f"Configuración no encontrada: {e}")
             raise
         except ValueError as e:
-            self.logger.error(f"[Núcleo] Configuración inválida: {e}")
+            self.logger.error(f"Configuración inválida: {e}")
             raise
         except Exception as e:
-            self.logger.error(f"[Núcleo] Error inicializando: {e}")
+            self.logger.error(f"Error inicializando: {e}")
             await self.publicar_alerta({
                 "tipo": "error_inicializacion",
                 "mensaje": str(e),
@@ -227,14 +208,15 @@ class CoreCNucleus:
             raise
 
     async def procesar_entrelazador(self):
+        """Propaga cambios a través del entrelazador."""
         try:
             for bloque in self.bloques:
                 cambio = {"fitness": bloque.fitness}
                 for entidad in bloque.entidades:
                     await self.entrelazador.afectar(entidad, cambio, max_saltos=1)
-            self.logger.debug("[Núcleo] Cambios propagados en Entrelazador")
+            self.logger.debug("Cambios propagados en Entrelazador")
         except Exception as e:
-            self.logger.error(f"[Núcleo] Error procesando Entrelazador: {e}")
+            self.logger.error(f"Error procesando Entrelazador: {e}")
             await self.publicar_alerta({
                 "tipo": "error_entrelazador",
                 "mensaje": str(e),
@@ -242,6 +224,7 @@ class CoreCNucleus:
             })
 
     async def process_bloque(self, bloque: BloqueSimbiotico):
+        """Procesa un bloque simbiótico."""
         try:
             if bloque.id != "ia_analisis":
                 await self.modules["ejecucion"].encolar_bloque(bloque)
@@ -249,7 +232,7 @@ class CoreCNucleus:
                 async with self.db_pool.acquire() as conn:
                     await bloque.escribir_postgresql(conn)
             else:
-                self.logger.warning(f"[Núcleo] PostgreSQL no disponible, usando fallback para {bloque.id}")
+                self.logger.warning(f"PostgreSQL no disponible, usando fallback para {bloque.id}")
                 await self.save_fallback_messages(bloque.id, bloque.mensajes)
                 await self.publicar_alerta({
                     "tipo": "error_db_pool",
@@ -263,7 +246,7 @@ class CoreCNucleus:
                     if isinstance(entidad, EntidadSuperpuesta):
                         await ml_module.entrenar_modelo(entidad, bloque.fitness)
         except Exception as e:
-            self.logger.error(f"[Núcleo] Error procesando bloque {bloque.id}: {e}")
+            self.logger.error(f"Error procesando bloque {bloque.id}: {e}")
             await self.publicar_alerta({
                 "tipo": "error_procesamiento_bloque",
                 "bloque_id": bloque.id,
@@ -272,40 +255,45 @@ class CoreCNucleus:
             })
 
     async def save_fallback_messages(self, bloque_id: str, mensajes: list):
+        """Guarda mensajes en un archivo de respaldo si PostgreSQL no está disponible."""
         try:
             if self.fallback_storage.exists():
                 with open(self.fallback_storage, "r") as f:
                     existing = json.load(f)
+                    if not isinstance(existing, list):
+                        self.logger.error(f"Formato inválido en {self.fallback_storage}, esperado lista")
+                        existing = []
             else:
                 existing = []
             existing.extend([{"bloque_id": bloque_id, "mensaje": m} for m in mensajes])
             with open(self.fallback_storage, "w") as f:
                 json.dump(existing, f)
-            self.logger.info(f"[Núcleo] Mensajes de {bloque_id} guardados en fallback")
+            self.logger.info(f"Mensajes de {bloque_id} guardados en fallback")
         except Exception as e:
-            self.logger.error(f"[Núcleo] Error guardando mensajes en fallback: {e}")
+            self.logger.error(f"Error guardando mensajes en fallback: {e}")
 
     async def retry_fallback_messages(self):
+        """Reintenta escribir mensajes de respaldo en PostgreSQL."""
         if not self.db_pool or not self.fallback_storage.exists():
-            self.logger.info(f"[Núcleo] No hay mensajes de fallback o db_pool no disponible")
+            self.logger.info("No hay mensajes de fallback o db_pool no disponible")
             return
         try:
-            self.logger.info(f"[Núcleo] Leyendo mensajes de {self.fallback_storage}")
+            self.logger.info(f"Leyendo mensajes de {self.fallback_storage}")
             with open(self.fallback_storage, "r") as f:
                 messages = json.load(f)
             if not isinstance(messages, list):
-                self.logger.error(f"[Núcleo] Formato inválido en {self.fallback_storage}, esperado lista")
+                self.logger.error(f"Formato inválido en {self.fallback_storage}, esperado lista")
                 return
-            self.logger.info(f"[Núcleo] Encontrados {len(messages)} mensajes para reintentar")
+            self.logger.info(f"Encontrados {len(messages)} mensajes para reintentar")
             async with self.db_pool.acquire() as conn:
-                self.logger.debug("[Núcleo] Adquirida conexión al pool de PostgreSQL")
+                self.logger.debug("Adquirida conexión al pool de PostgreSQL")
                 for msg in messages:
                     bloque_id = msg.get("bloque_id")
                     m = msg.get("mensaje")
                     if not (bloque_id and m):
-                        self.logger.warning(f"[Núcleo] Mensaje inválido: {msg}")
+                        self.logger.warning(f"Mensaje inválido: {msg}")
                         continue
-                    self.logger.debug(f"[Núcleo] Insertando mensaje para bloque {bloque_id}, entidad {m['entidad_id']}")
+                    self.logger.debug(f"Insertando mensaje para bloque {bloque_id}, entidad {m['entidad_id']}")
                     await conn.execute(
                         """
                         INSERT INTO mensajes (
@@ -320,34 +308,33 @@ class CoreCNucleus:
                         m.get("probabilidad", 0.0),
                         m["timestamp"]
                     )
-            self.logger.info(f"[Núcleo] Eliminando archivo de fallback {self.fallback_storage}")
+            self.logger.info(f"Eliminando archivo de fallback {self.fallback_storage}")
             try:
                 self.fallback_storage.unlink()
-                self.logger.info("[Núcleo] Mensajes de fallback escritos en PostgreSQL")
+                self.logger.info("Mensajes de fallback escritos en PostgreSQL")
             except Exception as e:
-                self.logger.error(f"[Núcleo] Error eliminando archivo de fallback: {e}")
-                self.logger.debug(f"[Núcleo] Permisos del archivo: {self.fallback_storage.stat()}")
+                self.logger.error(f"Error eliminando archivo de fallback: {e}")
         except json.JSONDecodeError as e:
-            self.logger.error(f"[Núcleo] Error decodificando JSON en {self.fallback_storage}: {e}")
+            self.logger.error(f"Error decodificando JSON en {self.fallback_storage}: {e}")
         except Exception as e:
-            self.logger.error(f"[Núcleo] Error reintentando mensajes de fallback: {e}")
-            self.logger.debug(f"[Núcleo] Detalles del error: {repr(e)}")
+            self.logger.error(f"Error reintentando mensajes de fallback: {e}")
 
     async def ejecutar_analisis(self):
+        """Ejecuta análisis de datos sobre mensajes recientes."""
         try:
             if not self.db_pool:
-                self.logger.warning("[Núcleo] No se puede ejecutar análisis, db_pool no inicializado")
+                self.logger.warning("No se puede ejecutar análisis, db_pool no inicializado")
                 return
             async with self.db_pool.acquire() as conn:
                 rows = await conn.fetch("SELECT bloque_id, valor FROM mensajes LIMIT 1000")
             if not rows:
-                self.logger.debug("[Núcleo] No hay mensajes para análisis")
+                self.logger.debug("No hay mensajes para análisis")
                 return
             df = pd.DataFrame(rows, columns=["bloque_id", "valor"])
             df_wide = df.pivot(columns="bloque_id", values="valor").fillna(0)
             await self.modules["analisis_datos"].analizar(df_wide, "mensajes_recientes")
         except Exception as e:
-            self.logger.error(f"[Núcleo] Error en ejecutar_analisis: {e}")
+            self.logger.error(f"Error en ejecutar_analisis: {e}")
             await self.publicar_alerta({
                 "tipo": "error_analisis",
                 "mensaje": str(e),
@@ -355,11 +342,12 @@ class CoreCNucleus:
             })
 
     async def get_datos_from_redis(self, bloque_id: str) -> dict:
+        """Obtiene datos de Redis para un bloque específico."""
         try:
             if not self.redis_client:
-                self.logger.warning(f"[Núcleo] Redis no inicializado para {bloque_id}")
+                self.logger.warning(f"Redis no inicializado para {bloque_id}")
                 return {"valores": []}
-            max_length = self.config.get("redis_config", {}).get("stream_max_length", 5000)
+            max_length = self.config.redis_config.stream_max_length
             msgs = await self.redis_client.xread({"alertas:datos": "$"}, block=1000, count=10)
             valores = []
             for _, batch in msgs:
@@ -370,7 +358,7 @@ class CoreCNucleus:
                 valores = valores[-max_length:]
             return {"valores": valores}
         except aioredis.RedisError as e:
-            self.logger.error(f"[Núcleo] Error leyendo Redis para {bloque_id}: {e}")
+            self.logger.error(f"Error leyendo Redis para {bloque_id}: {e}")
             await self.publicar_alerta({
                 "tipo": "error_redis_datos",
                 "bloque_id": bloque_id,
@@ -380,25 +368,27 @@ class CoreCNucleus:
             return {"valores": []}
 
     async def publicar_alerta(self, alerta: dict):
+        """Publica una alerta en Redis o la archiva si Redis no está disponible."""
         try:
             if not self.redis_client:
-                self.logger.warning("[Alerta] Redis no inicializado, archivando localmente")
+                self.logger.warning("Redis no inicializado, archivando localmente")
                 await self.archive_alert(alerta)
                 return
             key = f"alertas:{alerta['tipo']}"
-            max_length = self.config.get("redis_config", {}).get("stream_max_length", 5000)
+            max_length = self.config.redis_config.stream_max_length
             await self.redis_client.xadd(key, alerta, maxlen=max_length)
-            self.logger.debug(f"[Alerta] {alerta}")
+            self.logger.debug(f"Alerta publicada: {alerta}")
             stream_len = await self.redis_client.xlen(key)
             if stream_len >= max_length * 0.9:
                 await self.archive_alert(alerta)
         except aioredis.RedisError as e:
-            self.logger.error(f"[Núcleo] Error publicando alerta: {e}")
+            self.logger.error(f"Error publicando alerta: {e}")
             await self.archive_alert(alerta)
 
     async def archive_alert(self, alerta: dict):
+        """Archiva una alerta en PostgreSQL."""
         if not self.db_pool:
-            self.logger.warning("[Alerta] PostgreSQL no disponible, no se puede archivar")
+            self.logger.warning("PostgreSQL no disponible, no se puede archivar")
             return
         try:
             async with self.db_pool.acquire() as conn:
@@ -413,19 +403,20 @@ class CoreCNucleus:
                     alerta.get("timestamp", time.time()),
                     json.dumps(alerta)
                 )
-            self.logger.info(f"[Alerta] Alerta archivada en PostgreSQL: {alerta['tipo']}")
+            self.logger.info(f"Alerta archivada en PostgreSQL: {alerta['tipo']}")
         except Exception as e:
-            self.logger.error(f"[Alerta] Error archivando alerta: {e}")
+            self.logger.error(f"Error archivando alerta: {e}")
 
     async def publicar_aprendizaje(self, aprendizaje: dict):
+        """Publica un aprendizaje en Redis y PostgreSQL."""
         try:
             if not self.redis_client:
-                self.logger.warning("[Aprendizaje] Redis no inicializado")
+                self.logger.warning("Redis no inicializado")
                 return
-            aprendizaje["instancia_id"] = self.config["instance_id"]
+            aprendizaje["instancia_id"] = self.config.instance_id
             aprendizaje["timestamp"] = time.time()
             await self.redis_client.xadd("corec:aprendizajes", aprendizaje, maxlen=1000)
-            self.logger.info(f"[Aprendizaje] Publicado: {aprendizaje}")
+            self.logger.info(f"Aprendizaje publicado: {aprendizaje}")
             if self.db_pool:
                 async with self.db_pool.acquire() as conn:
                     await conn.execute(
@@ -440,34 +431,36 @@ class CoreCNucleus:
                         aprendizaje["timestamp"]
                     )
         except Exception as e:
-            self.logger.error(f"[Aprendizaje] Error publicando aprendizaje: {e}")
+            self.logger.error(f"Error publicando aprendizaje: {e}")
 
     async def consumir_aprendizajes(self):
+        """Consume aprendizajes de otras instancias y los aplica localmente."""
         try:
             if not self.redis_client:
-                self.logger.warning("[Aprendizaje] Redis no inicializado")
+                self.logger.warning("Redis no inicializado")
                 return
             msgs = await self.redis_client.xread({"corec:aprendizajes": "$"}, block=1000, count=10)
             for _, batch in msgs:
                 for _, msg in batch:
-                    if msg["instancia_id"] == self.config["instance_id"]:
+                    if msg["instancia_id"] == self.config.instance_id:
                         continue
                     for bloque in self.bloques:
                         if msg["bloque_id"] == bloque.id and msg["fitness"] > bloque.fitness:
                             bloque.quantization_step = msg["estrategia"]["quantization_step"]
                             bloque.max_concurrent_tasks = msg["estrategia"]["max_concurrent_tasks"]
                             bloque.increment_factor = msg["estrategia"]["increment_factor"]
-                            self.logger.info(f"[Aprendizaje] Aplicado aprendizaje de {msg['instancia_id']} a {bloque.id}")
+                            self.logger.info(f"Aplicado aprendizaje de {msg['instancia_id']} a {bloque.id}")
         except Exception as e:
-            self.logger.error(f"[Aprendizaje] Error consumiendo aprendizajes: {e}")
+            self.logger.error(f"Error consumiendo aprendizajes: {e}")
 
     async def evaluar_estrategias(self):
+        """Evalúa estrategias para optimizar el rendimiento de los bloques."""
         try:
             for bloque in self.bloques:
                 await self.modules["evolucion"].evaluar_estrategia(bloque)
-            self.logger.debug("[Núcleo] Estrategias evaluadas")
+            self.logger.debug("Estrategias evaluadas")
         except Exception as e:
-            self.logger.error(f"[Núcleo] Error evaluando estrategias: {e}")
+            self.logger.error(f"Error evaluando estrategias: {e}")
             await self.publicar_alerta({
                 "tipo": "error_evolucion",
                 "mensaje": str(e),
@@ -475,15 +468,16 @@ class CoreCNucleus:
             })
 
     async def ejecutar(self):
+        """Ejecuta el ciclo principal del núcleo."""
         try:
-            self.logger.info("[Núcleo] Ejecutando ciclo principal (scheduler)...")
+            self.logger.info("Ejecutando ciclo principal (scheduler)...")
             while True:
                 await asyncio.sleep(3600)
         except asyncio.CancelledError:
-            self.logger.info("[Núcleo] Ejecución cancelada.")
+            self.logger.info("Ejecución cancelada.")
             raise
         except Exception as e:
-            self.logger.error(f"[Núcleo] Error en ejecución continua: {e}")
+            self.logger.error(f"Error en ejecución continua: {e}")
             await self.publicar_alerta({
                 "tipo": "error_ejecucion",
                 "mensaje": str(e),
@@ -492,19 +486,20 @@ class CoreCNucleus:
             raise
 
     async def detener(self):
+        """Detiene el núcleo y sus componentes."""
         try:
             if self.scheduler:
                 self.scheduler.shutdown()
-                self.logger.info("[Núcleo] Scheduler detenido")
+                self.logger.info("Scheduler detenido")
             for module in self.modules.values():
                 await module.detener()
             if self.redis_client:
                 await self.redis_client.close()
             if self.db_pool:
                 self.db_pool.close()
-            self.logger.info("[Núcleo] Detención completa")
+            self.logger.info("Detención completa")
         except Exception as e:
-            self.logger.error(f"[Núcleo] Error durante la detención: {e}")
+            self.logger.error(f"Error durante la detención: {e}")
             await self.publicar_alerta({
                 "tipo": "error_detencion",
                 "mensaje": str(e),
@@ -512,6 +507,7 @@ class CoreCNucleus:
             })
 
     async def ejecutar_plugin(self, plugin_id: str, comando: dict):
+        """Ejecuta un comando en un plugin específico."""
         plugin = self.plugins.get(plugin_id)
         if not plugin:
             raise ValueError(f"Plugin {plugin_id} no encontrado")
