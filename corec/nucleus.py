@@ -1,3 +1,4 @@
+# corec/nucleus.py
 import asyncio
 import logging
 import time
@@ -15,8 +16,11 @@ from corec.modules.auditoria import ModuloAuditoria
 from corec.modules.ia import ModuloIA
 from corec.modules.analisis_datos import ModuloAnalisisDatos
 from corec.blocks import BloqueSimbiotico
-from corec.entities import crear_entidad
+from corec.entities import Entidad
+from corec.entities_superpuestas import EntidadSuperpuesta
+from corec.entrelazador import Entrelazador
 from corec.utils.db_utils import init_postgresql, init_redis
+from corec.config import QUANTIZATION_STEP_DEFAULT
 
 class CoreCNucleus:
     def __init__(self, config_path: str):
@@ -30,10 +34,11 @@ class CoreCNucleus:
         self.plugins = {}
         self.bloques = []
         self.scheduler = None
+        self.entrelazador = None
         self.fallback_storage = Path("fallback_messages.json")
 
     async def inicializar(self):
-        """Configura conexiones, módulos, bloques y tareas programadas."""
+        """Configura conexiones, módulos, bloques, entrelazador y tareas."""
         try:
             self.config = load_config_dict(self.config_path)
             try:
@@ -58,6 +63,11 @@ class CoreCNucleus:
                     "timestamp": time.time()
                 })
 
+            # Inicializar Entrelazador
+            self.entrelazador = Entrelazador(self.redis_client)
+            self.logger.info("[Núcleo] Entrelazador inicializado")
+
+            # Inicializar módulos
             self.modules["registro"] = ModuloRegistro()
             self.modules["sincronizacion"] = ModuloSincronizacion()
             self.modules["ejecucion"] = ModuloEjecucion()
@@ -67,7 +77,6 @@ class CoreCNucleus:
 
             for name, module in self.modules.items():
                 module_config = self.config.get(f"{name}_config", {})
-                # Respetar enabled: False para el módulo IA
                 if name == "ia" and not module_config.get("enabled", True):
                     self.logger.info(f"[Núcleo] Módulo {name} deshabilitado")
                     continue
@@ -82,22 +91,31 @@ class CoreCNucleus:
                         "timestamp": time.time()
                     })
 
+            # Inicializar bloques
             for block_conf in self.config.get("bloques", []):
+                quantization_step = block_conf.get("quantization_step", QUANTIZATION_STEP_DEFAULT)
+                max_errores = block_conf.get("autoreparacion", {}).get("max_errores", 0.1)
+                max_concurrent_tasks = block_conf.get("max_concurrent_tasks")
+                cpu_intensive = block_conf.get("cpu_intensive", False)
                 entidades = []
                 ia_config = self.config.get("ia_config", {})
-                # Usar ia_fn solo si el módulo IA está habilitado
                 if block_conf["id"] == "ia_analisis" and ia_config.get("enabled", True):
                     async def ia_fn(carga, mod_ia=self.modules["ia"], bconf=block_conf):
                         datos = await self.get_datos_from_redis(bconf["id"])
                         res = await mod_ia.procesar_bloque(None, datos)
                         return res["mensajes"][0] if res["mensajes"] else {"valor": 0.0}
                     entidades = [
-                        crear_entidad(f"ent_{i}", block_conf["canal"], ia_fn)
+                        Entidad(f"ent_{i}", block_conf["canal"], ia_fn, quantization_step)
                         for i in range(block_conf["entidades"])
                     ]
                 else:
                     entidades = [
-                        crear_entidad(f"ent_{i}", block_conf["canal"], lambda carga: {"valor": 0.5})
+                        Entidad(
+                            f"ent_{i}",
+                            block_conf["canal"],
+                            lambda carga: {"valor": 0.5},
+                            quantization_step
+                        )
                         for i in range(block_conf["entidades"])
                     ]
                 bloque = BloqueSimbiotico(
@@ -105,17 +123,32 @@ class CoreCNucleus:
                     block_conf["canal"],
                     entidades,
                     block_conf["max_size_mb"],
-                    self
+                    self,
+                    quantization_step,
+                    max_errores,
+                    max_concurrent_tasks,
+                    cpu_intensive
                 )
-                bloque.ia_timeout_seconds = block_conf.get("ia_timeout_seconds")
                 self.bloques.append(bloque)
+                for entidad in entidades:
+                    self.entrelazador.registrar_entidad(entidad)
                 await self.modules["registro"].registrar_bloque(
                     bloque.id, bloque.canal, len(entidades), bloque.max_size_mb
                 )
 
+            # Configurar enlaces
+            for bloque in self.bloques:
+                entidades = bloque.entidades
+                for i in range(0, len(entidades), 2):
+                    if i + 1 < len(entidades):
+                        try:
+                            self.entrelazador.enlazar(entidades[i], entidades[i + 1])
+                        except ValueError as e:
+                            self.logger.warning(f"[Núcleo] Error enlazando entidades en {bloque.id}: {e}")
+
+            # Configurar scheduler
             self.scheduler = Scheduler()
             self.scheduler.start()
-
             for b in self.bloques:
                 self.scheduler.schedule_periodic(
                     func=self.process_bloque,
@@ -123,23 +156,25 @@ class CoreCNucleus:
                     job_id=f"proc_{b.id}",
                     args=[b]
                 )
-
             self.scheduler.schedule_periodic(
                 func=self.modules["auditoria"].detectar_anomalias,
                 seconds=120,
                 job_id="audit_anomalias"
             )
-
             self.scheduler.schedule_periodic(
                 func=self.ejecutar_analisis,
                 seconds=300,
                 job_id="analisis_datos_periodico"
             )
-
             self.scheduler.schedule_periodic(
                 func=self.retry_fallback_messages,
                 seconds=300,
                 job_id="retry_fallback_messages"
+            )
+            self.scheduler.schedule_periodic(
+                func=self.procesar_entrelazador,
+                seconds=30,
+                job_id="entrelazador_periodico"
             )
 
             self.logger.info("[Núcleo] Inicialización completa")
@@ -159,8 +194,24 @@ class CoreCNucleus:
             })
             raise
 
+    async def procesar_entrelazador(self):
+        """Procesa cambios periódicos en el Entrelazador."""
+        try:
+            for bloque in self.bloques:
+                cambio = {"fitness": bloque.fitness}
+                for entidad in bloque.entidades:
+                    await self.entrelazador.afectar(entidad, cambio, max_saltos=1)
+            self.logger.debug("[Núcleo] Cambios propagados en Entrelazador")
+        except Exception as e:
+            self.logger.error(f"[Núcleo] Error procesando Entrelazador: {e}")
+            await self.publicar_alerta({
+                "tipo": "error_entrelazador",
+                "mensaje": str(e),
+                "timestamp": time.time()
+            })
+
     async def process_bloque(self, bloque: BloqueSimbiotico):
-        """Procesa un bloque y escribe sus mensajes en PostgreSQL o fallback."""
+        """Procesa un bloque y escribe sus mensajes."""
         try:
             if bloque.id != "ia_analisis":
                 await self.modules["ejecucion"].encolar_bloque(bloque)
@@ -168,7 +219,7 @@ class CoreCNucleus:
                 async with self.db_pool.acquire() as conn:
                     await bloque.escribir_postgresql(conn)
             else:
-                self.logger.warning(f"[Núcleo] PostgreSQL no disponible, usando almacenamiento fallback para {bloque.id}")
+                self.logger.warning(f"[Núcleo] PostgreSQL no disponible, usando fallback para {bloque.id}")
                 await self.save_fallback_messages(bloque.id, bloque.mensajes)
                 await self.publicar_alerta({
                     "tipo": "error_db_pool",
