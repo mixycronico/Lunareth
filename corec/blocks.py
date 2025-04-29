@@ -1,4 +1,3 @@
-import logging
 import time
 import asyncio
 from typing import List, Dict, Any
@@ -42,12 +41,12 @@ class BloqueSimbiotico:
             mutacion (Dict): Configuración de mutaciones.
             autorreplicacion (Dict): Configuración de autorreplicación.
         """
-        self.logger = logging.getLogger("BloqueSimbiotico")
+        self.nucleus = nucleus
+        self.logger = nucleus.logger
         self.id = id
         self.canal = canal
         self.entidades = entidades
         self.max_size_mb = max_size_mb
-        self.nucleus = nucleus
         self.mensajes: List[Dict[str, Any]] = []
         self.fitness: float = 0.0
         self.fallos = 0
