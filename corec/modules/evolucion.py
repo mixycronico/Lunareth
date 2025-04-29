@@ -1,8 +1,9 @@
-# corec/modules/evolucion.py
 import logging
 import random
+import time
 from typing import Dict, List
 from corec.blocks import BloqueSimbiotico
+
 
 class ModuloEvolucion:
     def __init__(self):
@@ -13,13 +14,24 @@ class ModuloEvolucion:
             {"quantization_step": 0.01, "max_concurrent_tasks": 20, "increment_factor": 1.1}
         ]
         self.historial: Dict[str, List[Dict]] = {}  # {bloque_id: [{estrategia, fitness, timestamp}]}
+        self.nucleus = None
 
     async def inicializar(self, nucleus, config):
+        """Inicializa el módulo de evolución.
+
+        Args:
+            nucleus: Instancia del núcleo de CoreC.
+            config: Configuración del módulo (opcional).
+        """
         self.nucleus = nucleus
-        self.logger.info("[Evolucion] Módulo inicializado")
+        self.logger.info("Módulo Evolución inicializado")
 
     async def evaluar_estrategia(self, bloque: BloqueSimbiotico):
-        """Evalúa el rendimiento del bloque y propone una nueva estrategia si es necesario."""
+        """Evalúa el rendimiento del bloque y propone una nueva estrategia si es necesario.
+
+        Args:
+            bloque (BloqueSimbiotico): Bloque a evaluar.
+        """
         bloque_id = bloque.id
         fitness = bloque.fitness
         if bloque_id not in self.historial:
@@ -45,14 +57,16 @@ class ModuloEvolucion:
             bloque.quantization_step = nueva_estrategia["quantization_step"]
             bloque.max_concurrent_tasks = nueva_estrategia["max_concurrent_tasks"]
             bloque.increment_factor = nueva_estrategia["increment_factor"]
-            self.logger.info(f"[Evolucion] Bloque {bloque_id} cambió estrategia: {nueva_estrategia}")
+            self.logger.info(f"Bloque {bloque_id} cambió estrategia: {nueva_estrategia}")
             # Publicar aprendizaje si la estrategia parece prometedora
             if fitness > min_fitness * 1.5:
                 await self.nucleus.publicar_aprendizaje({
                     "bloque_id": bloque_id,
                     "estrategia": nueva_estrategia,
-                    "fitness": fitness
+                    "fitness": fitness,
+                    "timestamp": time.time()
                 })
 
     async def detener(self):
-        self.logger.info("[Evolucion] Módulo detenido")
+        """Detiene el módulo de evolución."""
+        self.logger.info("Módulo Evolución detenido")
