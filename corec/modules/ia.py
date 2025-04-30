@@ -2,6 +2,7 @@ import time
 import asyncio
 import torch
 import psutil
+from pathlib import Path
 from corec.utils.torch_utils import load_mobilenet_v3_small
 from corec.blocks import BloqueSimbiotico
 
@@ -25,6 +26,8 @@ class ModuloIA:
             return
         try:
             model_path = self.nucleus.config.ia_config.model_path
+            if not Path(model_path).exists():
+                raise FileNotFoundError(f"Modelo no encontrado en {model_path}")
             self.model = load_mobilenet_v3_small(
                 model_path,
                 pretrained=self.nucleus.config.ia_config.pretrained,
