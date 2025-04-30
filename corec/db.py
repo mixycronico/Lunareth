@@ -1,8 +1,9 @@
 import logging
 import asyncpg
-from typing import Dict, Any
+
 
 logger = logging.getLogger("CoreCDB")
+
 
 async def init_postgresql(config: Dict[str, Any]):
     """Inicializa la conexión a PostgreSQL."""
