@@ -5,6 +5,7 @@ import json
 from typing import Dict
 from corec.utils.quantization import escalar
 from corec.entities import EntidadBase
+import logging
 
 
 class EntidadSuperpuesta(EntidadBase):
@@ -33,14 +34,13 @@ class EntidadSuperpuesta(EntidadBase):
         if not roles:
             raise ValueError("Los roles no pueden estar vacíos")
         self.nucleus = nucleus
-        self.logger = nucleus.logger if nucleus else None
+        self.logger = nucleus.logger if nucleus else logging.getLogger("CoreC")
         self.id = id
         self.quantization_step = quantization_step
         self.min_fitness = min_fitness
         self.mutation_rate = mutation_rate
         self.roles = {k: escalar(v, quantization_step) for k, v in roles.items()}
         self.normalizar_roles()
-
 
     async def procesar(self, carga: float) -> Dict[str, float]:
         """Procesa la entidad basado en los roles y la carga.
@@ -57,7 +57,6 @@ class EntidadSuperpuesta(EntidadBase):
             "roles": self.roles.copy()
         }
 
-
     def recibir_cambio(self, cambio: Dict[str, float]):
         """Actualiza roles con valores cuantizados y normaliza.
 
@@ -66,7 +65,6 @@ class EntidadSuperpuesta(EntidadBase):
         """
         for rol, valor in cambio.items():
             self.ajustar_rol(rol, valor)
-
 
     def ajustar_rol(self, rol: str, nuevo_peso: float):
         """Ajusta o añade un rol, cuantizado, y normaliza.
@@ -78,7 +76,6 @@ class EntidadSuperpuesta(EntidadBase):
         self.roles[rol] = escalar(nuevo_peso, self.quantization_step)
         self.normalizar_roles()
 
-
     def normalizar_roles(self):
         """Normaliza los roles para que la suma de sus valores absolutos sea 1.0."""
         total = sum(abs(v) for v in self.roles.values())
@@ -86,7 +83,6 @@ class EntidadSuperpuesta(EntidadBase):
             self.roles = {k: escalar(0.0, self.quantization_step) for k in self.roles}
         else:
             self.roles = {k: escalar(v / total, self.quantization_step) for k, v in self.roles}
-
 
     async def mutar_roles(self, fitness: float, ml_module=None):
         """Muta roles si el fitness es bajo, usando ML si está disponible.
@@ -101,18 +97,15 @@ class EntidadSuperpuesta(EntidadBase):
                 if ajuste:
                     self.roles = {k: escalar(v, self.quantization_step) for k, v in ajuste.items()}
                     self.normalizar_roles()
-                    if self.logger:
-                        self.logger.info(f"Entidad {self.id} roles ajustados por ML: {self.roles}")
+                    self.logger.info(f"Entidad {self.id} roles ajustados por ML: {self.roles}")
                     return
             for rol in self.roles:
                 delta = random.uniform(-0.1, 0.1)
                 self.roles[rol] = escalar(self.roles[rol] + delta, self.quantization_step)
             self.normalizar_roles()
-            if self.logger:
-                self.logger.info(
-                    f"Entidad {self.id} roles mutados aleatoriamente debido a fitness bajo: {fitness}"
-                )
-
+            self.logger.info(
+                f"Entidad {self.id} roles mutados aleatoriamente debido a fitness bajo: {fitness}"
+            )
 
     async def crear_entidad(self, bloque_id: str, canal: int, db_pool=None) -> 'EntidadSuperpuesta':
         """Crea una nueva entidad con roles derivados y la persiste en PostgreSQL.
@@ -125,7 +118,10 @@ class EntidadSuperpuesta(EntidadBase):
         Returns:
             EntidadSuperpuesta: Nueva entidad creada.
         """
-        nuevos_roles = {k: escalar(v + random.uniform(-0.05, 0.05), self.quantization_step) for k, v in self.roles.items()}
+        nuevos_roles = {
+            k: escalar(v + random.uniform(-0.05, 0.05), self.quantization_step)
+            for k, v in self.roles.items()
+        }
         nueva_entidad = EntidadSuperpuesta(
             f"{self.id}_child_{uuid.uuid4().hex[:8]}",
             nuevos_roles,
@@ -134,8 +130,7 @@ class EntidadSuperpuesta(EntidadBase):
             self.mutation_rate,
             self.nucleus
         )
-        if self.logger:
-            self.logger.info(f"Entidad {self.id} creó nueva entidad: {nueva_entidad.id}")
+        self.logger.info(f"Entidad {self.id} creó nueva entidad: {nueva_entidad.id}")
 
         if db_pool:
             try:
@@ -154,10 +149,8 @@ class EntidadSuperpuesta(EntidadBase):
                         nueva_entidad.mutation_rate,
                         time.time()
                     )
-                if self.logger:
-                    self.logger.info(f"Entidad {nueva_entidad.id} persistida en PostgreSQL")
+                self.logger.info(f"Entidad {nueva_entidad.id} persistida en PostgreSQL")
             except Exception as e:
-                if self.logger:
-                    self.logger.error(f"Entidad {nueva_entidad.id} error persistiendo en PostgreSQL: {e}")
+                self.logger.error(f"Entidad {nueva_entidad.id} error persistiendo en PostgreSQL: {e}")
 
         return nueva_entidad
