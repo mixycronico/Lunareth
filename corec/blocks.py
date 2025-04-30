@@ -1,11 +1,9 @@
 import time
 import asyncio
-import random
 import psutil
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 from collections import deque
-import networkx as nx
 import json
 import asyncpg
 from corec.entities import EntidadBase
@@ -73,7 +71,6 @@ class BloqueSimbiotico:
             "min_fitness_trigger": 0.2
         }
 
-
     async def _get_cpu_percent(self) -> float:
         """Obtiene el promedio de CPU basado en múltiples lecturas."""
         readings = []
@@ -83,7 +80,6 @@ class BloqueSimbiotico:
         avg_cpu = sum(readings) / len(readings)
         self.logger.debug(f"Bloque {self.id} CPU readings: {readings}, average: {avg_cpu:.1f}%")
         return avg_cpu
-
 
     def _adjust_increment_factor(self, processing_time: float):
         """Ajusta el factor de incremento basado en el historial de rendimiento."""
@@ -110,7 +106,6 @@ class BloqueSimbiotico:
                 f"aumentando increment_factor a {self.increment_factor:.3f}"
             )
 
-
     def _adjust_concurrent_tasks(self, cpu_percent: float, ram_percent: float):
         """Ajusta dinámicamente max_concurrent_tasks basado en CPU y RAM."""
         overload = (
@@ -133,16 +128,19 @@ class BloqueSimbiotico:
             is_cpu_low = cpu_percent < self.nucleus.config.cpu_autoadjust_threshold * 80
             self.cpu_low_cycles.append(is_cpu_low)
             if len(self.cpu_low_cycles) == self.nucleus.config.cpu_stable_cycles and all(self.cpu_low_cycles):
-                new_tasks = min(self.max_concurrent_tasks, int(self.current_concurrent_tasks * self.increment_factor))
+                new_tasks = min(
+                    self.max_concurrent_tasks,
+                    int(self.current_concurrent_tasks * self.increment_factor)
+                )
                 if new_tasks != self.current_concurrent_tasks:
                     self.logger.info(
-                        f"Bloque {self.id} incrementando tareas concurrentes de {self.current_concurrent_tasks} "
-                        f"a {new_tasks} (CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%, "
+                        f"Bloque {self.id} incrementando tareas concurrentes de "
+                        f"{self.current_concurrent_tasks} a {new_tasks} "
+                        f"(CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%, "
                         f"increment_factor={self.increment_factor:.3f})"
                     )
                     self.current_concurrent_tasks = new_tasks
                     self.cpu_low_cycles.clear()
-
 
     async def procesar(self, carga: float) -> Dict[str, Any]:
         """Procesa entidades en paralelo, cuantiza valores y verifica recursos/fallos.
@@ -234,7 +232,9 @@ class BloqueSimbiotico:
                         nueva_entidad = await entidad.crear_entidad(self.id, self.canal, self.nucleus.db_pool)
                         self.entidades.append(nueva_entidad)
                         self.nucleus.entrelazador.registrar_entidad(nueva_entidad)
-                        self.logger.info(f"Bloque {self.id} nueva entidad creada: {nueva_entidad.id} (fitness={self.fitness})")
+                        self.logger.info(
+                            f"Bloque {self.id} nueva entidad creada: {nueva_entidad.id} (fitness={self.fitness})"
+                        )
 
         if total_entidades > 0 and (self.fallos / total_entidades) > self.max_errores:
             self.logger.error(f"Bloque {self.id} fallos críticos: {self.fallos}/{total_entidades}")
@@ -299,7 +299,6 @@ class BloqueSimbiotico:
             "fitness": self.fitness
         }
 
-
     async def reparar(self):
         """Repara el bloque reactivando entidades inactivas o reiniciando roles."""
         repaired = False
@@ -324,7 +323,6 @@ class BloqueSimbiotico:
             })
         else:
             self.logger.debug(f"Bloque {self.id} no requirió reparación")
-
 
     async def escribir_postgresql(self, conn):
         """Escribe mensajes en PostgreSQL, incluyendo roles si existen."""
