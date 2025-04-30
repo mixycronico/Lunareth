@@ -5,10 +5,9 @@ import asyncpg
 from typing import Any, Dict, List
 from corec.core import ComponenteBase
 
-
 class ModuloCognitivo(ComponenteBase):
     """Módulo cognitivo con autoconciencia avanzada, atención y resolución de conflictos."""
-
+    
     def __init__(self):
         self.nucleus = None
         self.logger = None
@@ -125,11 +124,16 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.error(f"Error cargando estado cognitivo: {e}")
 
     async def guardar_estado(self):
-        """Guarda el estado en PostgreSQL."""
+        """Guarda el estado en PostgreSQL, limitando datos persistidos."""
         try:
             if not self.nucleus.db_pool:
                 self.logger.warning("No hay conexión a PostgreSQL, no se puede guardar el estado")
                 return
+
+            max_percepciones = 100  # Limitar percepciones guardadas
+            max_decisiones = 100  # Limitar decisiones guardadas
+            percepciones = self.percepciones[-max_percepciones:]
+            decisiones = self.decisiones[-max_decisiones:]
 
             async with self.nucleus.db_pool.acquire() as conn:
                 await conn.execute(
@@ -142,9 +146,9 @@ class ModuloCognitivo(ComponenteBase):
                     "estado_completo",
                     json.dumps(self.memoria),
                     json.dumps(self.intuiciones),
-                    json.dumps(self.percepciones[-1000:]),
-                    json.dumps(self.decisiones[-1000:]),
-                    json.dumps(self.decisiones_fallidas[-1000:]),
+                    json.dumps(percepciones),
+                    json.dumps(decisiones),
+                    json.dumps(self.decisiones_fallidas[-100:]),
                     json.dumps(self.contexto),
                     json.dumps(self.memoria_semantica),
                     json.dumps(self.yo),
