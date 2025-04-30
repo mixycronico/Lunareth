@@ -4,10 +4,16 @@ import numpy as np
 from PIL import Image
 from torchvision import models, transforms
 
+
 logger = logging.getLogger("TorchUtils")
 
 
-def load_mobilenet_v3_small(model_path: str = "", pretrained: bool = False, n_classes: int = 3, device: torch.device = None) -> torch.nn.Module:
+def load_mobilenet_v3_small(
+    model_path: str = "",
+    pretrained: bool = False,
+    n_classes: int = 3,
+    device: torch.device = None
+) -> torch.nn.Module:
     """Carga un modelo MobileNetV3 Small.
 
     Args:
