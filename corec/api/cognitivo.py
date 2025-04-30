@@ -1,9 +1,10 @@
+import os
 from fastapi import FastAPI, HTTPException, Header
 from typing import Dict, Any, List
-import asyncio
 from corec.nucleus import CoreCNucleus
 
 app = FastAPI(title="CoreC Cognitive API")
+API_KEY = os.getenv("API_KEY", "secure_key")  # Cargar desde variable de entorno
 
 nucleus_instance = None
 
@@ -22,7 +23,7 @@ async def shutdown_event():
 
 @app.get("/cognitivo/intuicion/{tipo}")
 async def get_intuicion(tipo: str, api_key: str = Header(...)):
-    if api_key != "secure_key":
+    if api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
     nucleus = await get_nucleus()
     intuicion = await nucleus.modules["cognitivo"].intuir(tipo)
@@ -30,7 +31,7 @@ async def get_intuicion(tipo: str, api_key: str = Header(...)):
 
 @app.post("/cognitivo/percibir")
 async def percibir(datos: Dict[str, Any], api_key: str = Header(...)):
-    if api_key != "secure_key":
+    if api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
     nucleus = await get_nucleus()
     await nucleus.modules["cognitivo"].percibir(datos)
@@ -38,7 +39,7 @@ async def percibir(datos: Dict[str, Any], api_key: str = Header(...)):
 
 @app.get("/cognitivo/decisiones")
 async def get_decisiones(api_key: str = Header(...)):
-    if api_key != "secure_key":
+    if api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
     nucleus = await get_nucleus()
     decisiones = nucleus.modules["cognitivo"].decisiones[-10:]
@@ -46,14 +47,14 @@ async def get_decisiones(api_key: str = Header(...)):
 
 @app.get("/cognitivo/yo")
 async def get_yo(api_key: str = Header(...)):
-    if api_key != "secure_key":
+    if api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
     nucleus = await get_nucleus()
     return {"yo": nucleus.modules["cognitivo"].yo}
 
 @app.get("/cognitivo/metadialogo")
 async def get_metadialogo(api_key: str = Header(...)):
-    if api_key != "secure_key":
+    if api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
     nucleus = await get_nucleus()
     afirmaciones = await nucleus.modules["cognitivo"].generar_metadialogo()
@@ -61,7 +62,7 @@ async def get_metadialogo(api_key: str = Header(...)):
 
 @app.get("/cognitivo/atencion")
 async def get_atencion(api_key: str = Header(...)):
-    if api_key != "secure_key":
+    if api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
     nucleus = await get_nucleus()
     return {"atencion": nucleus.modules["cognitivo"].atencion}
