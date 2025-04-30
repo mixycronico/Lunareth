@@ -1,14 +1,16 @@
 import time
 import asyncio
-from typing import List, Dict, Any
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+import random
 import psutil
+from typing import List, Dict, Any, Optionalmejor_opcion = None
+from concurrent.futures import ThreadPoolExecutor
+from collections import deque
+import networkx as nx
 import json
+import asyncpg
 from corec.entities import EntidadBase
 from corec.entities_superpuestas import EntidadSuperpuesta
 from corec.utils.quantization import escalar
-import asyncpg
 
 
 class BloqueSimbiotico:
@@ -71,6 +73,7 @@ class BloqueSimbiotico:
             "min_fitness_trigger": 0.2
         }
 
+
     async def _get_cpu_percent(self) -> float:
         """Obtiene el promedio de CPU basado en múltiples lecturas."""
         readings = []
@@ -80,6 +83,7 @@ class BloqueSimbiotico:
         avg_cpu = sum(readings) / len(readings)
         self.logger.debug(f"Bloque {self.id} CPU readings: {readings}, average: {avg_cpu:.1f}%")
         return avg_cpu
+
 
     def _adjust_increment_factor(self, processing_time: float):
         """Ajusta el factor de incremento basado en el historial de rendimiento."""
@@ -105,6 +109,7 @@ class BloqueSimbiotico:
                 f"Bloque {self.id} rendimiento bueno (avg={avg_processing_time:.3f}s), "
                 f"aumentando increment_factor a {self.increment_factor:.3f}"
             )
+
 
     def _adjust_concurrent_tasks(self, cpu_percent: float, ram_percent: float):
         """Ajusta dinámicamente max_concurrent_tasks basado en CPU y RAM."""
@@ -137,6 +142,7 @@ class BloqueSimbiotico:
                     )
                     self.current_concurrent_tasks = new_tasks
                     self.cpu_low_cycles.clear()
+
 
     async def procesar(self, carga: float) -> Dict[str, Any]:
         """Procesa entidades en paralelo, cuantiza valores y verifica recursos/fallos.
@@ -293,6 +299,7 @@ class BloqueSimbiotico:
             "fitness": self.fitness
         }
 
+
     async def reparar(self):
         """Repara el bloque reactivando entidades inactivas o reiniciando roles."""
         repaired = False
@@ -317,6 +324,7 @@ class BloqueSimbiotico:
             })
         else:
             self.logger.debug(f"Bloque {self.id} no requirió reparación")
+
 
     async def escribir_postgresql(self, conn):
         """Escribe mensajes en PostgreSQL, incluyendo roles si existen."""
