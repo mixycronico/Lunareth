@@ -1,21 +1,17 @@
+#!/usr/bin/env python3
 import asyncio
-import json
 import logging
+import json
 from pathlib import Path
 import psutil
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from corec.nucleus import CoreCNucleus
-from corec.utils.db_utils import init_postgresql, init_redis
 from corec.utils.logging import setup_logging
 from plugins.registry import registry
 
 
 async def log_system_metrics(logger: logging.Logger):
-    """Registra métricas básicas del sistema periódicamente.
-
-    Args:
-        logger (logging.Logger): Logger para registrar las métricas.
-    """
+    """Registra métricas básicas del sistema periódicamente."""
     while True:
         try:
             cpu_percent = psutil.cpu_percent()
@@ -37,14 +33,7 @@ async def log_system_metrics(logger: logging.Logger):
     )
 )
 async def load_plugins(nucleus: CoreCNucleus):
-    """Carga plugins habilitados desde la configuración.
-
-    Args:
-        nucleus (CoreCNucleus): Instancia del núcleo de CoreC.
-
-    Raises:
-        ValueError: Si la configuración del plugin es inválida.
-    """
+    """Carga plugins habilitados desde la configuración."""
     plugins_conf = nucleus.config.plugins
     if not plugins_conf:
         nucleus.logger.warning("No se encontraron plugins en la configuración")
@@ -83,20 +72,8 @@ async def load_plugins(nucleus: CoreCNucleus):
     )
 )
 async def initialize_nucleus(config_path: str) -> CoreCNucleus:
-    """Inicializa el núcleo de CoreC con reintentos.
-
-    Args:
-        config_path (str): Ruta al archivo de configuración.
-
-    Returns:
-        CoreCNucleus: Instancia inicializada del núcleo.
-
-    Raises:
-        FileNotFoundError: Si el archivo de configuración no existe.
-    """
+    """Inicializa el núcleo de CoreC con reintentos."""
     nucleus = CoreCNucleus(config_path)
-    nucleus.db_pool = await init_postgresql(nucleus.config.db_config.model_dump())
-    nucleus.redis_client = await init_redis(nucleus.config.redis_config.model_dump())
     await nucleus.inicializar()
     return nucleus
 
