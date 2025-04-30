@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI, HTTPException, Header
-from typing import Dict, Any, List
+from typing import Dict, Any
 from corec.nucleus import CoreCNucleus
 
 
