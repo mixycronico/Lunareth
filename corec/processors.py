@@ -1,7 +1,5 @@
 import logging
 from typing import Dict, Any
-import random
-from corec.utils.logging import CoreCLogger
 
 
 logger = logging.getLogger("corec.processors")
