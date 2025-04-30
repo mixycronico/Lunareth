@@ -7,6 +7,28 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from corec.nucleus import CoreCNucleus
 from corec.blocks import BloqueSimbiotico
 from corec.entities_superpuestas import EntidadSuperpuesta
+from corec.config_loader import CoreCConfig
+
+@pytest.fixture
+def mock_redis():
+    redis_mock = AsyncMock()
+    redis_mock.rpush = AsyncMock()
+    redis_mock.close = AsyncMock()
+    redis_mock.xadd = AsyncMock()
+    redis_mock.xlen = AsyncMock(return_value=100)
+    redis_mock.xread = AsyncMock(return_value=[])
+    return redis_mock
+
+@pytest.fixture
+def mock_db_pool():
+    db_pool_mock = AsyncMock()
+    conn_mock = AsyncMock()
+    conn_mock.execute = AsyncMock()
+    conn_mock.fetch = AsyncMock(return_value=[])
+    db_pool_mock.acquire.return_value.__aenter__ = AsyncMock(return_value=conn_mock)
+    db_pool_mock.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+    db_pool_mock.close = AsyncMock()
+    return db_pool_mock
 
 @pytest.fixture
 def test_config():
@@ -146,6 +168,14 @@ def test_config():
         "increment_factor_min": 1.01,
         "increment_factor_max": 1.1
     }
+
+@pytest.fixture
+def nucleus(test_config, mock_redis, mock_db_pool):
+    with patch("corec.config_loader.load_config", return_value=CoreCConfig(**test_config)), \
+         patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
+         patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool):
+        nucleus = CoreCNucleus("config/corec_config.json")
+        return nucleus
 
 @pytest.mark.asyncio
 async def test_nucleus_fallback_storage(test_config, mock_redis, mock_db_pool):
@@ -293,4 +323,26 @@ async def test_nucleus_retry_fallback_max_retries(test_config, mock_redis, mock_
             assert not conn.execute.called
             assert mock_logger.called
             assert "Mensaje descartado tras 5 intentos" in str(mock_logger.call_args)
+        await nucleus.detener()
+
+@pytest.mark.asyncio
+async def test_nucleus_reconexion_autosanacion(test_config, mock_redis, mock_db_pool):
+    """Prueba la reconexión automática manejada por ModuloAutosanacion."""
+    test_config["ia_config"]["enabled"] = False
+    with patch("corec.config_loader.load_config", return_value=CoreCConfig(**test_config)), \
+         patch("corec.utils.db_utils.init_redis", return_value=mock_redis), \
+         patch("corec.utils.db_utils.init_postgresql", return_value=mock_db_pool), \
+         patch("apscheduler.schedulers.asyncio.AsyncIOScheduler.add_job", AsyncMock()), \
+         patch("pandas.DataFrame", return_value=pd.DataFrame({"valores": [0.1, 0.2, 0.3]}, dtype=float)):
+        nucleus = CoreCNucleus("config/corec_config.json")
+        await nucleus.inicializar()
+        nucleus.db_pool = None
+        nucleus.redis_client = None
+        with patch("corec.utils.db_utils.init_postgresql", AsyncMock(return_value=mock_db_pool)) as mock_init_postgresql, \
+             patch("corec.utils.db_utils.init_redis", AsyncMock(return_value=mock_redis)) as mock_init_redis, \
+             patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
+            await nucleus.modules["autosanacion"].verificar_estado()
+            assert mock_init_postgresql.called
+            assert mock_init_redis.called
+            assert mock_alerta.called
         await nucleus.detener()
