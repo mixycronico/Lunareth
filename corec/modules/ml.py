@@ -1,5 +1,5 @@
-import random
 import time
+import random
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from typing import Dict, List, Optional
@@ -12,6 +12,7 @@ class ModuloML:
         self.historial: Dict[str, List[Dict]] = {}  # {entidad_id: [{roles, fitness, timestamp}]}
         self.nucleus = None
 
+
     async def inicializar(self, nucleus, config):
         """Inicializa el módulo de aprendizaje automático.
 
@@ -22,6 +23,7 @@ class ModuloML:
         self.nucleus = nucleus
         self.logger = nucleus.logger
         self.logger.info("Módulo ML inicializado")
+
 
     async def entrenar_modelo(self, entidad: EntidadSuperpuesta, fitness: float):
         """Entrena un modelo para predecir ajustes de roles.
@@ -54,6 +56,7 @@ class ModuloML:
             self.modelos[entidad_id] = modelo
             self.logger.info(f"Modelo entrenado para entidad {entidad_id}")
 
+
     async def predecir_ajuste_roles(self, entidad: EntidadSuperpuesta) -> Optional[Dict[str, float]]:
         """Predice un ajuste óptimo de roles usando el modelo entrenado.
 
@@ -68,7 +71,6 @@ class ModuloML:
             self.logger.debug(f"No hay modelo entrenado para entidad {entidad_id}")
             return None
         modelo = self.modelos[entidad_id]
-        roles_actuales = list(entidad.roles.values())
         posibles_ajustes = []
         for _ in range(10):
             ajuste = {k: v + random.uniform(-0.1, 0.1) for k, v in entidad.roles.items()}
@@ -80,6 +82,7 @@ class ModuloML:
         mejor_ajuste_idx = np.argmax(fitness_predichos)
         mejor_ajuste = posibles_ajustes[mejor_ajuste_idx]
         return dict(zip(entidad.roles.keys(), mejor_ajuste))
+
 
     async def detener(self):
         """Detiene el módulo de aprendizaje automático."""
