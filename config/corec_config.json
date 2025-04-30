@@ -3,7 +3,7 @@
     "db_config": {
         "dbname": "corec_db",
         "user": "postgres",
-        "password": "your_password",  // Reemplazar por variable de entorno
+        "password": "your_password",
         "host": "localhost",
         "port": 5432,
         "max_connections": 50,
@@ -13,7 +13,7 @@
         "host": "localhost",
         "port": 6379,
         "username": "corec_user",
-        "password": "secure_password",  // Reemplazar por variable de entorno
+        "password": "secure_password",
         "max_connections": 200,
         "stream_max_length": 10000,
         "retry_interval": 2
