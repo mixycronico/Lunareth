@@ -1,10 +1,11 @@
-import asyncio
+import time
 from corec.utils.db_utils import init_postgresql, init_redis
 
 
 class ModuloAutosanacion:
     def __init__(self):
         self.nucleus = None
+
 
     async def inicializar(self, nucleus, config):
         """Inicializa el módulo de autosanación.
@@ -17,6 +18,7 @@ class ModuloAutosanacion:
         self.logger = nucleus.logger
         self.logger.info("Módulo Autosanación inicializado")
 
+
     async def verificar_estado(self):
         """Verifica el estado de los módulos y conexiones, aplicando autosanación si es necesario."""
         try:
@@ -26,6 +28,11 @@ class ModuloAutosanacion:
                 try:
                     self.nucleus.db_pool = await init_postgresql(self.nucleus.config.db_config.model_dump())
                     self.logger.info("PostgreSQL reconectado")
+                    await self.nucleus.publicar_alerta({
+                        "tipo": "reconexion_postgresql",
+                        "mensaje": "PostgreSQL reconectado",
+                        "timestamp": time.time()
+                    })
                 except Exception as e:
                     self.logger.error(f"Error reconectando PostgreSQL: {e}")
                     await self.nucleus.publicar_alerta({
@@ -40,6 +47,11 @@ class ModuloAutosanacion:
                 try:
                     self.nucleus.redis_client = await init_redis(self.nucleus.config.redis_config.model_dump())
                     self.logger.info("Redis reconectado")
+                    await self.nucleus.publicar_alerta({
+                        "tipo": "reconexion_redis",
+                        "mensaje": "Redis reconectado",
+                        "timestamp": time.time()
+                    })
                 except Exception as e:
                     self.logger.error(f"Error reconectando Redis: {e}")
                     await self.nucleus.publicar_alerta({
@@ -71,6 +83,7 @@ class ModuloAutosanacion:
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
+
 
     async def detener(self):
         """Detiene el módulo de autosanación."""
