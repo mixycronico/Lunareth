@@ -1,13 +1,11 @@
 import time
-import random
 import json
-import asyncpg
-from typing import Any, Dict, List
+from typing import Dict, Any, List
 from corec.core import ComponenteBase
+
 
 class ModuloCognitivo(ComponenteBase):
     """Módulo cognitivo con autoconciencia avanzada, atención y resolución de conflictos."""
-    
     def __init__(self):
         self.nucleus = None
         self.logger = None
@@ -41,6 +39,7 @@ class ModuloCognitivo(ComponenteBase):
         }
         self.config = None
 
+
     async def inicializar(self, nucleus, config: Dict[str, Any] = None):
         """Inicializa el módulo cognitivo."""
         try:
@@ -66,9 +65,11 @@ class ModuloCognitivo(ComponenteBase):
             for key, value in self.config.items():
                 if key in ["max_memoria", "max_percepciones"] and value <= 0:
                     raise ValueError(f"{key} debe ser mayor que 0")
-                if key in ["umbral_confianza", "penalizacion_intuicion", "confiabilidad_minima", "umbral_fallo", "tasa_aprendizaje_minima", "umbral_relevancia"] and not 0 < value <= 1:
+                if key in ["umbral_confianza", "penalizacion_intuicion", "confiabilidad_minima",
+                           "umbral_fallo", "tasa_aprendizaje_minima", "umbral_relevancia"] and not 0 < value <= 1:
                     raise ValueError(f"{key} debe estar entre 0 y 1")
-                if key in ["impacto_adaptacion", "peso_afectivo", "peso_semantico", "umbral_cambio_significativo", "peso_novedad"] and not 0 <= value <= 1:
+                if key in ["impacto_adaptacion", "peso_afectivo", "peso_semantico",
+                           "umbral_cambio_significativo", "peso_novedad"] and not 0 <= value <= 1:
                     raise ValueError(f"{key} debe estar entre 0 y 1")
 
             await self.cargar_estado()
@@ -88,6 +89,7 @@ class ModuloCognitivo(ComponenteBase):
                 "timestamp": time.time()
             })
             raise
+
 
     async def cargar_estado(self):
         """Carga el estado desde PostgreSQL."""
@@ -122,6 +124,7 @@ class ModuloCognitivo(ComponenteBase):
                     self.logger.info("No se encontró estado previo, iniciando con estado vacío")
         except Exception as e:
             self.logger.error(f"Error cargando estado cognitivo: {e}")
+
 
     async def guardar_estado(self):
         """Guarda el estado en PostgreSQL, limitando datos persistidos."""
@@ -160,6 +163,7 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error guardando estado cognitivo: {e}")
 
+
     async def actualizar_atencion(self):
         """Actualiza el sistema de atención cognitiva."""
         try:
@@ -190,6 +194,7 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error actualizando atención: {e}")
 
+
     async def evaluar_relevancia(self, datos: Dict[str, Any]) -> float:
         """Evalúa la relevancia de una percepción."""
         try:
@@ -209,6 +214,7 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.error(f"Error evaluando relevancia: {e}")
             return 0.0
 
+
     async def actualizar_yo(self):
         """Actualiza el modelo interno del 'yo'."""
         try:
@@ -216,13 +222,27 @@ class ModuloCognitivo(ComponenteBase):
             fallos_recientes = len([d for d in self.decisiones_fallidas[-10:]])
             decisiones_recientes = len([d for d in self.decisiones[-10:]])
             estabilidad = 1.0 - (fallos_recientes / decisiones_recientes) if decisiones_recientes else 1.0
-            actividad = len(self.percepciones[-100:]) / (time.time() - self.percepciones[-100]["timestamp"] + 1e-6) if self.percepciones and len(self.percepciones) >= 100 else 0.0
+            actividad = (
+                len(self.percepciones[-100:]) /
+                (time.time() - self.percepciones[-100]["timestamp"] + 1e-6)
+                if self.percepciones and len(self.percepciones) >= 100 else 0.0
+            )
 
             umbral_cambio = self.config.get("umbral_cambio_significativo", 0.05)
             if abs(self.yo["estado"]["confianza"] - confiabilidad) > umbral_cambio:
-                await self.registrar_cambio_yo("estado.confianza", self.yo["estado"]["confianza"], confiabilidad, "actualización de confiabilidad")
+                await self.registrar_cambio_yo(
+                    "estado.confianza",
+                    self.yo["estado"]["confianza"],
+                    confiabilidad,
+                    "actualización de confiabilidad"
+                )
             if abs(self.yo["estado"]["estabilidad"] - estabilidad) > umbral_cambio:
-                await self.registrar_cambio_yo("estado.estabilidad", self.yo["estado"]["estabilidad"], estabilidad, "actualización de estabilidad")
+                await self.registrar_cambio_yo(
+                    "estado.estabilidad",
+                    self.yo["estado"]["estabilidad"],
+                    estabilidad,
+                    "actualización de estabilidad"
+                )
 
             self.yo["estado"] = {
                 "confianza": confiabilidad,
@@ -236,6 +256,7 @@ class ModuloCognitivo(ComponenteBase):
             await self.actualizar_atencion()
         except Exception as e:
             self.logger.error(f"Error actualizando modelo interno: {e}")
+
 
     async def registrar_cambio_yo(self, atributo: str, valor_anterior: Any, valor_nuevo: Any, motivo: str):
         """Registra un cambio en el modelo interno."""
@@ -263,6 +284,7 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.debug(f"Cambio en yo registrado: {cambio}")
         except Exception as e:
             self.logger.error(f"Error registrando cambio en yo: {e}")
+
 
     async def generar_intenciones(self):
         """Genera intenciones explícitas."""
@@ -315,6 +337,7 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error generando intenciones: {e}")
 
+
     async def resolver_conflictos(self):
         """Resuelve conflictos entre intenciones."""
         try:
@@ -327,12 +350,16 @@ class ModuloCognitivo(ComponenteBase):
                                 if (a1, a2) in self.conflictos_intenciones:
                                     conflictos.append((i1, i2, self.conflictos_intenciones[(a1, a2)]))
             for i1, i2, motivo in conflictos:
-                resolucion = {"intencion1": i1["meta"], "intencion2": i2["meta"], "motivo": motivo}
+                resolucion = {
+                    "intencion1": i1["meta"],
+                    "intencion2": i2["meta"],
+                    "motivo": motivo
+                }
                 if self.yo["estado"]["estabilidad"] < 0.7:
-                    resolucion["decision"] = f"Priorizar {i1['meta']} (estabilidad baja)"
+                    resolucion["decision"] = f"Priorizar {i1['meta']} debido a estabilidad baja"
                     i2["estado"] = "desactivada"
                 else:
-                    resolucion["decision"] = f"Compromiso: reducir umbral parcialmente"
+                    resolucion["decision"] = "Compromiso: reducir umbral parcialmente"
                     self.config["umbral_confianza"] *= 0.95
                 if self.nucleus.db_pool:
                     async with self.nucleus.db_pool.acquire() as conn:
@@ -355,6 +382,7 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error resolviendo conflictos: {e}")
 
+
     async def ejecutar_intenciones(self):
         """Ejecuta acciones de intenciones activas."""
         try:
@@ -364,7 +392,9 @@ class ModuloCognitivo(ComponenteBase):
                 for accion in intencion["acciones"]:
                     if accion == "reducir_umbral_confianza":
                         self.config["umbral_confianza"] = max(self.config["umbral_confianza"] * 0.9, 0.3)
-                        self.logger.info(f"Umbral de confianza reducido a {self.config['umbral_confianza']:.2f}")
+                        self.logger.info(
+                            f"Umbral de confianza reducido a {self.config['umbral_confianza']:.2f}"
+                        )
                     elif accion == "analizar_fallos":
                         await self.analizar_decisiones_fallidas()
                     elif accion == "aumentar_percepciones":
@@ -373,7 +403,9 @@ class ModuloCognitivo(ComponenteBase):
                         for concepto in self.memoria_semantica:
                             for otro_concepto in self.memoria_semantica[concepto]:
                                 self.memoria_semantica[concepto][otro_concepto] *= 1.05
-                                self.memoria_semantica[concepto][otro_concepto] = min(self.memoria_semantica[concepto][otro_concepto], 1.0)
+                                self.memoria_semantica[concepto][otro_concepto] = min(
+                                    self.memoria_semantica[concepto][otro_concepto], 1.0
+                                )
                         self.logger.info("Memoria semántica reforzada")
                 if intencion["meta"] == "mejorar_estabilidad" and self.yo["estado"]["estabilidad"] >= 0.7:
                     intencion["estado"] = "completada"
@@ -382,6 +414,7 @@ class ModuloCognitivo(ComponenteBase):
             self.intenciones = [i for i in self.intenciones if i["estado"] == "activa"]
         except Exception as e:
             self.logger.error(f"Error ejecutando intenciones: {e}")
+
 
     async def evaluar_aprendizaje(self):
         """Evalúa la tasa de aprendizaje."""
@@ -395,6 +428,7 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error evaluando aprendizaje: {e}")
             return 0.0
+
 
     async def consultar_metadialogos_previos(self, tema: str, max_edad: float = 3600) -> List[Dict[str, Any]]:
         """Consulta metadialogos previos."""
@@ -413,10 +447,17 @@ class ModuloCognitivo(ComponenteBase):
                     f"%{tema}%",
                     time.time() - max_edad
                 )
-            return [{"afirmacion": row["afirmacion"], "contexto": json.loads(row["contexto"]), "timestamp": row["timestamp"]} for row in rows]
+            return [
+                {
+                    "afirmacion": row["afirmacion"],
+                    "contexto": json.loads(row["contexto"]),
+                    "timestamp": row["timestamp"]
+                } for row in rows
+            ]
         except Exception as e:
             self.logger.error(f"Error consultando metadialogos previos: {e}")
             return []
+
 
     async def generar_metadialogo(self):
         """Genera afirmaciones sobre el estado interno."""
@@ -426,7 +467,9 @@ class ModuloCognitivo(ComponenteBase):
                 afirmacion = "Creo que mi razonamiento es poco confiable porque mi confianza es baja."
                 previos = await self.consultar_metadialogos_previos("confiable")
                 if previos:
-                    afirmacion += f" Esto es consistente con mi reflexión anterior: '{previos[0]['afirmacion']}'."
+                    afirmacion += (
+                        f" Esto es consistente con mi reflexión anterior: '{previos[0]['afirmacion']}'."
+                    )
                 afirmaciones.append({"texto": afirmacion, "referencias": [p["timestamp"] for p in previos]})
             fallos_recientes = len([d for d in self.decisiones_fallidas[-10:]])
             if self.yo["estado"]["estabilidad"] < 0.7 and fallos_recientes > 2:
@@ -436,7 +479,10 @@ class ModuloCognitivo(ComponenteBase):
                     afirmacion += f" Esto sigue un patrón desde: '{previos[0]['afirmacion']}'."
                 afirmaciones.append({"texto": afirmacion, "referencias": [p["timestamp"] for p in previos]})
             if self.yo["estado"]["actividad"] > 10:
-                afirmaciones.append({"texto": "Estoy muy activo, procesando muchas percepciones.", "referencias": []})
+                afirmaciones.append({
+                    "texto": "Estoy muy activo, procesando muchas percepciones.",
+                    "referencias": []
+                })
             contradicciones = await self.detectar_contradicciones()
             if contradicciones:
                 afirmacion = "Detecté contradicciones en mis intuiciones, debo revisar mis conceptos."
@@ -472,6 +518,7 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error generando metadialogo: {e}")
             return []
+
 
     async def percibir(self, datos: Dict[str, Any]):
         """Recibe datos del entorno con atención selectiva."""
@@ -516,7 +563,9 @@ class ModuloCognitivo(ComponenteBase):
 
             await self.aprender_concepto(clave, datos)
             await self.actualizar_yo()
-            self.logger.debug(f"Percepción registrada: {clave}, impacto afectivo: {datos['impacto_afectivo']:.2f}")
+            self.logger.debug(
+                f"Percepción registrada: {clave}, impacto afectivo: {datos['impacto_afectivo']:.2f}"
+            )
             await self.nucleus.publicar_alerta({
                 "tipo": "cognitivo_percepcion",
                 "clave": clave,
@@ -526,6 +575,7 @@ class ModuloCognitivo(ComponenteBase):
             })
         except Exception as e:
             self.logger.error(f"Error procesando percepción: {e}")
+
 
     async def aprender_concepto(self, concepto: str, datos: Dict[str, Any]):
         """Aprende relaciones semánticas."""
@@ -543,13 +593,17 @@ class ModuloCognitivo(ComponenteBase):
                     self.memoria_semantica[concepto][otro_concepto] = min(peso, 1.0)
                     peso_yo = self.memoria_semantica["yo"].get(concepto, 0.0) + 0.05
                     self.memoria_semantica["yo"][concepto] = min(peso_yo, 1.0)
-                    self.logger.debug(f"Relación semántica aprendida: {concepto} -> {otro_concepto} ({peso:.2f})")
+                    self.logger.debug(
+                        f"Relación semántica aprendida: {concepto} -> {otro_concepto} ({peso:.2f})"
+                    )
         except Exception as e:
             self.logger.error(f"Error aprendiendo concepto {concepto}: {e}")
+
 
     async def consultar_memoria_semantica(self, concepto: str) -> Dict[str, float]:
         """Consulta relaciones semánticas."""
         return self.memoria_semantica.get(concepto, {})
+
 
     async def intuir(self, tipo: str) -> float:
         """Genera una intuición."""
@@ -562,17 +616,25 @@ class ModuloCognitivo(ComponenteBase):
                 return 0.0
 
             valores = [float(d.get("valor", 0.0)) for d in historial if isinstance(d.get("valor"), (int, float))]
-            impactos = [float(d.get("impacto_afectivo", 0.0)) for d in historial if isinstance(d.get("valor"), (int, float))]
+            impactos = [
+                float(d.get("impacto_afectivo", 0.0))
+                for d in historial if isinstance(d.get("valor"), (int, float))
+            ]
             if not valores:
                 return 0.0
 
-            pesos = [1.0 / (1 + (time.time() - d["timestamp"]) / 3600) for d in historial if isinstance(d.get("valor"), (int, float))]
+            pesos = [
+                1.0 / (1 + (time.time() - d["timestamp"]) / 3600)
+                for d in historial if isinstance(d.get("valor"), (int, float))
+            ]
             peso_afectivo = self.config.get("peso_afectivo", 0.2)
             valores_ajustados = [v + i * peso_afectivo for v, i in zip(valores, impactos)]
             intuicion_base = sum(v * w for v, w in zip(valores_ajustados, pesos)) / sum(pesos) if sum(pesos) > 0 else 0.0
 
             conceptos_relacionados = await self.consultar_memoria_semantica(tipo)
-            ajuste_semantico = sum(self.intuiciones.get(c, 0.0) * peso for c, peso in conceptos_relacionados.items())
+            ajuste_semantico = sum(
+                self.intuiciones.get(c, 0.0) * peso for c, peso in conceptos_relacionados.items()
+            )
             intuicion = intuicion_base + ajuste_semantico * self.config.get("peso_semantico", 0.1)
             self.intuiciones[tipo] = intuicion
             self.logger.debug(f"Intuición generada para {tipo}: {intuicion:.4f}")
@@ -580,6 +642,7 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error generando intuición para {tipo}: {e}")
             return 0.0
+
 
     async def decidir(self, opciones: List[str], umbral: float = None) -> str:
         """Toma una decisión."""
@@ -607,13 +670,14 @@ class ModuloCognitivo(ComponenteBase):
             self.decisiones.append(decision)
             if max_confianza < self.config.get("umbral_fallo", 0.3):
                 await self.registrar_decision_fallida(decision, motivo="baja_confianza")
-            
+
             await self.actualizar_yo()
             self.logger.info(f"Decisión tomada: {mejor_opcion} con confianza {max_confianza:.2f}")
             return mejor_opcion
         except Exception as e:
             self.logger.error(f"Error tomando decisión: {e}")
             return "ninguna"
+
 
     async def registrar_decision_fallida(self, decision: Dict[str, Any], motivo: str):
         """Registra una decisión fallida."""
@@ -645,6 +709,7 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error registrando decisión fallida: {e}")
 
+
     async def analizar_decisiones_fallidas(self):
         """Analiza decisiones fallidas para ajustar intuiciones."""
         try:
@@ -661,9 +726,12 @@ class ModuloCognitivo(ComponenteBase):
                 if count >= 3:
                     if opcion in self.intuiciones:
                         self.intuiciones[opcion] *= 0.8
-                        self.logger.warning(f"Intuición penalizada para {opcion} por {count} fallos: {self.intuiciones[opcion]:.4f}")
+                        self.logger.warning(
+                            f"Intuición penalizada para {opcion} por {count} fallos: {self.intuiciones[opcion]:.4f}"
+                        )
         except Exception as e:
             self.logger.error(f"Error analizando decisiones fallidas: {e}")
+
 
     async def evaluar_confiabilidad(self):
         """Evalúa la confiabilidad histórica."""
@@ -684,6 +752,7 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.error(f"Error evaluando confiabilidad: {e}")
             return 1.0
 
+
     async def detectar_contradicciones(self):
         """Detecta contradicciones lógico-semánticas."""
         try:
@@ -702,7 +771,10 @@ class ModuloCognitivo(ComponenteBase):
                                 "timestamp": time.time()
                             })
             for c in contradicciones:
-                afirmacion = f"Detecté una contradicción: {c['concepto1']} ({c['intuicion1']:.2f}) y {c['concepto2']} ({c['intuicion2']:.2f}) son opuestos."
+                afirmacion = (
+                    f"Detecté una contradicción: {c['concepto1']} ({c['intuicion1']:.2f}) y "
+                    f"{c['concepto2']} ({c['intuicion2']:.2f}) son opuestos."
+                )
                 if self.nucleus.db_pool:
                     async with self.nucleus.db_pool.acquire() as conn:
                         await conn.execute(
@@ -729,6 +801,7 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error detectando contradicciones: {e}")
             return []
+
 
     async def detener(self):
         """Detiene el módulo cognitivo."""
