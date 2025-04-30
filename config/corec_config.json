@@ -45,6 +45,23 @@
         "retry_delay_min": 2,
         "retry_delay_max": 10
     },
+    "cognitivo_config": {
+        "max_memoria": 1000,
+        "umbral_confianza": 0.5,
+        "penalizacion_intuicion": 0.9,
+        "max_percepciones": 5000,
+        "impacto_adaptacion": 0.1,
+        "confiabilidad_minima": 0.4,
+        "umbral_afectivo_positivo": 0.8,
+        "umbral_afectivo_negativo": -0.8,
+        "peso_afectivo": 0.2,
+        "umbral_fallo": 0.3,
+        "peso_semantico": 0.1,
+        "umbral_cambio_significativo": 0.05,
+        "tasa_aprendizaje_minima": 0.1,
+        "umbral_relevancia": 0.3,
+        "peso_novedad": 0.3
+    },
     "bloques": [
         {
             "id": "enjambre_sensor",
