@@ -1,6 +1,7 @@
 from celery import Celery
 from corec.config_loader import load_config
 
+
 def configure_celery(config_path: str = "config/corec_config.json"):
     """Configura Celery con las credenciales de Redis proporcionadas."""
     config = load_config(config_path).redis_config.model_dump()
@@ -9,6 +10,7 @@ def configure_celery(config_path: str = "config/corec_config.json"):
         broker=broker_url,
         result_backend=broker_url
     )
+
 
 # Configuración de la aplicación Celery
 celery_app = Celery(
