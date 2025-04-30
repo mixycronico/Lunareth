@@ -1,16 +1,19 @@
 import json
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 from pydantic import BaseModel, Field, ValidationError
 from dotenv import load_dotenv
+
 
 # Cargar variables de entorno desde .env
 load_dotenv()
 
+
 class AutoreparacionConfig(BaseModel):
     max_errores: float = Field(gt=0, le=1.0)
     min_fitness: float = Field(ge=0, le=1.0)
+
 
 class MutacionConfig(BaseModel):
     enabled: bool
@@ -18,10 +21,12 @@ class MutacionConfig(BaseModel):
     mutation_rate: float = Field(gt=0, le=1.0)
     ml_enabled: Optional[bool] = False
 
+
 class AutorreplicacionConfig(BaseModel):
     enabled: bool
     max_entidades: int = Field(ge=1)
     min_fitness_trigger: float = Field(ge=0, le=1.0)
+
 
 class BloqueConfig(BaseModel):
     id: str
@@ -37,6 +42,7 @@ class BloqueConfig(BaseModel):
     mutacion: MutacionConfig
     autorreplicacion: AutorreplicacionConfig
 
+
 class PluginBloqueConfig(BaseModel):
     bloque_id: str
     canal: int = Field(ge=1)
@@ -50,10 +56,12 @@ class PluginBloqueConfig(BaseModel):
     mutacion: MutacionConfig
     autorreplicacion: AutorreplicacionConfig
 
+
 class PluginConfig(BaseModel):
     enabled: bool
     path: str
     bloque: PluginBloqueConfig
+
 
 class DBConfig(BaseModel):
     dbname: str
@@ -62,6 +70,7 @@ class DBConfig(BaseModel):
     host: str
     port: int = Field(ge=1)
 
+
 class RedisConfig(BaseModel):
     host: str
     port: int = Field(ge=1)
@@ -69,6 +78,7 @@ class RedisConfig(BaseModel):
     password: str
     max_connections: int = Field(ge=1, default=100)
     stream_max_length: int = Field(ge=1, default=5000)
+
 
 class IAConfig(BaseModel):
     enabled: bool
@@ -79,10 +89,12 @@ class IAConfig(BaseModel):
     timeout_seconds: float = Field(gt=0)
     batch_size: int = Field(ge=1)
 
+
 class AnalisisDatosConfig(BaseModel):
     correlation_threshold: float = Field(gt=0, le=1.0)
     n_estimators: int = Field(ge=1)
     max_samples: int = Field(ge=1)
+
 
 class MLConfig(BaseModel):
     enabled: bool
@@ -90,12 +102,14 @@ class MLConfig(BaseModel):
     historial_size: int = Field(ge=1)
     min_samples_train: int = Field(ge=1)
 
+
 class AutosanacionConfig(BaseModel):
     enabled: bool
     check_interval_seconds: float = Field(gt=0)
     max_retries: int = Field(ge=1)
     retry_delay_min: float = Field(gt=0)
     retry_delay_max: float = Field(gt=0)
+
 
 class CognitivoConfig(BaseModel):
     max_memoria: int = Field(ge=1, default=1000)
@@ -113,6 +127,7 @@ class CognitivoConfig(BaseModel):
     tasa_aprendizaje_minima: float = Field(gt=0, le=1.0, default=0.1)
     umbral_relevancia: float = Field(gt=0, le=1.0, default=0.3)
     peso_novedad: float = Field(ge=0, le=1.0, default=0.3)
+
 
 class CoreCConfig(BaseModel):
     instance_id: str
@@ -143,6 +158,7 @@ class CoreCConfig(BaseModel):
     performance_threshold: float = Field(default=0.5, gt=0)
     increment_factor_min: float = Field(default=1.01, gt=1.0)
     increment_factor_max: float = Field(default=1.1, gt=1.0)
+
 
 def load_config(config_path: str) -> CoreCConfig:
     """Carga y valida el archivo de configuración."""
