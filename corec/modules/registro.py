@@ -9,6 +9,7 @@ class ModuloRegistro(ComponenteBase):
         self.nucleus = None
         self.bloques = {}
 
+
     async def inicializar(self, nucleus, config=None):
         """Inicializa el módulo de registro.
 
@@ -23,6 +24,7 @@ class ModuloRegistro(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error inicializando Módulo Registro: {e}")
             raise
+
 
     async def registrar_bloque(self, bloque_id: str, canal: int, num_entidades: int, max_size_mb: float = 10.0):
         """Registra un bloque simbiótico.
@@ -66,7 +68,7 @@ class ModuloRegistro(ComponenteBase):
                 "num_entidades": num_entidades,
                 "fitness": 0.0,
                 "timestamp": time.time()
-            }
+            }  # noqa: F841
             await self.nucleus.publicar_alerta({
                 "tipo": "bloque_registrado",
                 "bloque_id": bloque_id,
@@ -83,6 +85,7 @@ class ModuloRegistro(ComponenteBase):
                 "timestamp": time.time()
             })
             raise
+
 
     async def detener(self):
         """Detiene el módulo de registro."""
