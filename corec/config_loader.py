@@ -105,6 +105,24 @@ class AutosanacionConfig(BaseModel):
     retry_delay_max: float = Field(gt=0)
 
 
+class CognitivoConfig(BaseModel):
+    max_memoria: int = Field(ge=1, default=1000)
+    umbral_confianza: float = Field(gt=0, le=1.0, default=0.5)
+    penalizacion_intuicion: float = Field(gt=0, le=1.0, default=0.9)
+    max_percepciones: int = Field(ge=1, default=5000)
+    impacto_adaptacion: float = Field(ge=0, le=1.0, default=0.1)
+    confiabilidad_minima: float = Field(gt=0, le=1.0, default=0.4)
+    umbral_afectivo_positivo: float = Field(gt=0, le=1.0, default=0.8)
+    umbral_afectivo_negativo: float = Field(lt=0, default=-0.8)
+    peso_afectivo: float = Field(ge=0, le=1.0, default=0.2)
+    umbral_fallo: float = Field(gt=0, le=1.0, default=0.3)
+    peso_semantico: float = Field(ge=0, le=1.0, default=0.1)
+    umbral_cambio_significativo: float = Field(ge=0, le=1.0, default=0.05)
+    tasa_aprendizaje_minima: float = Field(gt=0, le=1.0, default=0.1)
+    umbral_relevancia: float = Field(gt=0, le=1.0, default=0.3)
+    peso_novedad: float = Field(ge=0, le=1.0, default=0.3)
+
+
 class CoreCConfig(BaseModel):
     instance_id: str
     db_config: DBConfig
@@ -113,9 +131,9 @@ class CoreCConfig(BaseModel):
     analisis_datos_config: AnalisisDatosConfig
     ml_config: MLConfig
     autosanacion_config: AutosanacionConfig
+    cognitivo_config: CognitivoConfig = Field(default_factory=lambda: CognitivoConfig())
     bloques: list[BloqueConfig]
     plugins: Dict[str, PluginConfig] = Field(default_factory=dict)
-    # Constantes migradas de config.py
     quantization_step_default: float = Field(default=0.05, gt=0, le=1.0)
     max_enlaces_por_entidad: int = Field(default=100, ge=1)
     redis_stream_key: str = Field(default="corec:entrelazador")
@@ -137,18 +155,7 @@ class CoreCConfig(BaseModel):
 
 
 def load_config(config_path: str) -> CoreCConfig:
-    """Carga y valida el archivo de configuración.
-
-    Args:
-        config_path (str): Ruta al archivo de configuración JSON.
-
-    Returns:
-        CoreCConfig: Instancia validada del modelo de configuración.
-
-    Raises:
-        FileNotFoundError: Si el archivo de configuración no existe.
-        ValueError: Si el formato del archivo es inválido o hay IDs de bloques duplicados.
-    """
+    """Carga y valida el archivo de configuración."""
     try:
         config_file = Path(config_path)
         if not config_file.exists():
@@ -157,12 +164,11 @@ def load_config(config_path: str) -> CoreCConfig:
         with config_file.open("r") as f:
             config_dict = json.load(f)
 
-        # Validar IDs de bloques únicos
         block_ids = [block["id"] for block in config_dict.get("bloques", [])]
         if len(block_ids) != len(set(block_ids)):
             raise ValueError("Duplicate block IDs found in configuration")
 
-        return CoreCConfig(**config_dict)
+        return CoreCConfig(**config_dict |= {"cognitivo_config": CognitivoConfig().dict()})
     except ValidationError as e:
         raise ValueError(f"Invalid config format: {e}")
     except Exception as e:
