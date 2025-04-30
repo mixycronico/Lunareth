@@ -24,7 +24,6 @@ from corec.entrelazador import Entrelazador
 from corec.utils.db_utils import init_postgresql, init_redis
 from corec.utils.logging import setup_logging
 
-
 class CoreCNucleus:
     def __init__(self, config_path: str = "config/corec_config.json"):
         self.logger = setup_logging({"log_level": "INFO", "log_file": "corec.log"})
@@ -38,6 +37,8 @@ class CoreCNucleus:
         self.scheduler = None
         self.entrelazador = None
         self.fallback_storage = Path("fallback_messages.json")
+        self.global_concurrent_tasks = 0
+        self.global_concurrent_tasks_max = 1000  # Límite global de tareas concurrentes
 
     async def inicializar(self):
         """Inicializa el núcleo de CoreC, configurando módulos, bloques y conexiones."""
@@ -253,6 +254,16 @@ class CoreCNucleus:
     async def process_bloque(self, bloque: BloqueSimbiotico):
         """Procesa un bloque simbiótico."""
         try:
+            if self.global_concurrent_tasks >= self.global_concurrent_tasks_max:
+                self.logger.warning(f"Límite global de tareas alcanzado: {self.global_concurrent_tasks}")
+                await self.publicar_alerta({
+                    "tipo": "limite_tareas_global",
+                    "bloque_id": bloque.id,
+                    "mensaje": f"Límite global de tareas concurrentes alcanzado: {self.global_concurrent_tasks}",
+                    "timestamp": time.time()
+                })
+                return
+            self.global_concurrent_tasks += bloque.current_concurrent_tasks
             import random
             if bloque.id != "ia_analisis":
                 await self.modules["ejecucion"].encolar_bloque(bloque)
@@ -281,6 +292,8 @@ class CoreCNucleus:
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
+        finally:
+            self.global_concurrent_tasks = max(0, self.global_concurrent_tasks - bloque.current_concurrent_tasks)
 
     async def save_fallback_messages(self, bloque_id: str, mensajes: list):
         """Guarda mensajes en un archivo de respaldo si PostgreSQL no está disponible."""
@@ -293,7 +306,7 @@ class CoreCNucleus:
                         existing = []
             else:
                 existing = []
-            existing.extend([{"bloque_id": bloque_id, "mensaje": m} for m in mensajes])
+            existing.extend([{"bloque_id": bloque_id, "mensaje": m, "retry_count": 0} for m in mensajes])
             with open(self.fallback_storage, "w") as f:
                 json.dump(existing, f)
             self.logger.info(f"Mensajes de {bloque_id} guardados en fallback")
@@ -313,36 +326,47 @@ class CoreCNucleus:
                 self.logger.error(f"Formato inválido en {self.fallback_storage}, esperado lista")
                 return
             self.logger.info(f"Encontrados {len(messages)} mensajes para reintentar")
+            remaining_messages = []
             async with self.db_pool.acquire() as conn:
                 self.logger.debug("Adquirida conexión al pool de PostgreSQL")
                 for msg in messages:
                     bloque_id = msg.get("bloque_id")
                     m = msg.get("mensaje")
+                    retry_count = msg.get("retry_count", 0)
+                    if retry_count >= 5:
+                        self.logger.warning(f"Mensaje descartado tras 5 intentos: {msg}")
+                        continue
                     if not (bloque_id and m):
                         self.logger.warning(f"Mensaje inválido: {msg}")
                         continue
                     self.logger.debug(f"Insertando mensaje para bloque {bloque_id}, entidad {m['entidad_id']}")
-                    await conn.execute(
-                        """
-                        INSERT INTO mensajes (
-                            bloque_id, entidad_id, canal, valor, clasificacion, probabilidad, timestamp, roles
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                        """,
-                        bloque_id,
-                        m["entidad_id"],
-                        m["canal"],
-                        m["valor"],
-                        m.get("clasificacion", ""),
-                        m.get("probabilidad", 0.0),
-                        m["timestamp"],
-                        json.dumps(m.get("roles", {}))
-                    )
-            self.logger.info(f"Eliminando archivo de fallback {self.fallback_storage}")
-            try:
-                self.fallback_storage.unlink()
-                self.logger.info("Mensajes de fallback escritos en PostgreSQL")
-            except Exception as e:
-                self.logger.error(f"Error eliminando archivo de fallback: {e}")
+                    try:
+                        await conn.execute(
+                            """
+                            INSERT INTO mensajes (
+                                bloque_id, entidad_id, canal, valor, clasificacion, probabilidad, timestamp, roles
+                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                            """,
+                            bloque_id,
+                            m["entidad_id"],
+                            m["canal"],
+                            m["valor"],
+                            m.get("clasificacion", ""),
+                            m.get("probabilidad", 0.0),
+                            m["timestamp"],
+                            json.dumps(m.get("roles", {}))
+                        )
+                    except Exception as e:
+                        self.logger.error(f"Error insertando mensaje {msg}: {e}")
+                        msg["retry_count"] = retry_count + 1
+                        remaining_messages.append(msg)
+            if remaining_messages:
+                with open(self.fallback_storage, "w") as f:
+                    json.dump(remaining_messages, f)
+                self.logger.info(f"{len(remaining_messages)} mensajes permanecen en fallback")
+            else:
+                self.fallback_storage.unlink(missing_ok=True)
+                self.logger.info("Mensajes de fallback escritos en PostgreSQL y archivo eliminado")
         except json.JSONDecodeError as e:
             self.logger.error(f"Error decodificando JSON en {self.fallback_storage}: {e}")
         except Exception as e:
