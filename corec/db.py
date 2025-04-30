@@ -1,5 +1,6 @@
 import logging
 import asyncpg
+from typing import Dict, Any
 
 
 logger = logging.getLogger("CoreCDB")
