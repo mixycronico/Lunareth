@@ -1,7 +1,10 @@
 import pytest
+import asyncio
+from unittest.mock import AsyncMock, patch
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad
-from unittest.mock import AsyncMock, patch, MagicMock
+from corec.entities_superpuestas import EntidadSuperpuesta
+from corec.nucleus import CoreCNucleus
 
 # Clase EntidadConError para simular un error al cambiar el estado
 class EntidadConError(Entidad):
@@ -25,11 +28,10 @@ class EntidadConError(Entidad):
 async def test_bloque_procesar_exitoso(nucleus, monkeypatch):
     """Prueba el procesamiento exitoso de un bloque simbiótico."""
     async def mock_procesar(carga):
-        return {"valor": 0.5}
+        return {"valor": 0.5, "clasificacion": "test", "probabilidad": 0.9}
 
-    entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
-    monkeypatch.setattr(entidades[0], "procesar", mock_procesar)
-    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
+    entidades = [Entidad("ent_1", 1, mock_procesar)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus, quantization_step=0.05, max_errores=0.1)
     with patch.object(bloque.logger, "warning") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
         result = await bloque.procesar(0.5)
@@ -45,9 +47,8 @@ async def test_bloque_procesar_valor_invalido(nucleus, monkeypatch):
     async def mock_procesar(carga):
         return {"valor": "invalid"}
 
-    entidades = [Entidad("ent_1", 1, lambda: {"valor": "invalid"})]
-    monkeypatch.setattr(entidades[0], "procesar", mock_procesar)
-    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
+    entidades = [Entidad("ent_1", 1, mock_procesar)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus, quantization_step=0.05, max_errores=0.1)
     with patch.object(bloque.logger, "warning") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
         result = await bloque.procesar(0.5)
@@ -63,9 +64,8 @@ async def test_bloque_procesar_error_entidad(nucleus, monkeypatch):
     async def mock_procesar(carga):
         raise Exception("Error")
 
-    entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
-    monkeypatch.setattr(entidades[0], "procesar", mock_procesar)
-    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
+    entidades = [Entidad("ent_1", 1, mock_procesar)]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus, quantization_step=0.05, max_errores=0.1)
     with patch.object(bloque.logger, "error") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
         result = await bloque.procesar(0.5)
@@ -82,9 +82,9 @@ async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
     async def mock_publicar_alerta(alerta):
         pass
 
-    entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
+    entidades = [EntidadSuperpuesta("ent_1", {"rol1": 0.5, "rol2": 0.5}, quantization_step=0.05, min_fitness=0.3, mutation_rate=0.1, nucleus=nucleus)]
     entidades[0].estado = "inactiva"
-    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus, quantization_step=0.05, max_errores=0.1)
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
     with patch.object(bloque.logger, "info") as mock_logger:
         await bloque.reparar()
@@ -96,11 +96,10 @@ async def test_bloque_reparar_exitoso(nucleus, monkeypatch):
 async def test_bloque_reparar_error(nucleus):
     """Prueba la reparación con un error."""
     entidades = [EntidadConError("ent_1", 1, lambda: {"valor": 0.5})]
-    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus, quantization_step=0.05, max_errores=0.1)
     with patch.object(bloque.logger, "error") as mock_logger, \
          patch.object(nucleus, "publicar_alerta", AsyncMock()) as mock_alerta:
-        with pytest.raises(Exception):
-            await bloque.reparar()
+        await bloque.reparar()  # No debería lanzar excepción, pero registra error
         assert mock_logger.called
         assert mock_alerta.called
         assert entidades[0].estado == "inactiva"
@@ -112,8 +111,8 @@ async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_db_pool, monkeyp
         pass
 
     entidades = [Entidad("ent_1", 1, lambda: {"valor": 0.5})]
-    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
-    bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345}]
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus, quantization_step=0.05, max_errores=0.1)
+    bloque.mensajes = [{"entidad_id": "ent_1", "canal": 1, "valor": 0.5, "timestamp": 12345, "roles": {}}]
     monkeypatch.setattr(nucleus, "publicar_alerta", mock_publicar_alerta)
     
     with patch.object(bloque.logger, "info") as mock_logger:
@@ -125,14 +124,15 @@ async def test_bloque_escribir_postgresql_exitoso(nucleus, mock_db_pool, monkeyp
 async def test_bloque_escribir_postgresql_error(nucleus, mock_db_pool):
     """Prueba la escritura en PostgreSQL con un error y almacenamiento en fallback."""
     entidades = [Entidad("ent_1", 1, lambda carga: {"valor": 0.5})]
-    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus)
+    bloque = BloqueSimbiotico("test_block", 1, entidades, 10.0, nucleus, quantization_step=0.05, max_errores=0.1)
     bloque.mensajes = [{
         "entidad_id": "ent_1",
         "canal": 1,
         "valor": 0.5,
         "clasificacion": "test",
         "probabilidad": 0.9,
-        "timestamp": 12345
+        "timestamp": 12345,
+        "roles": {}
     }]
     conn_mock = AsyncMock()
     conn_mock.execute.side_effect = Exception("DB Error")
