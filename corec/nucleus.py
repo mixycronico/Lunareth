@@ -16,6 +16,7 @@ from corec.modules.analisis_datos import ModuloAnalisisDatos
 from corec.modules.evolucion import ModuloEvolucion
 from corec.modules.ml import ModuloML
 from corec.modules.autosanacion import ModuloAutosanacion
+from corec.modules.cognitivo import ModuloCognitivo
 from corec.blocks import BloqueSimbiotico
 from corec.entities import Entidad
 from corec.entities_superpuestas import EntidadSuperpuesta
@@ -39,15 +40,12 @@ class CoreCNucleus:
         self.fallback_storage = Path("fallback_messages.json")
 
     async def inicializar(self):
-        """Inicializa el núcleo de CoreC, configurando módulos, bloques y conexiones.
-
-        Raises:
-            FileNotFoundError: Si el archivo de configuración no existe.
-            ValueError: Si la configuración es inválida.
-        """
+        """Inicializa el núcleo de CoreC, configurando módulos, bloques y conexiones."""
         try:
             self.config = load_config(self.config_path)
-            self.entrelazador = Entrelazador(self.redis_client)
+            self.db_pool = await init_postgresql(self.config.db_config.model_dump())
+            self.redis_client = await init_redis(self.config.redis_config.model_dump())
+            self.entrelazador = Entrelazador(self.redis_client, self)
             self.logger.info("Entrelazador inicializado")
 
             self.modules["registro"] = ModuloRegistro()
@@ -59,6 +57,7 @@ class CoreCNucleus:
             self.modules["evolucion"] = ModuloEvolucion()
             self.modules["ml"] = ModuloML()
             self.modules["autosanacion"] = ModuloAutosanacion()
+            self.modules["cognitivo"] = ModuloCognitivo()
 
             for name, module in self.modules.items():
                 module_config = getattr(self.config, f"{name}_config", {}).model_dump()
@@ -82,34 +81,7 @@ class CoreCNucleus:
                     async def ia_fn(carga, mod_ia=self.modules["ia"], bconf=block_conf):
                         datos = await self.get_datos_from_redis(bconf.id)
                         res = await mod_ia.procesar_bloque(None, datos)
-                        return res["#pragma once
-#include <Arduino.h>
-
-class Sensor {
-public:
-    Sensor(int pin, int calibrationValue = 0);
-    int read();
-    void calibrate(int value);
-
-private:
-    int _pin;
-    int _calibrationValue;
-};
-
-Sensor::Sensor(int pin, int calibrationValue) {
-    _pin = pin;
-    _calibrationValue = calibrationValue;
-    pinMode(_pin, INPUT);
-}
-
-int Sensor::read() {
-    int rawValue = analogRead(_pin);
-    return rawValue - _calibrationValue;
-}
-
-void Sensor::calibrate(int value) {
-    _calibrationValue = value;
-}mensajes"][0] if res["mensajes"] else {"valor": 0.0}
+                        return res["mensajes"][0] if res["mensajes"] else {"valor": 0.0}
                     entidades = [
                         Entidad(f"ent_{i}", block_conf.canal, ia_fn, block_conf.quantization_step)
                         for i in range(block_conf.entidades)
@@ -129,7 +101,8 @@ void Sensor::calibrate(int value) {
                                         row["roles"],
                                         row["quantization_step"],
                                         row["min_fitness"],
-                                        row["mutation_rate"]
+                                        row["mutation_rate"],
+                                        nucleus=self
                                     )
                                 )
                     if not entidades:
@@ -139,7 +112,8 @@ void Sensor::calibrate(int value) {
                                 {"rol1": 0.5, "rol2": 0.5},
                                 block_conf.quantization_step,
                                 min_fitness=block_conf.autoreparacion.min_fitness,
-                                mutation_rate=block_conf.mutacion.mutation_rate
+                                mutation_rate=block_conf.mutacion.mutation_rate,
+                                nucleus=self
                             )
                             for i in range(block_conf.entidades)
                         ]
@@ -172,7 +146,7 @@ void Sensor::calibrate(int value) {
                         except ValueError as e:
                             self.logger.warning(f"Error enlazando entidades en {bloque.id}: {e}")
 
-            self.scheduler = Scheduler()
+            self.scheduler = Scheduler(self)
             self.scheduler.start()
             for b in self.bloques:
                 self.scheduler.schedule_periodic(
@@ -216,6 +190,26 @@ void Sensor::calibrate(int value) {
                 seconds=120,
                 job_id="autosanacion_periodica"
             )
+            self.scheduler.schedule_periodic(
+                func=self.modules["cognitivo"].generar_metadialogo,
+                seconds=300,
+                job_id="cognitivo_metadialogo"
+            )
+            self.scheduler.schedule_periodic(
+                func=self.modules["cognitivo"].detectar_contradicciones,
+                seconds=600,
+                job_id="cognitivo_contradicciones"
+            )
+            self.scheduler.schedule_periodic(
+                func=self.modules["cognitivo"].actualizar_atencion,
+                seconds=300,
+                job_id="cognitivo_atencion"
+            )
+            self.scheduler.schedule_periodic(
+                func=self.modules["cognitivo"].resolver_conflictos,
+                seconds=600,
+                job_id="cognitivo_conflictos"
+            )
 
             self.logger.info("Inicialización completa")
 
@@ -233,6 +227,12 @@ void Sensor::calibrate(int value) {
                 "timestamp": time.time()
             })
             raise
+
+    async def consultar_intuicion(self, tipo: str) -> float:
+        """Consulta la intuición del módulo cognitivo para un tipo específico."""
+        if "cognitivo" not in self.modules:
+            raise ValueError("Módulo Cognitivo no inicializado")
+        return await self.modules["cognitivo"].intuir(tipo)
 
     async def procesar_entrelazador(self):
         """Propaga cambios a través del entrelazador."""
@@ -253,6 +253,7 @@ void Sensor::calibrate(int value) {
     async def process_bloque(self, bloque: BloqueSimbiotico):
         """Procesa un bloque simbiótico."""
         try:
+            import random
             if bloque.id != "ia_analisis":
                 await self.modules["ejecucion"].encolar_bloque(bloque)
             if self.db_pool:
@@ -324,8 +325,8 @@ void Sensor::calibrate(int value) {
                     await conn.execute(
                         """
                         INSERT INTO mensajes (
-                            bloque_id, entidad_id, canal, valor, clasificacion, probabilidad, timestamp
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                            bloque_id, entidad_id, canal, valor, clasificacion, probabilidad, timestamp, roles
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                         """,
                         bloque_id,
                         m["entidad_id"],
@@ -333,7 +334,8 @@ void Sensor::calibrate(int value) {
                         m["valor"],
                         m.get("clasificacion", ""),
                         m.get("probabilidad", 0.0),
-                        m["timestamp"]
+                        m["timestamp"],
+                        json.dumps(m.get("roles", {}))
                     )
             self.logger.info(f"Eliminando archivo de fallback {self.fallback_storage}")
             try:
@@ -523,7 +525,7 @@ void Sensor::calibrate(int value) {
             if self.redis_client:
                 await self.redis_client.close()
             if self.db_pool:
-                self.db_pool.close()
+                await self.db_pool.close()
             self.logger.info("Detención completa")
         except Exception as e:
             self.logger.error(f"Error durante la detención: {e}")
