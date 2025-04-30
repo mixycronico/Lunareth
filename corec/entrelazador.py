@@ -20,7 +20,6 @@ class Entrelazador:
         self.redis_client = redis_client
         self.entidades: Dict[str, EntidadBase] = {}
 
-
     def registrar_entidad(self, entidad: EntidadBase):
         """Registra una entidad en el grafo.
 
@@ -29,7 +28,6 @@ class Entrelazador:
         """
         self.entidades[entidad.id] = entidad
         self.grafo.add_node(entidad.id)
-
 
     def enlazar(self, entidad_a: EntidadBase, entidad_b: EntidadBase):
         """Enlaza dos entidades y persiste el enlace en Redis.
@@ -67,7 +65,6 @@ class Entrelazador:
                 )
             except Exception as e:
                 self.logger.error(f"Error persistiendo enlace: {e}")
-
 
     async def afectar(self, entidad: EntidadBase, cambio: Dict[str, float], max_saltos: int = 1):
         """Propaga un cambio a entidades enlazadas.
