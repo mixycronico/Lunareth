@@ -1,11 +1,11 @@
 import torch
-import torch.nn as nn
 from torchvision.models import mobilenet_v3_small
 
-def create_dummy_model():
-    model = mobilenet_v3_small(weights=None)
-    model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, 3)
-    torch.save(model.state_dict(), "corec/models/mobilev3/model.pth")
+# Cargar modelo preentrenado
+model = mobilenet_v3_small(pretrained=True)
 
-if __name__ == "__main__":
-    create_dummy_model()
+# Ajustar n_classes (ejemplo: 3 para crypto_trading)
+model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, 3)
+
+# Guardar como model.pth
+torch.save(model.state_dict(), "corec/models/mobilev3/model.pth")
