@@ -1,9 +1,10 @@
-import asyncio
-import redis.asyncio as aioredis
 import logging
+import redis.asyncio as aioredis
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+
 logger = logging.getLogger("corec.redis")
+
 
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=4, max=10))
 async def init_redis(redis_conf: dict) -> aioredis.Redis:
