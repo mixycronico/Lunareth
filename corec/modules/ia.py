@@ -5,7 +5,6 @@ import psutil
 from corec.utils.torch_utils import load_mobilenet_v3_small
 from corec.blocks import BloqueSimbiotico
 
-
 class ModuloIA:
     def __init__(self):
         self.model = None
@@ -13,14 +12,10 @@ class ModuloIA:
         self.enabled = False
         self.config = None
         self.nucleus = None
+        self.expected_input_size = 224 * 224 * 3  # Tamaño esperado para MobileNetV3
 
     async def inicializar(self, nucleus, config):
-        """Inicializa el módulo de inteligencia artificial.
-
-        Args:
-            nucleus: Instancia del núcleo de CoreC.
-            config: Configuración del módulo IA.
-        """
+        """Inicializa el módulo de inteligencia artificial."""
         self.nucleus = nucleus
         self.logger = nucleus.logger
         self.config = config
@@ -47,15 +42,7 @@ class ModuloIA:
             raise
 
     async def procesar_bloque(self, bloque: BloqueSimbiotico, datos: dict):
-        """Procesa un bloque con el modelo de inteligencia artificial.
-
-        Args:
-            bloque (BloqueSimbiotico): Bloque a procesar (opcional).
-            datos (dict): Datos de entrada para el modelo.
-
-        Returns:
-            Dict[str, Any]: Resultado con mensajes procesados.
-        """
+        """Procesa un bloque con el modelo de inteligencia artificial."""
         if not self.enabled or not self.model:
             self.logger.warning("Módulo IA no habilitado o modelo no inicializado")
             return {"mensajes": []}
@@ -84,6 +71,22 @@ class ModuloIA:
             if not valores:
                 self.logger.debug("No hay valores para procesar")
                 return {"mensajes": []}
+
+            # Validar tamaño de entrada
+            if len(valores) != self.expected_input_size:
+                self.logger.error(f"Tamaño de valores inválido: {len(valores)} != {self.expected_input_size}")
+                await self.nucleus.publicar_alerta({
+                    "tipo": "error_datos_entrada",
+                    "mensaje": f"Tamaño de valores inválido: {len(valores)} != {self.expected_input_size}",
+                    "timestamp": time.time()
+                })
+                return {
+                    "mensajes": [{
+                        "clasificacion": "error_datos",
+                        "probabilidad": 0.0,
+                        "timestamp": time.time()
+                    }]
+                }
 
             input_tensor = torch.tensor(valores, dtype=torch.float32).to(self.device)
             timeout_seconds = (
