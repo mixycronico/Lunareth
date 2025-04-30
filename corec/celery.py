@@ -1,10 +1,20 @@
 from celery import Celery
+from corec.config_loader import load_config
+
+def configure_celery(config_path: str = "config/corec_config.json"):
+    """Configura Celery con las credenciales de Redis proporcionadas."""
+    config = load_config(config_path).redis_config.model_dump()
+    broker_url = f"redis://{config['username']}:{config['password']}@{config['host']}:{config['port']}/0"
+    celery_app.conf.update(
+        broker=broker_url,
+        result_backend=broker_url
+    )
 
 # Configuración de la aplicación Celery
 celery_app = Celery(
     'corec',
-    broker='redis://corec_user:secure_password@localhost:6379/0',
-    backend='redis://corec_user:secure_password@localhost:6379/0',
+    broker='redis://localhost:6379/0',  # Valor por defecto, se sobrescribe
+    backend='redis://localhost:6379/0',
     include=['corec.modules.ejecucion']
 )
 
@@ -17,15 +27,5 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-
-def configure_celery(redis_config: dict):
-    """Configura Celery con las credenciales de Redis proporcionadas.
-
-    Args:
-        redis_config (dict): Configuración de Redis (host, port, username, password).
-    """
-    broker_url = f"redis://{redis_config['username']}:{redis_config['password']}@{redis_config['host']}:{redis_config['port']}/0"
-    celery_app.conf.update(
-        broker=broker_url,
-        result_backend=broker_url
-    )
+# Cargar configuración desde el archivo
+configure_celery()
