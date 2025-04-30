@@ -2,7 +2,7 @@ import time
 import asyncio
 import random
 import psutil
-from typing import List, Dict, Any, Optionalmejor_opcion = None
+from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
 from collections import deque
 import networkx as nx
