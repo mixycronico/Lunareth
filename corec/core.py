@@ -7,17 +7,14 @@ class ComponenteBase:
     def __init__(self):
         self.logger = logging.getLogger("CoreC")
 
-
     async def inicializar(self, nucleus: Any, config: Dict[str, Any] = None):
         """Inicializa el componente."""
         self.nucleus = nucleus
         self.logger = nucleus.logger
 
-
     async def manejar_comando(self, comando: Dict[str, Any]) -> Any:
         """Maneja un comando enviado al componente."""
         pass
-
 
     async def detener(self):
         """Detiene el componente."""
