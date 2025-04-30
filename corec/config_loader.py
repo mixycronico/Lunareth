@@ -1,8 +1,8 @@
-import json
 import os
+import json
 from pathlib import Path
-from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, root_validator
+from typing import Dict, Any, Optional, List
 
 
 class AutoreparacionConfig(BaseModel):
@@ -13,7 +13,7 @@ class AutoreparacionConfig(BaseModel):
 class MutacionConfig(BaseModel):
     enabled: bool
     min_fitness: float = Field(ge=0, le=1.0)
-    mutation_rate: float = Field(gt=0, le=1.0)
+    mutation_rate: float = Field(gt=0, lt=1.0)
     ml_enabled: Optional[bool] = False
 
 
@@ -103,7 +103,7 @@ class AutosanacionConfig(BaseModel):
     check_interval_seconds: float = Field(gt=0)
     max_retries: int = Field(ge=1)
     retry_delay_min: float = Field(gt=0)
-    retry_delay_max: float = Field(gt=0)
+    retry_delay_max: float = Field(ge=0)
 
 
 class CognitivoConfig(BaseModel):
@@ -112,15 +112,15 @@ class CognitivoConfig(BaseModel):
     penalizacion_intuicion: float = Field(gt=0, le=1.0, default=0.9)
     max_percepciones: int = Field(ge=1, default=5000)
     impacto_adaptacion: float = Field(ge=0, le=1.0, default=0.1)
-    confiabilidad_minima: float = Field(gt=0, le=1.0, default=0.4)
-    umbral_afectivo_positivo: float = Field(gt=0, le=1.0, default=0.8)
-    umbral_afectivo_negativo: float = Field(lt=0, default=-0.8)
+    confiabilidad_minima: float = Field(ge=0, le=1.0, default=0.4)
+    umbral_afectivo_positivo: float = Field(ge=0, le=1.0, default=0.8)
+    umbral_afectivo_negativo: float = Field(lt=0, ge=-1.0, default=-0.8)
     peso_afectivo: float = Field(ge=0, le=1.0, default=0.2)
     umbral_fallo: float = Field(gt=0, le=1.0, default=0.3)
     peso_semantico: float = Field(ge=0, le=1.0, default=0.1)
     umbral_cambio_significativo: float = Field(ge=0, le=1.0, default=0.05)
     tasa_aprendizaje_minima: float = Field(gt=0, le=1.0, default=0.1)
-    umbral_relevancia: float = Field(gt=0, le=1.0, default=0.3)
+    umbral_relevancia: float = Field(ge=0, le=1.0, default=0.3)
     peso_novedad: float = Field(ge=0, le=1.0, default=0.3)
 
 
@@ -132,9 +132,10 @@ class CoreCConfig(BaseModel):
     analisis_datos_config: AnalisisDatosConfig
     ml_config: MLConfig
     autosanacion_config: AutosanacionConfig
-    cognitivo_config: CognitivoConfig = Field(default_factory=lambda: CognitivoConfig())
-    bloques: list[BloqueConfig]
+    cognitivo_config: CognitivoConfig = Field(default_factory=CognitivoConfig)
+    bloques: List[BloqueConfig]
     plugins: Dict[str, PluginConfig] = Field(default_factory=dict)
+    # Parámetros por defecto relocados aquí:
     quantization_step_default: float = Field(default=0.05, gt=0, le=1.0)
     max_enlaces_por_entidad: int = Field(default=100, ge=1)
     redis_stream_key: str = Field(default="corec:entrelazador")
@@ -154,27 +155,39 @@ class CoreCConfig(BaseModel):
     increment_factor_min: float = Field(default=1.01, gt=1.0)
     increment_factor_max: float = Field(default=1.1, gt=1.0)
 
+    @root_validator(pre=True)
+    def override_secrets_from_env(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        # Obliga a usar variables de entorno en producción
+        db_pass = os.getenv("DB_PASSWORD")
+        if db_pass:
+            values["db_config"]["password"] = db_pass
+        else:
+            raise ValueError("Environment variable DB_PASSWORD is required")
 
-def load_config(config_path: str) -> CoreCConfig:
-    """Carga y valida el archivo de configuración."""
-    try:
-        config_file = Path(config_path)
-        if not config_file.exists():
-            raise FileNotFoundError(f"Config file not found: {config_path}")
+        redis_pass = os.getenv("REDIS_PASSWORD")
+        if redis_pass:
+            values["redis_config"]["password"] = redis_pass
+        else:
+            raise ValueError("Environment variable REDIS_PASSWORD is required")
 
-        with config_file.open("r") as f:
-            config_dict = json.load(f)
-
-        # Reemplazar contraseñas con variables de entorno
-        config_dict["db_config"]["password"] = os.getenv("DB_PASSWORD", config_dict["db_config"]["password"])
-        config_dict["redis_config"]["password"] = os.getenv("REDIS_PASSWORD", config_dict["redis_config"]["password"])
-
-        block_ids = [block["id"] for block in config_dict.get("bloques", [])]
-        if len(block_ids) != len(set(block_ids)):
+        # Validación de bloques duplicados
+        bloques = values.get("bloques", [])
+        ids = [b["id"] for b in bloques]
+        if len(ids) != len(set(ids)):
             raise ValueError("Duplicate block IDs found in configuration")
 
-        return CoreCConfig(**config_dict)
-    except ValidationError as e:
-        raise ValueError(f"Invalid config format: {e}")
-    except Exception as e:
-        raise ValueError(f"Error loading config: {e}")
+        return values
+
+
+def load_config(config_path: str) -> CoreCConfig:
+    """Carga y valida el archivo de configuración usando Pydantic."""
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return CoreCConfig(**raw)
+    except ValidationError as exc:
+        # Re-lanzar con mensaje claro
+        raise ValueError(f"Invalid config format:\n{exc}")
