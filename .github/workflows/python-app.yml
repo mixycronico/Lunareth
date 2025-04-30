@@ -19,7 +19,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]  # Probar en múltiples versiones de Python
+        python-version: ["3.9", "3.10", "3.11"]
 
     services:
       postgres:
@@ -59,7 +59,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio flake8 fastapi httpx python-dotenv
+          pip install pytest pytest-asyncio flake8 fastapi httpx python-dotenv pytest-cov
 
       - name: Create .env file
         run: |
@@ -67,9 +67,20 @@ jobs:
           echo "REDIS_PASSWORD=secure_password" >> .env
           echo "API_KEY=test_key" >> .env
 
-      - name: Generate MobileNetV3 model
+      - name: Check for model.pth
         run: |
-          python generate_model.py
+          if [ -f corec/models/mobilev3/model.pth ]; then
+            echo "model.pth found, skipping model generation"
+          else
+            echo "model.pth not found, checking for generate_model.py"
+            if [ -f corec/models/mobilev3/generate_model.py ]; then
+              echo "generate_model.py found, generating model"
+              python corec/models/mobilev3/generate_model.py
+            else
+              echo "Neither model.pth nor generate_model.py found, failing"
+              exit 1
+            fi
+          fi
         env:
           PYTHONPATH: .
 
@@ -104,7 +115,7 @@ jobs:
       - name: Run FastAPI tests
         run: |
           uvicorn app:app --host 0.0.0.0 --port 8000 --reload &
-          sleep 5  # Esperar a que el servidor esté listo
+          sleep 5
           pytest tests/test_fastapi.py -v
         env:
           PYTHONPATH: .
