@@ -1,7 +1,7 @@
 import logging
 import time
 import networkx as nx
-from typing import Set
+from typing import Set, Dict
 from corec.utils.quantization import escalar
 from corec.entities import EntidadBase
 
@@ -20,6 +20,7 @@ class Entrelazador:
         self.redis_client = redis_client
         self.entidades: Dict[str, EntidadBase] = {}
 
+
     def registrar_entidad(self, entidad: EntidadBase):
         """Registra una entidad en el grafo.
 
@@ -28,6 +29,7 @@ class Entrelazador:
         """
         self.entidades[entidad.id] = entidad
         self.grafo.add_node(entidad.id)
+
 
     def enlazar(self, entidad_a: EntidadBase, entidad_b: EntidadBase):
         """Enlaza dos entidades y persiste el enlace en Redis.
@@ -43,7 +45,9 @@ class Entrelazador:
             raise ValueError("Ambas entidades deben estar registradas")
         max_enlaces = self.nucleus.config.max_enlaces_por_entidad if self.nucleus else 100
         if self.grafo.degree(entidad_a.id) >= max_enlaces or self.grafo.degree(entidad_b.id) >= max_enlaces:
-            self.logger.warning(f"Límite de enlaces alcanzado para {entidad_a.id} o {entidad_b.id}")
+            self.logger.warning(
+                f"Límite de enlaces alcanzado para {entidad_a.id} o {entidad_b.id}"
+            )
             raise ValueError("Límite de enlaces alcanzado")
         self.grafo.add_edge(entidad_a.id, entidad_b.id)
         if self.redis_client:
@@ -53,11 +57,17 @@ class Entrelazador:
                     "entidad_b": entidad_b.id,
                     "timestamp": time.time()
                 }
-                redis_stream_key = self.nucleus.config.redis_stream_key if self.nucleus else "corec:entrelazador"
+                redis_stream_key = (
+                    self.nucleus.config.redis_stream_key if self.nucleus
+                    else "corec:entrelazador"
+                )
                 self.redis_client.xadd(redis_stream_key, enlace)
-                self.logger.info(f"Enlace {entidad_a.id} -> {entidad_b.id} persistido en Redis")
+                self.logger.info(
+                    f"Enlace {entidad_a.id} -> {entidad_b.id} persistido en Redis"
+                )
             except Exception as e:
                 self.logger.error(f"Error persistiendo enlace: {e}")
+
 
     async def afectar(self, entidad: EntidadBase, cambio: Dict[str, float], max_saltos: int = 1):
         """Propaga un cambio a entidades enlazadas.
@@ -67,7 +77,10 @@ class Entrelazador:
             cambio (Dict[str, float]): Cambios a propagar.
             max_saltos (int): Máximo número de saltos en el grafo.
         """
-        cambio_escalado = {k: escalar(v, self.nucleus.config.quantization_step_default if self.nucleus else 0.05) for k, v in cambio.items()}
+        cambio_escalado = {
+            k: escalar(v, self.nucleus.config.quantization_step_default if self.nucleus else 0.05)
+            for k, v in cambio.items()
+        }
         visited: Set[str] = set()
 
         async def propagar(nodo_id: str, saltos: int):
