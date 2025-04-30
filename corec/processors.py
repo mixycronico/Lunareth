@@ -1,6 +1,7 @@
 import logging
-import random
 from typing import Dict, Any
+import random
+from corec.utils.logging import CoreCLogger
 
 
 logger = logging.getLogger("corec.processors")
@@ -8,30 +9,13 @@ logger = logging.getLogger("corec.processors")
 
 class ProcesadorBase:
     async def procesar(self, datos: Dict[str, Any]) -> Dict[str, Any]:
-        """Procesa datos de entrada.
-
-        Args:
-            datos (Dict[str, Any]): Datos a procesar.
-
-        Returns:
-            Dict[str, Any]: Resultado procesado.
-
-        Raises:
-            NotImplementedError: Si no se implementa en la subclase.
-        """
+        """Procesa datos de entrada."""
         raise NotImplementedError
 
 
 class ProcesadorSensor(ProcesadorBase):
     async def procesar(self, datos: Dict[str, Any]) -> Dict[str, Any]:
-        """Procesa datos de sensores, promediando valores o generando un valor aleatorio.
-
-        Args:
-            datos (Dict[str, Any]): Datos de entrada con lista de valores.
-
-        Returns:
-            Dict[str, Any]: Resultado con valor procesado.
-        """
+        """Procesa datos de sensores, promediando valores o generando un valor aleatorio."""
         vals = datos.get("valores", [])
         v = sum(vals) / len(vals) if vals else random.random()
         logger.debug(f"Sensor procesado: {v:.4f}")
@@ -40,14 +24,7 @@ class ProcesadorSensor(ProcesadorBase):
 
 class ProcesadorFiltro(ProcesadorBase):
     async def procesar(self, datos: Dict[str, Any]) -> Dict[str, Any]:
-        """Filtra valores basándose en un umbral.
-
-        Args:
-            datos (Dict[str, Any]): Datos con valor y umbral.
-
-        Returns:
-            Dict[str, Any]: Resultado con valor filtrado.
-        """
+        """Filtra valores basándose en un umbral."""
         v = datos.get("valor", random.random())
         um = datos.get("umbral", 0.5)
         out = v if v > um else 0.0
