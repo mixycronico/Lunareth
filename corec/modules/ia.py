@@ -6,6 +6,7 @@ from pathlib import Path
 from corec.utils.torch_utils import load_mobilenet_v3_small
 from corec.blocks import BloqueSimbiotico
 
+
 class ModuloIA:
     def __init__(self):
         self.model = None
@@ -14,6 +15,7 @@ class ModuloIA:
         self.config = None
         self.nucleus = None
         self.expected_input_size = 224 * 224 * 3  # Tamaño esperado para MobileNetV3
+
 
     async def inicializar(self, nucleus, config):
         """Inicializa el módulo de inteligencia artificial."""
@@ -43,6 +45,7 @@ class ModuloIA:
                 "timestamp": time.time()
             })
             raise
+
 
     async def procesar_bloque(self, bloque: BloqueSimbiotico, datos: dict):
         """Procesa un bloque con el modelo de inteligencia artificial."""
@@ -161,6 +164,7 @@ class ModuloIA:
             })
 
         return {"mensajes": mensajes}
+
 
     async def detener(self):
         """Detiene el módulo de inteligencia artificial."""
