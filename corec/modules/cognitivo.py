@@ -39,7 +39,6 @@ class ModuloCognitivo(ComponenteBase):
         }
         self.config = None
 
-
     async def inicializar(self, nucleus, config: Dict[str, Any] = None):
         """Inicializa el módulo cognitivo."""
         try:
@@ -90,7 +89,6 @@ class ModuloCognitivo(ComponenteBase):
             })
             raise
 
-
     async def cargar_estado(self):
         """Carga el estado desde PostgreSQL."""
         try:
@@ -124,7 +122,6 @@ class ModuloCognitivo(ComponenteBase):
                     self.logger.info("No se encontró estado previo, iniciando con estado vacío")
         except Exception as e:
             self.logger.error(f"Error cargando estado cognitivo: {e}")
-
 
     async def guardar_estado(self):
         """Guarda el estado en PostgreSQL, limitando datos persistidos."""
@@ -163,7 +160,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error guardando estado cognitivo: {e}")
 
-
     async def actualizar_atencion(self):
         """Actualiza el sistema de atención cognitiva."""
         try:
@@ -194,7 +190,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error actualizando atención: {e}")
 
-
     async def evaluar_relevancia(self, datos: Dict[str, Any]) -> float:
         """Evalúa la relevancia de una percepción."""
         try:
@@ -213,7 +208,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error evaluando relevancia: {e}")
             return 0.0
-
 
     async def actualizar_yo(self):
         """Actualiza el modelo interno del 'yo'."""
@@ -257,7 +251,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error actualizando modelo interno: {e}")
 
-
     async def registrar_cambio_yo(self, atributo: str, valor_anterior: Any, valor_nuevo: Any, motivo: str):
         """Registra un cambio en el modelo interno."""
         try:
@@ -284,7 +277,6 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.debug(f"Cambio en yo registrado: {cambio}")
         except Exception as e:
             self.logger.error(f"Error registrando cambio en yo: {e}")
-
 
     async def generar_intenciones(self):
         """Genera intenciones explícitas."""
@@ -337,7 +329,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error generando intenciones: {e}")
 
-
     async def resolver_conflictos(self):
         """Resuelve conflictos entre intenciones."""
         try:
@@ -382,7 +373,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error resolviendo conflictos: {e}")
 
-
     async def ejecutar_intenciones(self):
         """Ejecuta acciones de intenciones activas."""
         try:
@@ -415,7 +405,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error ejecutando intenciones: {e}")
 
-
     async def evaluar_aprendizaje(self):
         """Evalúa la tasa de aprendizaje."""
         try:
@@ -428,7 +417,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error evaluando aprendizaje: {e}")
             return 0.0
-
 
     async def consultar_metadialogos_previos(self, tema: str, max_edad: float = 3600) -> List[Dict[str, Any]]:
         """Consulta metadialogos previos."""
@@ -457,7 +445,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error consultando metadialogos previos: {e}")
             return []
-
 
     async def generar_metadialogo(self):
         """Genera afirmaciones sobre el estado interno."""
@@ -519,7 +506,6 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.error(f"Error generando metadialogo: {e}")
             return []
 
-
     async def percibir(self, datos: Dict[str, Any]):
         """Recibe datos del entorno con atención selectiva."""
         try:
@@ -576,7 +562,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error procesando percepción: {e}")
 
-
     async def aprender_concepto(self, concepto: str, datos: Dict[str, Any]):
         """Aprende relaciones semánticas."""
         try:
@@ -599,11 +584,9 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error aprendiendo concepto {concepto}: {e}")
 
-
     async def consultar_memoria_semantica(self, concepto: str) -> Dict[str, float]:
         """Consulta relaciones semánticas."""
         return self.memoria_semantica.get(concepto, {})
-
 
     async def intuir(self, tipo: str) -> float:
         """Genera una intuición."""
@@ -643,7 +626,6 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.error(f"Error generando intuición para {tipo}: {e}")
             return 0.0
 
-
     async def decidir(self, opciones: List[str], umbral: float = None) -> str:
         """Toma una decisión."""
         try:
@@ -678,7 +660,6 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.error(f"Error tomando decisión: {e}")
             return "ninguna"
 
-
     async def registrar_decision_fallida(self, decision: Dict[str, Any], motivo: str):
         """Registra una decisión fallida."""
         try:
@@ -709,7 +690,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error registrando decisión fallida: {e}")
 
-
     async def analizar_decisiones_fallidas(self):
         """Analiza decisiones fallidas para ajustar intuiciones."""
         try:
@@ -732,7 +712,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error analizando decisiones fallidas: {e}")
 
-
     async def evaluar_confiabilidad(self):
         """Evalúa la confiabilidad histórica."""
         try:
@@ -751,7 +730,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error evaluando confiabilidad: {e}")
             return 1.0
-
 
     async def detectar_contradicciones(self):
         """Detecta contradicciones lógico-semánticas."""
@@ -801,7 +779,6 @@ class ModuloCognitivo(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error detectando contradicciones: {e}")
             return []
-
 
     async def detener(self):
         """Detiene el módulo cognitivo."""
