@@ -798,5 +798,6 @@ class ModuloCognitivo(ComponenteBase):
                 "memoria": {"conceptos": {}, "tamaño": 0}
             }
             self.logger.info("Módulo Cognitivo detenido")
-        except Exception as e:
-            self
+        except Exception:
+            # Excepción capturada pero no usada, ya que el manejo de errores se realiza en el logger anterior
+            pass
