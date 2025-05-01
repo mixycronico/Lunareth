@@ -479,7 +479,7 @@ class ModuloCognitivo(ComponenteBase):
                 afirmacion = f"Me siento inestable porque fallé {fallos_recientes} veces seguidas."
                 previos = await self.consultar_metadialogos_previos("inestable")
                 if previos:
-                    afirmacion += f" Esto sigue un pattern desde: '{previos[0]['afirmacion']}'."
+                    afirmacion += f" Esto sigue un patrón desde: '{previos[0]['afirmacion']}'."
                 afirmaciones.append({"texto": afirmacion, "referencias": [p["timestamp"] for p in previos]})
             if self.yo["estado"]["actividad"] > 10:
                 afirmaciones.append({
