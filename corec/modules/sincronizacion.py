@@ -7,7 +7,6 @@ class ModuloSincronizacion(ComponenteBase):
     def __init__(self):
         self.nucleus = None
 
-
     async def inicializar(self, nucleus, config=None):
         """Inicializa el módulo de sincronización.
 
@@ -22,7 +21,6 @@ class ModuloSincronizacion(ComponenteBase):
         except Exception as e:
             self.logger.error(f"Error inicializando Módulo Sincronización: {e}")
             raise
-
 
     async def redirigir_entidades(self, bloque_origen: BloqueSimbiotico, bloque_destino: BloqueSimbiotico, proporcion: float, canal: int):
         """Redirige entidades entre bloques.
@@ -67,7 +65,6 @@ class ModuloSincronizacion(ComponenteBase):
             })
             raise
 
-
     async def adaptar_bloque(self, bloque_origen: BloqueSimbiotico, bloque_destino: BloqueSimbiotico):
         """Adapta un bloque fusionándolo con otro.
 
@@ -93,7 +90,6 @@ class ModuloSincronizacion(ComponenteBase):
                 "timestamp": time.time()
             })
             raise
-
 
     async def detener(self):
         """Detiene el módulo de sincronización."""
