@@ -799,4 +799,4 @@ class ModuloCognitivo(ComponenteBase):
             }
             self.logger.info("Módulo Cognitivo detenido")
         except Exception as e:
-            self.logger.error(f"Error deteniendo Módulo Cognitivo: {e}")
+            self
