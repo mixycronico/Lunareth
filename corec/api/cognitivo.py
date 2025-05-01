@@ -2,25 +2,27 @@ from fastapi import FastAPI, HTTPException, Header
 from typing import Dict, Any
 from corec.nucleus import CoreCNucleus
 
-
 app = FastAPI(title="CoreC Cognitive API")
 
-nucleus_instance = None  # noqa: F824
+# Única instancia compartida del núcleo
+_nucleus_instance: CoreCNucleus = None
 
 
-async def get_nucleus():
-    global nucleus_instance
-    if nucleus_instance is None:
-        nucleus_instance = CoreCNucleus("config/corec_config.json")
-        await nucleus_instance.inicializar()
-    return nucleus_instance
+async def get_nucleus() -> CoreCNucleus:
+    """Inicializa y devuelve la instancia singleton de CoreCNucleus."""
+    global _nucleus_instance
+    if _nucleus_instance is None:
+        _nucleus_instance = CoreCNucleus("config/corec_config.json")
+        await _nucleus_instance.inicializar()
+    return _nucleus_instance
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global nucleus_instance
-    if nucleus_instance:
-        await nucleus_instance.detener()
+    """Detiene el núcleo al apagar la aplicación."""
+    global _nucleus_instance
+    if _nucleus_instance is not None:
+        await _nucleus_instance.detener()
 
 
 @app.get("/cognitivo/intuicion/{tipo}")
