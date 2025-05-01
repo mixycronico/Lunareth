@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, Header
 from typing import Dict, Any
-from corec.nucleus import CoreCNucleus
 
 
 app = FastAPI(title="CoreC Cognitive API")
