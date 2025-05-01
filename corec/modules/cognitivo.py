@@ -111,7 +111,9 @@ class ModuloCognitivo(ComponenteBase):
             async with self.nucleus.db_pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
-                    SELECT memoria, intuiciones, percepciones, decisiones, decisiones_fallidas, contexto, memoria_semantica, yo, intenciones, atencion
+                    SELECT memoria, intuiciones, percepciones, decisiones,
+                           decisiones_fallidas, contexto, memoria_semantica,
+                           yo, intenciones, atencion
                     FROM cognitivo_memoria
                     WHERE instancia_id = $1
                     ORDER BY timestamp DESC LIMIT 1
