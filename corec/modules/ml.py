@@ -12,7 +12,6 @@ class ModuloML:
         self.historial: Dict[str, List[Dict]] = {}  # {entidad_id: [{roles, fitness, timestamp}]}
         self.nucleus = None
 
-
     async def inicializar(self, nucleus, config):
         """Inicializa el módulo de aprendizaje automático.
 
@@ -23,7 +22,6 @@ class ModuloML:
         self.nucleus = nucleus
         self.logger = nucleus.logger
         self.logger.info("Módulo ML inicializado")
-
 
     async def entrenar_modelo(self, entidad: EntidadSuperpuesta, fitness: float):
         """Entrena un modelo para predecir ajustes de roles.
@@ -56,7 +54,6 @@ class ModuloML:
             self.modelos[entidad_id] = modelo
             self.logger.info(f"Modelo entrenado para entidad {entidad_id}")
 
-
     async def predecir_ajuste_roles(self, entidad: EntidadSuperpuesta) -> Optional[Dict[str, float]]:
         """Predice un ajuste óptimo de roles usando el modelo entrenado.
 
@@ -82,7 +79,6 @@ class ModuloML:
         mejor_ajuste_idx = np.argmax(fitness_predichos)
         mejor_ajuste = posibles_ajustes[mejor_ajuste_idx]
         return dict(zip(entidad.roles.keys(), mejor_ajuste))
-
 
     async def detener(self):
         """Detiene el módulo de aprendizaje automático."""
