@@ -41,7 +41,6 @@ class CoreCNucleus:
         self.global_concurrent_tasks = 0
         self.global_concurrent_tasks_max = 1000  # Límite global de tareas concurrentes
 
-
     async def inicializar(self):
         """Inicializa el núcleo de CoreC, configurando módulos, bloques y conexiones."""
         try:
@@ -231,13 +230,11 @@ class CoreCNucleus:
             })
             raise
 
-
     async def consultar_intuicion(self, tipo: str) -> float:
         """Consulta la intuición del módulo cognitivo para un tipo específico."""
         if "cognitivo" not in self.modules:
             raise ValueError("Módulo Cognitivo no inicializado")
         return await self.modules["cognitivo"].intuir(tipo)
-
 
     async def procesar_entrelazador(self):
         """Propaga cambios a través del entrelazador."""
@@ -254,7 +251,6 @@ class CoreCNucleus:
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
-
 
     async def process_bloque(self, bloque: BloqueSimbiotico):
         """Procesa un bloque simbiótico."""
@@ -301,7 +297,6 @@ class CoreCNucleus:
         finally:
             self.global_concurrent_tasks = max(0, self.global_concurrent_tasks - bloque.current_concurrent_tasks)
 
-
     async def save_fallback_messages(self, bloque_id: str, mensajes: list):
         """Guarda mensajes en un archivo de respaldo si PostgreSQL no está disponible."""
         try:
@@ -321,7 +316,6 @@ class CoreCNucleus:
             self.logger.info(f"Mensajes de {bloque_id} guardados en fallback")
         except Exception as e:
             self.logger.error(f"Error guardando mensajes en fallback: {e}")
-
 
     async def retry_fallback_messages(self):
         """Reintenta escribir mensajes de respaldo en PostgreSQL."""
@@ -382,7 +376,6 @@ class CoreCNucleus:
         except Exception as e:
             self.logger.error(f"Error reintentando mensajes de fallback: {e}")
 
-
     async def ejecutar_analisis(self):
         """Ejecuta análisis de datos sobre mensajes recientes."""
         try:
@@ -404,7 +397,6 @@ class CoreCNucleus:
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
-
 
     async def get_datos_from_redis(self, bloque_id: str) -> dict:
         """Obtiene datos de Redis para un bloque específico."""
@@ -432,7 +424,6 @@ class CoreCNucleus:
             })
             return {"valores": []}
 
-
     async def publicar_alerta(self, alerta: dict):
         """Publica una alerta en Redis o la archiva si Redis no está disponible."""
         try:
@@ -450,7 +441,6 @@ class CoreCNucleus:
         except aioredis.RedisError as e:
             self.logger.error(f"Error publicando alerta: {e}")
             await self.archive_alert(alerta)
-
 
     async def archive_alert(self, alerta: dict):
         """Archiva una alerta en PostgreSQL."""
@@ -473,7 +463,6 @@ class CoreCNucleus:
             self.logger.info(f"Alerta archivada en PostgreSQL: {alerta['tipo']}")
         except Exception as e:
             self.logger.error(f"Error archivando alerta: {e}")
-
 
     async def publicar_aprendizaje(self, aprendizaje: dict):
         """Publica un aprendizaje en Redis y PostgreSQL."""
@@ -501,7 +490,6 @@ class CoreCNucleus:
         except Exception as e:
             self.logger.error(f"Error publicando aprendizaje: {e}")
 
-
     async def consumir_aprendizajes(self):
         """Consume aprendizajes de otras instancias y los aplica localmente."""
         try:
@@ -522,7 +510,6 @@ class CoreCNucleus:
         except Exception as e:
             self.logger.error(f"Error consumiendo aprendizajes: {e}")
 
-
     async def evaluar_estrategias(self):
         """Evalúa estrategias para optimizar el rendimiento de los bloques."""
         try:
@@ -536,7 +523,6 @@ class CoreCNucleus:
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
-
 
     async def ejecutar(self):
         """Ejecuta el ciclo principal del núcleo."""
@@ -555,7 +541,6 @@ class CoreCNucleus:
                 "timestamp": time.time()
             })
             raise
-
 
     async def detener(self):
         """Detiene el núcleo y sus componentes."""
@@ -577,7 +562,6 @@ class CoreCNucleus:
                 "mensaje": str(e),
                 "timestamp": time.time()
             })
-
 
     async def ejecutar_plugin(self, plugin_id: str, comando: dict):
         """Ejecuta un comando en un plugin específico."""
