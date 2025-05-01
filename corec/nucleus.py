@@ -147,7 +147,7 @@ class CoreCNucleus:
                         try:
                             self.entrelazador.enlazar(entidades[i], entidades[i + 1])
                         except ValueError as e:
-                            self.logger.warning(f"Error enlazand entidades en {bloque.id}: {e}")
+                            self.logger.warning(f"Error enlazando entidades en {bloque.id}: {e}")
 
             self.scheduler = Scheduler(self)
             self.scheduler.start()
@@ -584,4 +584,4 @@ class CoreCNucleus:
         plugin = self.plugins.get(plugin_id)
         if not plugin:
             raise ValueError(f"Plugin {plugin_id} no encontrado")
-        return await plugin.manejar_comando(comando)p
+        return await plugin.manejar_comando(comando)
