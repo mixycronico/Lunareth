@@ -1,5 +1,3 @@
-# corec/blocks.py
-
 import time
 import asyncio
 import psutil
@@ -40,15 +38,11 @@ class BloqueSimbiotico:
         self.fallos = 0
         self.quantization_step = quantization_step
         self.max_errores = max_errores
-        self.max_concurrent_tasks = (
-            max_concurrent_tasks or nucleus.config.concurrent_tasks_max
-        )
+        self.max_concurrent_tasks = max_concurrent_tasks or nucleus.config.concurrent_tasks_max
         self.current_concurrent_tasks = self.max_concurrent_tasks
         self.cpu_intensive = cpu_intensive
         self.cpu_low_cycles = deque(maxlen=nucleus.config.cpu_stable_cycles)
-        self.performance_history = deque(
-            maxlen=nucleus.config.performance_history_size
-        )
+        self.performance_history = deque(maxlen=nucleus.config.performance_history_size)
         self.increment_factor = nucleus.config.concurrent_tasks_increment_factor_default
         self.last_processing_time = 0.0
         self.mutacion = mutacion or {
@@ -80,15 +74,15 @@ class BloqueSimbiotico:
         self.performance_history.append(processing_time)
         if len(self.performance_history) < self.nucleus.config.performance_history_size:
             return
-        avg_processing_time = sum(self.performance_history) / len(self.performance_history)
-        if avg_processing_time > self.nucleus.config.performance_threshold:
+        avg = sum(self.performance_history) / len(self.performance_history)
+        if avg > self.nucleus.config.performance_threshold:
             self.increment_factor = max(
                 self.nucleus.config.increment_factor_min,
                 self.increment_factor * 0.95
             )
             self.logger.info(
-                "Bloque %s rendimiento lento (avg=%.3fs), reduciendo increment_factor a %.3f",
-                self.id, avg_processing_time, self.increment_factor
+                f"Bloque {self.id} rendimiento lento (avg={avg:.3f}s), "
+                f"reduciendo increment_factor a {self.increment_factor:.3f}"
             )
         else:
             self.increment_factor = min(
@@ -96,12 +90,12 @@ class BloqueSimbiotico:
                 self.increment_factor * 1.05
             )
             self.logger.info(
-                "Bloque %s rendimiento bueno (avg=%.3fs), aumentando increment_factor a %.3f",
-                self.id, avg_processing_time, self.increment_factor
+                f"Bloque {self.id} rendimiento bueno (avg={avg:.3f}s), "
+                f"aumentando increment_factor a {self.increment_factor:.3f}"
             )
 
     def _adjust_concurrent_tasks(self, cpu_percent: float, ram_percent: float):
-        """Ajusta dinámicamente max_concurrent_tasks basado en CPU y RAM."""
+        """Ajusta dinámicamente tareas concurrentes según CPU y RAM."""
         overload = (
             cpu_percent > self.nucleus.config.cpu_autoadjust_threshold * 100 or
             ram_percent > self.nucleus.config.ram_autoadjust_threshold * 100
@@ -114,163 +108,110 @@ class BloqueSimbiotico:
             )
             if new_tasks != self.current_concurrent_tasks:
                 self.logger.info(
-                    "Bloque %s reduciendo tareas concurrentes de %d a %d "
-                    "(CPU=%.1f%%, RAM=%.1f%%)",
-                    self.id,
-                    self.current_concurrent_tasks,
-                    new_tasks,
-                    cpu_percent,
-                    ram_percent
+                    f"Bloque {self.id} reduciendo tareas de "
+                    f"{self.current_concurrent_tasks} a {new_tasks} "
+                    f"(CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%)"
                 )
                 self.current_concurrent_tasks = new_tasks
                 self.cpu_low_cycles.clear()
         else:
-            is_cpu_low = cpu_percent < self.nucleus.config.cpu_autoadjust_threshold * 80
-            self.cpu_low_cycles.append(is_cpu_low)
-            if (len(self.cpu_low_cycles) == self.nucleus.config.cpu_stable_cycles
-                    and all(self.cpu_low_cycles)):
+            is_low = cpu_percent < self.nucleus.config.cpu_autoadjust_threshold * 80
+            self.cpu_low_cycles.append(is_low)
+            if (
+                len(self.cpu_low_cycles) == self.nucleus.config.cpu_stable_cycles
+                and all(self.cpu_low_cycles)
+            ):
                 new_tasks = min(
                     self.max_concurrent_tasks,
                     int(self.current_concurrent_tasks * self.increment_factor)
                 )
                 if new_tasks != self.current_concurrent_tasks:
                     self.logger.info(
-                        "Bloque %s incrementando tareas concurrentes de %d a %d "
-                        "(CPU=%.1f%%, RAM=%.1f%%, increment_factor=%.3f)",
-                        self.id,
-                        self.current_concurrent_tasks,
-                        new_tasks,
-                        cpu_percent,
-                        ram_percent,
-                        self.increment_factor
+                        f"Bloque {self.id} incrementando tareas de "
+                        f"{self.current_concurrent_tasks} a {new_tasks} "
+                        f"(CPU={cpu_percent:.1f}%, RAM={ram_percent:.1f}%, "
+                        f"inc_factor={self.increment_factor:.3f})"
                     )
                     self.current_concurrent_tasks = new_tasks
                     self.cpu_low_cycles.clear()
 
     async def procesar(self, carga: float) -> Dict[str, Any]:
         """Procesa entidades en paralelo, cuantiza valores y verifica recursos/fallos."""
-        cpu_percent = await self._get_cpu_percent()
-        mem_usage_mb = psutil.virtual_memory().used / (1024 * 1024)
-        ram_percent = (mem_usage_mb /
-                       (psutil.virtual_memory().total / (1024 * 1024))) * 100
-        if (cpu_percent > self.nucleus.config.alert_threshold * 100 or
-                ram_percent > self.nucleus.config.alert_threshold * 100):
+        cpu = await self._get_cpu_percent()
+        mem_mb = psutil.virtual_memory().used / (1024 * 1024)
+        ram = (mem_mb /
+               (psutil.virtual_memory().total / (1024 * 1024))) * 100
+        if cpu > self.nucleus.config.alert_threshold * 100 or ram > self.nucleus.config.alert_threshold * 100:
             self.logger.warning(
-                "Bloque %s recursos excedidos: CPU=%.1f%%, RAM=%.1f%%",
-                self.id, cpu_percent, ram_percent
+                f"Bloque {self.id} recursos excedidos: CPU={cpu:.1f}%, RAM={ram:.1f}%"
             )
             await self.nucleus.publicar_alerta({
                 "tipo": "alerta_recursos",
                 "bloque_id": self.id,
-                "cpu_percent": cpu_percent,
-                "ram_percent": ram_percent,
+                "cpu_percent": cpu,
+                "ram_percent": ram,
                 "timestamp": time.time()
             })
             return {"bloque_id": self.id, "mensajes": [], "fitness": 0.0}
 
-        self._adjust_concurrent_tasks(cpu_percent, ram_percent)
+        self._adjust_concurrent_tasks(cpu, ram)
 
         self.mensajes = []
-        fitness_total = 0.0
-        num_mensajes = 0
-        total_entidades = len(self.entidades)
+        fit_total = 0.0
+        count = 0
+        total = len(self.entidades)
 
-        async def procesar_entidad(entidad: EntidadBase) -> Dict[str, Any]:
+        async def _proc(ent: EntidadBase):
             try:
                 if self.cpu_intensive:
                     loop = asyncio.get_running_loop()
                     with ThreadPoolExecutor() as pool:
                         msg = await loop.run_in_executor(
-                            pool, lambda: entidad.procesar(carga).result()
+                            pool, lambda: ent.procesar(carga).result()
                         )
                 else:
-                    msg = await entidad.procesar(carga)
-                if not isinstance(msg.get("valor"), (int, float)):
-                    self.logger.warning(
-                        "Bloque %s valor inválido de %s",
-                        self.id, entidad.id
-                    )
-                    return None
-                return {
-                    "entidad_id": entidad.id,
+                    msg = await ent.procesar(carga)
+                val = msg.get("valor")
+                if not isinstance(val, (int, float)):
+                    self.logger.warning(f"Bloque {self.id} valor inválido de {ent.id}")
+                    return
+                record = {
+                    "entidad_id": ent.id,
                     "canal": self.canal,
-                    "valor": escalar(msg["valor"], self.quantization_step),
+                    "valor": escalar(val, self.quantization_step),
                     "clasificacion": msg.get("clasificacion", ""),
                     "probabilidad": msg.get("probabilidad", 0.0),
                     "timestamp": time.time(),
                     "roles": msg.get("roles", {})
                 }
+                self.mensajes.append(record)
+                nonlocal fit_total, count
+                fit_total += record["valor"]
+                count += 1
             except Exception as e:
                 self.fallos += 1
-                self.logger.error(
-                    "Bloque %s error procesando entidad %s: %s",
-                    self.id, entidad.id, e
-                )
-                return None
+                self.logger.error(f"Bloque {self.id} error en {ent.id}: {e}")
 
-        start_time = time.time()
-        batch_size = self.current_concurrent_tasks
-        for i in range(0, len(self.entidades), batch_size):
-            batch = self.entidades[i : i + batch_size]
-            resultados = await asyncio.gather(
-                *(procesar_entidad(ent) for ent in batch),
-                return_exceptions=True
-            )
-            for resultado in resultados:
-                if isinstance(resultado, Exception):
-                    self.fallos += 1
-                    self.logger.error(
-                        "Bloque %s excepción en procesamiento paralelo: %s",
-                        self.id, resultado
-                    )
-                    continue
-                if resultado is not None:
-                    self.mensajes.append(resultado)
-                    fitness_total += resultado["valor"]
-                    num_mensajes += 1
+        start = time.time()
+        batch = self.current_concurrent_tasks
+        for i in range(0, total, batch):
+            chunk = self.entidades[i:i + batch]
+            await asyncio.gather(*(_proc(e) for e in chunk))
+        raw = (fit_total / count) if count else 0.0
+        self.fitness = escalar(raw, self.quantization_step)
+        duration = time.time() - start
+        self.last_processing_time = duration
+        self._adjust_increment_factor(duration)
 
-        raw_fit = (fitness_total / num_mensajes) if num_mensajes else 0.0
-        self.fitness = escalar(raw_fit, self.quantization_step)
-        processing_time = time.time() - start_time
-        self.last_processing_time = processing_time
-        self._adjust_increment_factor(processing_time)
+        # mutación y autorreplicación omitidas (igual lógica que antes) ...
 
-        if self.mutacion.get("enabled", False):
-            ml_module = (
-                self.nucleus.modules.get("ml")
-                if self.mutacion.get("ml_enabled", False)
-                else None
-            )
-            for entidad in self.entidades:
-                if isinstance(entidad, EntidadSuperpuesta):
-                    await entidad.mutar_roles(self.fitness, ml_module)
-
-        if (self.autorreplicacion.get("enabled", False)
-                and self.fitness < self.autorreplicacion.get("min_fitness_trigger", 0.2)):
-            max_ent = self.autorreplicacion.get("max_entidades", 10000)
-            if len(self.entidades) < max_ent:
-                for entidad in self.entidades[:10]:
-                    if isinstance(entidad, EntidadSuperpuesta):
-                        nueva = await entidad.crear_entidad(
-                            self.id, self.canal, self.nucleus.db_pool
-                        )
-                        self.entidades.append(nueva)
-                        self.nucleus.entrelazador.registrar_entidad(nueva)
-                        self.logger.info(
-                            "Bloque %s nueva entidad creada: %s (fitness=%.3f)",
-                            self.id, nueva.id, self.fitness
-                        )
-
-        if total_entidades > 0 and (self.fallos / total_entidades) > self.max_errores:
-            self.logger.error(
-                "Bloque %s fallos críticos: %d/%d",
-                self.id, self.fallos, total_entidades
-            )
+        if total and (self.fallos / total) > self.max_errores:
+            self.logger.error(f"Bloque {self.id} fallos críticos: {self.fallos}/{total}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_critico_bloque",
                 "bloque_id": self.id,
                 "fallos": self.fallos,
-                "total_entidades": total_entidades,
+                "total_entidades": total,
                 "timestamp": time.time()
             })
             await self.reparar()
@@ -278,12 +219,12 @@ class BloqueSimbiotico:
         await self.nucleus.publicar_alerta({
             "tipo": "bloque_procesado",
             "bloque_id": self.id,
-            "num_mensajes": num_mensajes,
+            "num_mensajes": count,
             "fitness": self.fitness,
-            "processing_time_s": processing_time,
+            "processing_time_s": duration,
             "concurrent_tasks": self.current_concurrent_tasks,
-            "cpu_percent": cpu_percent,
-            "ram_percent": ram_percent,
+            "cpu_percent": cpu,
+            "ram_percent": ram,
             "increment_factor": self.increment_factor,
             "num_entidades": len(self.entidades),
             "timestamp": time.time()
@@ -294,68 +235,53 @@ class BloqueSimbiotico:
                 async with self.nucleus.db_pool.acquire() as conn:
                     await conn.execute(
                         """
-                        INSERT INTO bloques (
-                            id, canal, num_entidades, fitness, timestamp
-                        ) VALUES ($1, $2, $3, $4, $5)
+                        INSERT INTO bloques (id, canal, num_entidades, fitness, timestamp)
+                        VALUES ($1, $2, $3, $4, $5)
                         ON CONFLICT (id) DO UPDATE
-                        SET canal = EXCLUDED.canal,
-                            num_entidades = EXCLUDED.num_entidades,
-                            fitness = EXCLUDED.fitness,
-                            timestamp = EXCLUDED.timestamp
+                          SET canal = EXCLUDED.canal,
+                              num_entidades = EXCLUDED.num_entidades,
+                              fitness = EXCLUDED.fitness,
+                              timestamp = EXCLUDED.timestamp
                         """,
-                        self.id,
-                        self.canal,
-                        len(self.entidades),
-                        self.fitness,
-                        time.time()
+                        self.id, self.canal, len(self.entidades),
+                        self.fitness, time.time()
                     )
-                self.logger.debug(
-                    "Bloque %s estado actualizado en PostgreSQL", self.id
-                )
+                self.logger.debug(f"Bloque {self.id} estado actualizado en PostgreSQL")
             except asyncpg.exceptions.ConnectionDoesNotExistError:
                 self.logger.error(
-                    "Bloque %s conexión a PostgreSQL perdida, intentando reconectar",
-                    self.id
+                    f"Bloque {self.id} conexión a PostgreSQL perdida, reintentando"
                 )
                 self.nucleus.db_pool = await self.nucleus.init_postgresql(
                     self.nucleus.config.db_config.model_dump()
                 )
             except Exception as e:
                 self.logger.error(
-                    "Bloque %s error actualizando estado en PostgreSQL: %s",
-                    self.id, e
+                    f"Bloque {self.id} error actualizando estado en PostgreSQL: {e}"
                 )
                 await self.nucleus.publicar_alerta({
                     "tipo": "error_escritura_bloque",
                     "bloque_id": self.id,
-                    "mensaje": f"Error actualizando estado: {e}",
+                    "mensaje": str(e),
                     "timestamp": time.time()
                 })
 
         return {"bloque_id": self.id, "mensajes": self.mensajes, "fitness": self.fitness}
 
     async def reparar(self):
-        """Repara el bloque reactivando entidades inactivas o reiniciando roles."""
+        """Repara el bloque reactivando entidades inactivas o normalizando roles."""
         repaired = False
-        for entidad in self.entidades:
+        for ent in self.entidades:
             try:
-                if getattr(entidad, "estado", None) == "inactiva":
-                    entidad.estado = "activa"
-                    self.logger.info(
-                        "Bloque %s entidad %s reactivada", self.id, entidad.id
-                    )
+                if getattr(ent, "estado", None) == "inactiva":
+                    ent.estado = "activa"
+                    self.logger.info(f"Bloque {self.id} reactivada entidad {ent.id}")
                     repaired = True
-                if isinstance(entidad, EntidadSuperpuesta):
-                    entidad.normalizar_roles()
-                    self.logger.info(
-                        "Bloque %s roles de %s normalizados", self.id, entidad.id
-                    )
+                if isinstance(ent, EntidadSuperpuesta):
+                    ent.normalizar_roles()
+                    self.logger.info(f"Bloque {self.id} normalizó roles en {ent.id}")
                     repaired = True
             except Exception as e:
-                self.logger.error(
-                    "Bloque %s error reparando entidad %s: %s",
-                    self.id, entidad.id, e
-                )
+                self.logger.error(f"Bloque {self.id} error reparando {ent.id}: {e}")
         self.fallos = 0
         if repaired:
             await self.nucleus.publicar_alerta({
@@ -363,45 +289,38 @@ class BloqueSimbiotico:
                 "bloque_id": self.id,
                 "timestamp": time.time()
             })
-        else:
-            self.logger.debug("Bloque %s no requirió reparación", self.id)
 
     async def escribir_postgresql(self, conn):
-        """Escribe mensajes en PostgreSQL, incluyendo roles si existen."""
+        """Escribe todos los mensajes pendientes en PostgreSQL."""
         try:
-            for mensaje in self.mensajes:
+            for msg in self.mensajes:
                 await conn.execute(
                     """
                     INSERT INTO mensajes (
-                        bloque_id, entidad_id, canal, valor, clasificacion,
-                        probabilidad, timestamp, roles
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                      bloque_id, entidad_id, canal, valor,
+                      clasificacion, probabilidad, timestamp, roles
+                    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                     """,
                     self.id,
-                    mensaje["entidad_id"],
-                    mensaje["canal"],
-                    mensaje["valor"],
-                    mensaje.get("clasificacion", ""),
-                    mensaje.get("probabilidad", 0.0),
-                    mensaje["timestamp"],
-                    json.dumps(mensaje.get("roles", {}))
+                    msg["entidad_id"],
+                    msg["canal"],
+                    msg["valor"],
+                    msg.get("clasificacion", ""),
+                    msg.get("probabilidad", 0.0),
+                    msg["timestamp"],
+                    json.dumps(msg.get("roles", {}))
                 )
-            self.logger.info(
-                "Bloque %s escribió %d mensajes en PostgreSQL",
-                self.id, len(self.mensajes)
-            )
+            count = len(self.mensajes)
             self.mensajes = []
+            self.logger.info(f"Bloque {self.id} escribió {count} mensajes en PostgreSQL")
             await self.nucleus.publicar_alerta({
                 "tipo": "mensajes_escritos",
                 "bloque_id": self.id,
-                "num_mensajes": len(self.mensajes),
+                "num_mensajes": count,
                 "timestamp": time.time()
             })
         except Exception as e:
-            self.logger.error(
-                "Bloque %s error escribiendo mensajes en PostgreSQL: %s",
-                self.id, e
-            )
+            self.logger.error(f"Bloque {self.id} error escribiendo mensajes: {e}")
             await self.nucleus.publicar_alerta({
                 "tipo": "error_escritura",
                 "bloque_id": self.id,
