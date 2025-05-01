@@ -17,7 +17,10 @@ async def log_system_metrics(logger: logging.Logger):
             cpu_percent = psutil.cpu_percent()
             mem = psutil.virtual_memory()
             mem_percent = mem.used / mem.total * 100
-            logger.info(f"CPU: {cpu_percent:.1f}%, Memoria: {mem_percent:.1f}% ({mem.used / 1024**2:.1f} MB / {mem.total / 1024**2:.1f} MB)")
+            logger.info(
+                f"CPU: {cpu_percent:.1f}%, Memoria: {mem_percent:.1f}% "
+                f"({mem.used / 1024**2:.1f} MB / {mem.total / 1024**2:.1f} MB)"
+            )
             await asyncio.sleep(300)  # Cada 5 minutos
         except Exception as e:
             logger.error(f"Error registrando métricas: {e}")
@@ -54,7 +57,10 @@ async def load_plugins(nucleus: CoreCNucleus):
                         raise ValueError(f"Plugin '{name}' configuration missing in {conf_path}")
                     plugin_conf.update(raw[name])
             else:
-                nucleus.logger.warning(f"Configuración de plugin '{name}' no encontrada en {conf_path}, usando configuración base")
+                nucleus.logger.warning(
+                    f"Configuración de plugin '{name}' no encontrada en {conf_path}, "
+                    "usando configuración base"
+                )
 
             await registry.load_plugin(nucleus, name, plugin_conf)
             nucleus.logger.info(f"Plugin '{name}' cargado correctamente")
