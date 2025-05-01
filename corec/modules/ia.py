@@ -16,7 +16,6 @@ class ModuloIA:
         self.nucleus = None
         self.expected_input_size = 224 * 224 * 3  # Tamaño esperado para MobileNetV3
 
-
     async def inicializar(self, nucleus, config):
         """Inicializa el módulo de inteligencia artificial."""
         self.nucleus = nucleus
@@ -45,7 +44,6 @@ class ModuloIA:
                 "timestamp": time.time()
             })
             raise
-
 
     async def procesar_bloque(self, bloque: BloqueSimbiotico, datos: dict):
         """Procesa un bloque con el modelo de inteligencia artificial."""
@@ -164,7 +162,6 @@ class ModuloIA:
             })
 
         return {"mensajes": mensajes}
-
 
     async def detener(self):
         """Detiene el módulo de inteligencia artificial."""
