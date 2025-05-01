@@ -35,7 +35,8 @@ class ModuloCognitivo(ComponenteBase):
         self.ultima_evaluacion = time.time()
         self.memoria_semantica_old = {}
         self.conflictos_intenciones = {
-            ("aumentar_percepciones", "reducir_umbral_confianza"): "aumentar actividad vs. reducir errores"
+            ("aumentar_percepciones", "reducir_umbral_confianza"):
+                "aumentar actividad vs. reducir errores"
         }
         self.config = None
 
@@ -64,11 +65,22 @@ class ModuloCognitivo(ComponenteBase):
             for key, value in self.config.items():
                 if key in ["max_memoria", "max_percepciones"] and value <= 0:
                     raise ValueError(f"{key} debe ser mayor que 0")
-                if key in ["umbral_confianza", "penalizacion_intuicion", "confiabilidad_minima",
-                           "umbral_fallo", "tasa_aprendizaje_minima", "umbral_relevancia"] and not 0 < value <= 1:
+                if key in [
+                    "umbral_confianza",
+                    "penalizacion_intuicion",
+                    "confiabilidad_minima",
+                    "umbral_fallo",
+                    "tasa_aprendizaje_minima",
+                    "umbral_relevancia"
+                ] and not 0 < value <= 1:
                     raise ValueError(f"{key} debe estar entre 0 y 1")
-                if key in ["impacto_adaptacion", "peso_afectivo", "peso_semantico",
-                           "umbral_cambio_significativo", "peso_novedad"] and not 0 <= value <= 1:
+                if key in [
+                    "impacto_adaptacion",
+                    "peso_afectivo",
+                    "peso_semantico",
+                    "umbral_cambio_significativo",
+                    "peso_novedad"
+                ] and not 0 <= value <= 1:
                     raise ValueError(f"{key} debe estar entre 0 y 1")
 
             await self.cargar_estado()
@@ -167,7 +179,10 @@ class ModuloCognitivo(ComponenteBase):
             for concepto in self.memoria_semantica.get("yo", {}):
                 if self.memoria_semantica["yo"].get(concepto, 0.0) > 0.5:
                     self.atencion["focos"].append(concepto)
-            self.atencion["nivel"] = 0.5 + (1.0 - self.yo["estado"]["actividad"] / 20) if self.atencion["focos"] else 0.3
+            self.atencion["nivel"] = (
+                0.5 + (1.0 - self.yo["estado"]["actividad"] / 20)
+                if self.atencion["focos"] else 0.3
+            )
             self.atencion["nivel"] = min(self.atencion["nivel"], 1.0)
 
             if self.nucleus.db_pool:
@@ -202,7 +217,8 @@ class ModuloCognitivo(ComponenteBase):
                     relevancia += self.memoria_semantica[foco][clave] * 0.3
             impacto = abs(datos.get("impacto_afectivo", 0.0))
             relevancia += impacto * 0.2
-            novedad = 1.0 / (1 + (time.time() - datos["timestamp"]) / 3600)
+            tiempo_transcurrido = (time.time() - datos["timestamp"]) / 3600
+            novedad = 1.0 / (1 + tiempo_transcurrido)
             relevancia += novedad * self.config.get("peso_novedad", 0.3)
             return min(relevancia, 1.0)
         except Exception as e:
@@ -463,7 +479,7 @@ class ModuloCognitivo(ComponenteBase):
                 afirmacion = f"Me siento inestable porque fallé {fallos_recientes} veces seguidas."
                 previos = await self.consultar_metadialogos_previos("inestable")
                 if previos:
-                    afirmacion += f" Esto sigue un patrón desde: '{previos[0]['afirmacion']}'."
+                    afirmacion += f" Esto sigue un pattern desde: '{previos[0]['afirmacion']}'."
                 afirmaciones.append({"texto": afirmacion, "referencias": [p["timestamp"] for p in previos]})
             if self.yo["estado"]["actividad"] > 10:
                 afirmaciones.append({
@@ -799,5 +815,4 @@ class ModuloCognitivo(ComponenteBase):
             }
             self.logger.info("Módulo Cognitivo detenido")
         except Exception:
-            # Excepción capturada pero no usada, ya que el manejo de errores se realiza en el logger anterior
             pass
