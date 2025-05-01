@@ -39,7 +39,7 @@ class BloqueSimbiotico:
             max_concurrent_tasks (int, optional): Máximo número de tareas concurrentes.
             cpu_intensive (bool): Si True, usa ThreadPoolExecutor.
             mutacion (Dict): Configuración de mutaciones.
-            autorreplicacion (Dict): Configuración de autorreplicación.
+            autorreplicacion (Dict): Configuración de autorreplicacion.
         """
         self.nucleus = nucleus
         self.logger = nucleus.logger
