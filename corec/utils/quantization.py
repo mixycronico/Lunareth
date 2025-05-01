@@ -1,6 +1,3 @@
-import math
-
-
 def escalar(valor: float, paso: float) -> float:
     """Escala un valor a un paso de cuantización.
 
