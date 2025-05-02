@@ -64,8 +64,9 @@ class ModuloCognitivo(ComponenteBase):
             for key, value in self.config.items():
                 if key in ["max_memoria", "max_percepciones"] and value <= 0:
                     raise ValueError(f"{key} debe ser mayor que 0")
-                if key in ["umbral_confianza", "penalizacion_intuicion", "confiabilidad_minima",
-                           "umbral_fallo", "tasa_aprendizaje_minima", "umbral_relevancia"] and not 0 < value <= 1:
+                if key in ["umbral_confianza", "penalizacion_intuicion",
+                           "confiabilidad_minima", "umbral_fallo",
+                           "tasa_aprendizaje_minima", "umbral_relevancia"] and not 0 < value <= 1:
                     raise ValueError(f"{key} debe estar entre 0 y 1")
                 if key in ["impacto_adaptacion", "peso_afectivo", "peso_semantico",
                            "umbral_cambio_significativo", "peso_novedad"] and not 0 <= value <= 1:
@@ -99,7 +100,8 @@ class ModuloCognitivo(ComponenteBase):
             async with self.nucleus.db_pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
-                    SELECT memoria, intuiciones, percepciones, decisiones, decisiones_fallidas, contexto, memoria_semantica, yo, intenciones, atencion
+                    SELECT memoria, intuiciones, percepciones, decisiones, decisiones_fallidas,
+                           contexto, memoria_semantica, yo, intenciones, atencion
                     FROM cognitivo_memoria
                     WHERE instancia_id = $1
                     ORDER BY timestamp DESC LIMIT 1
@@ -139,7 +141,9 @@ class ModuloCognitivo(ComponenteBase):
                 await conn.execute(
                     """
                     INSERT INTO cognitivo_memoria (
-                        instancia_id, tipo, memoria, intuiciones, percepciones, decisiones, decisiones_fallidas, contexto, memoria_semantica, yo, intenciones, atencion, timestamp
+                        instancia_id, tipo, memoria, intuiciones, percepciones, decisiones,
+                        decisiones_fallidas, contexto, memoria_semantica, yo, intenciones,
+                        atencion, timestamp
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                     """,
                     self.nucleus.config.instance_id,
@@ -167,7 +171,8 @@ class ModuloCognitivo(ComponenteBase):
             for concepto in self.memoria_semantica.get("yo", {}):
                 if self.memoria_semantica["yo"].get(concepto, 0.0) > 0.5:
                     self.atencion["focos"].append(concepto)
-            self.atencion["nivel"] = 0.5 + (1.0 - self.yo["estado"]["actividad"] / 20) if self.atencion["focos"] else 0.3
+            self.atencion["nivel"] = (0.5 + (1.0 - self.yo["estado"]["actividad"] / 20)
+                                      if self.atencion["focos"] else 0.3)
             self.atencion["nivel"] = min(self.atencion["nivel"], 1.0)
 
             if self.nucleus.db_pool:
@@ -215,12 +220,11 @@ class ModuloCognitivo(ComponenteBase):
             confiabilidad = await self.evaluar_confiabilidad()
             fallos_recientes = len([d for d in self.decisiones_fallidas[-10:]])
             decisiones_recientes = len([d for d in self.decisiones[-10:]])
-            estabilidad = 1.0 - (fallos_recientes / decisiones_recientes) if decisiones_recientes else 1.0
-            actividad = (
-                len(self.percepciones[-100:]) /
-                (time.time() - self.percepciones[-100]["timestamp"] + 1e-6)
-                if self.percepciones and len(self.percepciones) >= 100 else 0.0
-            )
+            estabilidad = (1.0 - (fallos_recientes / decisiones_recientes)
+                          if decisiones_recientes else 1.0)
+            actividad = (len(self.percepciones[-100:]) /
+                         (time.time() - self.percepciones[-100]["timestamp"] + 1e-6)
+                         if self.percepciones and len(self.percepciones) >= 100 else 0.0)
 
             umbral_cambio = self.config.get("umbral_cambio_significativo", 0.05)
             if abs(self.yo["estado"]["confianza"] - confiabilidad) > umbral_cambio:
@@ -598,21 +602,19 @@ class ModuloCognitivo(ComponenteBase):
             if not historial:
                 return 0.0
 
-            valores = [float(d.get("valor", 0.0)) for d in historial if isinstance(d.get("valor"), (int, float))]
-            impactos = [
-                float(d.get("impacto_afectivo", 0.0))
-                for d in historial if isinstance(d.get("valor"), (int, float))
-            ]
+            valores = [float(d.get("valor", 0.0)) for d in historial
+                       if isinstance(d.get("valor"), (int, float))]
+            impactos = [float(d.get("impacto_afectivo", 0.0))
+                        for d in historial if isinstance(d.get("valor"), (int, float))]
             if not valores:
                 return 0.0
 
-            pesos = [
-                1.0 / (1 + (time.time() - d["timestamp"]) / 3600)
-                for d in historial if isinstance(d.get("valor"), (int, float))
-            ]
+            pesos = [1.0 / (1 + (time.time() - d["timestamp"]) / 3600)
+                     for d in historial if isinstance(d.get("valor"), (int, float))]
             peso_afectivo = self.config.get("peso_afectivo", 0.2)
             valores_ajustados = [v + i * peso_afectivo for v, i in zip(valores, impactos)]
-            intuicion_base = sum(v * w for v, w in zip(valores_ajustados, pesos)) / sum(pesos) if sum(pesos) > 0 else 0.0
+            intuicion_base = (sum(v * w for v, w in zip(valores_ajustados, pesos)) / sum(pesos)
+                              if sum(pesos) > 0 else 0.0)
 
             conceptos_relacionados = await self.consultar_memoria_semantica(tipo)
             ajuste_semantico = sum(
@@ -623,7 +625,7 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.debug(f"Intuición generada para {tipo}: {intuicion:.4f}")
             return intuicion
         except Exception as e:
-            self.logger.error(f"Error generando intuición para"profile: para {tipo}: {e}")
+            self.logger.error(f"Error generando intuición para {tipo}: {e}")
             return 0.0
 
     async def decidir(self, opciones: List[str], umbral: float = None) -> str:
@@ -639,7 +641,8 @@ class ModuloCognitivo(ComponenteBase):
             for opcion in opciones:
                 confianza = await self.intuir(opcion)
                 if opcion in self.contexto:
-                    confianza += self.contexto[opcion].get("impacto_afectivo", 0.0) * self.config.get("peso_afectivo", 0.2)
+                    confianza += (self.contexto[opcion].get("impacto_afectivo", 0.0) *
+                                  self.config.get("peso_afectivo", 0.2))
                 if confianza > max_confianza and confianza >= umbral:
                     mejor_opcion = opcion
                     max_confianza = confianza
