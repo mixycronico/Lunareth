@@ -602,8 +602,8 @@ class ModuloCognitivo(ComponenteBase):
             if not historial:
                 return 0.0
 
-            valores = [float(d.get("valor", 0.0)) for d in historial
-                       if isinstance(d.get("valor"), (int, float))]
+            valores = [float(d.get("valor", 0.0))
+                       for d in historial if isinstance(d.get("valor"), (int, float))]
             impactos = [float(d.get("impacto_afectivo", 0.0))
                         for d in historial if isinstance(d.get("valor"), (int, float))]
             if not valores:
