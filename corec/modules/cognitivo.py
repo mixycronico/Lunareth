@@ -64,10 +64,10 @@ class ModuloCognitivo(ComponenteBase):
             for key, value in self.config.items():
                 if key in ["max_memoria", "max_percepciones"] and value <= 0:
                     raise ValueError(f"{key} debe ser mayor que 0")
-                if key in ["umbral_confianza", "penalizacion_intuicion",
-                           "confiabilidad_minima", "umbral_fallo",
-                           "tasa_aprendizaje_minima", "umbral_relevancia"] \
-                        and not 0 < value <= 1:
+                valid_keys = ["umbral_confianza", "penalizacion_intuicion",
+                              "confiabilidad_minima", "umbral_fallo",
+                              "tasa_aprendizaje_minima", "umbral_relevancia"]
+                if key in valid_keys and not 0 < value <= 1:
                     raise ValueError(f"{key} debe estar entre 0 y 1")
                 if key in ["impacto_adaptacion", "peso_afectivo", "peso_semantico",
                            "umbral_cambio_significativo", "peso_novedad"] and not 0 <= value <= 1:
