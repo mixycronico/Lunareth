@@ -623,7 +623,7 @@ class ModuloCognitivo(ComponenteBase):
             self.logger.debug(f"Intuición generada para {tipo}: {intuicion:.4f}")
             return intuicion
         except Exception as e:
-            self.logger.error(f"Error generando intuición para {tipo}: {e}")
+            self.logger.error(f"Error generando intuición para"profile: para {tipo}: {e}")
             return 0.0
 
     async def decidir(self, opciones: List[str], umbral: float = None) -> str:
