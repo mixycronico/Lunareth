@@ -67,11 +67,11 @@ class ModuloCognitivo(ComponenteBase):
                 if key in ["umbral_confianza", "penalizacion_intuicion",
                            "confiabilidad_minima", "umbral_fallo",
                            "tasa_aprendizaje_minima", "umbral_relevancia"] \
-                        and not 0 < value <= 1:
+                        and not (0 < value <= 1):
                     raise ValueError(f"{key} debe estar entre 0 y 1")
                 if key in ["impacto_adaptacion", "peso_afectivo", "peso_semantico",
                            "umbral_cambio_significativo", "peso_novedad"] \
-                        and not 0 <= value <= 1:
+                        and not (0 <= value <= 1):
                     raise ValueError(f"{key} debe estar entre 0 y 1")
 
             await self.cargar_estado()
@@ -605,14 +605,17 @@ class ModuloCognitivo(ComponenteBase):
                 return 0.0
 
             valores = [float(d.get("valor", 0.0))
-                       for d in historial if isinstance(d.get("valor"), (int, float))]
+                       for d in historial
+                       if isinstance(d.get("valor"), (int, float))]
             impactos = [float(d.get("impacto_afectivo", 0.0))
-                        for d in historial if isinstance(d.get("valor"), (int, float))]
+                        for d in historial
+                        if isinstance(d.get("valor"), (int, float))]
             if not valores:
                 return 0.0
 
             pesos = [1.0 / (1 + (time.time() - d["timestamp"]) / 3600)
-                     for d in historial if isinstance(d.get("valor"), (int, float))]
+                     for d in historial
+                     if isinstance(d.get("valor"), (int, float))]
             peso_afectivo = self.config.get("peso_afectivo", 0.2)
             valores_ajustados = [v + i * peso_afectivo for v, i in zip(valores, impactos)]
             intuicion_base = (sum(v * w for v, w in zip(valores_ajustados, pesos)) / sum(pesos)
