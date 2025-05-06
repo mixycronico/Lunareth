@@ -64,14 +64,28 @@ class ModuloCognitivo(ComponenteBase):
             for key, value in self.config.items():
                 if key in ["max_memoria", "max_percepciones"] and value <= 0:
                     raise ValueError(f"{key} debe ser mayor que 0")
-                if key in ["umbral_confianza", "penalizacion_intuicion",
-                           "confiabilidad_minima", "umbral_fallo",
-                           "tasa_aprendizaje_minima", "umbral_relevancia"] \
-                        and not (0 < value <= 1):
+                if (
+                    key in [
+                        "umbral_confianza",
+                        "penalizacion_intuicion",
+                        "confiabilidad_minima",
+                        "umbral_fallo",
+                        "tasa_aprendizaje_minima",
+                        "umbral_relevancia",
+                    ]
+                    and not (0 < value <= 1)
+                ):
                     raise ValueError(f"{key} debe estar entre 0 y 1")
-                if key in ["impacto_adaptacion", "peso_afectivo", "peso_semantico",
-                           "umbral_cambio_significativo", "peso_novedad"] \
-                        and not (0 <= value <= 1):
+                if (
+                    key in [
+                        "impacto_adaptacion",
+                        "peso_afectivo",
+                        "peso_semantico",
+                        "umbral_cambio_significativo",
+                        "peso_novedad",
+                    ]
+                    and not (0 <= value <= 1)
+                ):
                     raise ValueError(f"{key} debe estar entre 0 y 1")
 
             await self.cargar_estado()
@@ -102,11 +116,21 @@ class ModuloCognitivo(ComponenteBase):
             async with self.nucleus.db_pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
-                    SELECT memoria, intuiciones, percepciones, decisiones, decisiones_fallidas,
-                           contexto, memoria_semantica, yo, intenciones, atencion
+                    SELECT
+                        memoria,
+                        intuiciones,
+                        percepciones,
+                        decisiones,
+                        decisiones_fallidas,
+                        contexto,
+                        memoria_semantica,
+                        yo,
+                        intenciones,
+                        atencion
                     FROM cognitivo_memoria
                     WHERE instancia_id = $1
-                    ORDER BY timestamp DESC LIMIT 1
+                    ORDER BY timestamp DESC
+                    LIMIT 1
                     """,
                     self.nucleus.config.instance_id
                 )
